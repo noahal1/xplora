@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile database.py main.py)",
+      "Bash(DATABASE_URL=\"postgresql://user:pass@localhost:5432/xplore\" python -c \"import database; print\\('OK engine:', database.engine.url.render_as_string\\(hide_password=True\\)\\)\")",
+      "Bash(DATABASE_URL=\"\" python -c \"import database\")",
+      "Bash(DATABASE_URL=\"sqlite:///xplore.db\" python -c \"import database\")",
+      "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
+      "Bash(netstat -ano)",
+      "Bash(tasklist //FI \"PID eq 69776\")",
+      "Bash(wmic process *)",
+      "Bash(python -m py_compile database.py main.py init_db.py)",
+      "Bash(taskkill //F //PID 69776)",
+      "Bash(rm -v xplore.db)",
+      "Bash(env -u DATABASE_URL python -c \"import database; print\\('Loaded from .env ->', database.engine.url.render_as_string\\(hide_password=True\\)\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(python -m py_compile crud.py routers/movies.py)",
+      "Bash(node -e \"['zh-CN','en-US'].forEach\\(f=>{JSON.parse\\(require\\('fs'\\).readFileSync\\('src/i18n/locales/'+f+'.json','utf8'\\)\\);console.log\\(f+' ok'\\)}\\)\")",
+      "Bash(python -m py_compile routers/movies.py)"
+    ]
+  }
+}
