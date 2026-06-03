@@ -7,6 +7,7 @@ export interface Movie {
   year: number | null;
   genre: string | null;
   poster_url?: string | null;
+  media_type?: string;
 }
 
 export interface MovieImport {
@@ -30,6 +31,7 @@ export interface Recommendation {
   genre?: string | null;
   reason: string;
   confidence: number;
+  media_type?: string;
 }
 
 export interface ChatMessage {
@@ -44,6 +46,7 @@ export interface DBMovie {
   year: number | null;
   genre: string | null;
   status: MovieStatus;
+  media_type: string;
   poster_url: string | null;
   overview: string | null;
   director: string | null;
@@ -81,6 +84,7 @@ export interface MovieSearchResult {
   poster_url: string | null;
   source_id: string;
   source: string;
+  media_type?: string;
 }
 
 export interface MovieDetail {

@@ -51,7 +51,7 @@ export function LoginPage() {
               animation: 'login-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both',
             }}
           >
-            <Logo className="h-36 w-auto" />
+            <Logo className="h-16 w-auto" />
           </div>
           <p className="text-sm text-muted-foreground mt-2" style={{ animation: 'login-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both' }}>
             {t("login.subtitle")}

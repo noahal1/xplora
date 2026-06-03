@@ -10,6 +10,7 @@ from crud import (
     admin_delete_user,
     admin_reset_user_password,
     change_password,
+    log_operation,
 )
 from models import (
     LoginRequest,
@@ -29,6 +30,7 @@ async def login(req: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     token = create_token(user.id, user.username, user.is_admin)
+    log_operation(user.id, user.username, "login", f"用户登录")
     return LoginResponse(token=token, username=user.username, is_admin=user.is_admin)
 
 
@@ -46,6 +48,7 @@ async def admin_create_user(
     """Admin only: create a new user account."""
     try:
         user = create_user(req.username, req.password, is_admin=False)
+        log_operation(_admin["id"], _admin["username"], "admin_create_user", f"创建用户: {user.username}")
         return UserInfo(
             id=user.id,
             username=user.username,
@@ -86,6 +89,7 @@ async def admin_delete_user_endpoint(
     deleted = admin_delete_user(user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="用户不存在")
+    log_operation(admin["id"], admin["username"], "admin_delete_user", f"删除用户: {user_id}")
     return {"status": "deleted"}
 
 
@@ -102,6 +106,7 @@ async def admin_reset_password_endpoint(
     success = admin_reset_user_password(user_id, new_password)
     if not success:
         raise HTTPException(status_code=404, detail="用户不存在")
+    log_operation(_admin["id"], _admin["username"], "admin_reset_password", f"重置用户 {user_id} 密码")
     return {"status": "ok", "message": "密码已重置"}
 
 
@@ -114,4 +119,5 @@ async def change_my_password(
     success = change_password(current_user["id"], req.old_password, req.new_password)
     if not success:
         raise HTTPException(status_code=400, detail="原密码错误")
+    log_operation(current_user["id"], current_user["username"], "change_password", "修改密码")
     return {"status": "ok", "message": "密码已更新"}

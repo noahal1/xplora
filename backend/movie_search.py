@@ -1,10 +1,12 @@
 """Movie search service — proxies requests to TMDB and OMDb APIs."""
 
 import logging
+import re
 from typing import Optional
-import httpx
 
 from config_manager import get_api_key as get_config_api_key
+from http_client import make_client
+from scraper.match import strip_season
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +14,7 @@ logger = logging.getLogger(__name__)
 TMDB_BASE = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w185"
 OMDB_BASE = "https://www.omdbapi.com"
+TVMAZE_BASE = "https://api.tvmaze.com"
 
 
 class MovieSearchResult:
@@ -46,7 +49,7 @@ def search_tmdb(query: str, api_key: str, language: str = "zh-CN") -> list[Movie
     url = f"{TMDB_BASE}/search/movie"
     params = {"api_key": api_key, "query": query, "language": language}
     try:
-        with httpx.Client(timeout=10) as client:
+        with make_client(timeout=5) as client:
             resp = client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -121,16 +124,29 @@ def search_tmdb_dual(query: str, api_key: str) -> list[MovieSearchResult]:
 
 
 def search_tmdb_tv(query: str, api_key: str, language: str = "zh-CN") -> list[MovieSearchResult]:
-    """Search TV series via TMDB API with a single language."""
+    """Search TV series via TMDB API with a single language.
+
+    Retries once on SSL/connection errors to handle transient
+    TLS handshake issues (common on some Windows configurations).
+    """
     url = f"{TMDB_BASE}/search/tv"
     params = {"api_key": api_key, "query": query, "language": language}
-    try:
-        with httpx.Client(timeout=10) as client:
+
+    def _do_request() -> dict:
+        with make_client(timeout=5) as client:
             resp = client.get(url, params=params)
             resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        raise RuntimeError(f"TMDB TV search failed: {e}")
+            return resp.json()
+
+    try:
+        data = _do_request()
+    except Exception:
+        # Retry once for transient SSL/network failures
+        logger.debug("TMDB TV search retrying for '%s' (%s)", query, language)
+        try:
+            data = _do_request()
+        except Exception as e:
+            raise RuntimeError(f"TMDB TV search failed: {e}")
 
     results: list[MovieSearchResult] = []
     for item in data.get("results", [])[:10]:
@@ -194,7 +210,7 @@ def search_omdb(query: str, api_key: str, media_type: str = "movie") -> list[Mov
     url = OMDB_BASE
     params = {"apikey": api_key, "s": query, "type": media_type}
     try:
-        with httpx.Client(timeout=10) as client:
+        with make_client(timeout=5) as client:
             resp = client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -226,12 +242,66 @@ def search_omdb(query: str, api_key: str, media_type: str = "movie") -> list[Mov
     return results
 
 
+def search_tvmaze(query: str) -> list[MovieSearchResult]:
+    """Search TV series via TVmaze API (free, no API key required).
+
+    TVmaze is a community-maintained TV database with comprehensive
+    metadata for television shows worldwide. It uses fuzzy matching
+    so even partial/typo queries return relevant results.
+
+    Returns a list of ``MovieSearchResult`` with ``media_type="tv"``.
+    """
+    url = f"{TVMAZE_BASE}/search/shows"
+    params = {"q": query}
+    try:
+        with make_client(timeout=5) as client:
+            resp = client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        raise RuntimeError(f"TVmaze search failed: {e}")
+
+    results: list[MovieSearchResult] = []
+    for item in data[:15]:
+        show = item.get("show", {})
+        name = show.get("name") or ""
+        if not name:
+            continue
+        premiered = show.get("premiered", "")
+        year = int(premiered[:4]) if premiered and len(premiered) >= 4 else None
+        genres = show.get("genres", [])
+        genre_str = " / ".join(genres) if genres else ""
+        image = show.get("image") or {}
+        poster_url = image.get("medium") or None
+        # Strip HTML tags from summary for a clean preview
+        summary = show.get("summary", "") or ""
+        if summary:
+            summary = _strip_html(summary)
+
+        results.append(MovieSearchResult(
+            title=name,
+            year=year,
+            genre=genre_str,
+            poster_url=poster_url,
+            source_id=str(show.get("id", "")),
+            source="tvmaze",
+            original_title=show.get("name", ""),
+            media_type="tv",
+        ))
+    return results
+
+
+def _strip_html(text: str) -> str:
+    """Remove HTML tags from a string and strip whitespace."""
+    return re.sub(r"<[^>]+>", "", text).strip()
+
+
 def search_movies(query: str, source: str = "tmdb", dual_language: bool = False) -> list[dict]:
     """Unified search entry point. Returns list of dicts ready for JSON serialization.
 
     Args:
         query: Search query string.
-        source: ``"tmdb"``, ``"omdb"``, or ``"auto"``.
+        source: ``"tmdb"``, ``"omdb"``, ``"tvmaze"``, or ``"auto"``.
         dual_language: If True and source is TMDB, search in both
             Chinese and English then merge results (better for
             background scraping match rates).
@@ -240,17 +310,29 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False)
     if not query:
         return []
 
+    # Strip season info (e.g., "黑袍纠察队 第四季" → "黑袍纠察队")
+    query = strip_season(query)
+    if not query:
+        return []
+
+    # Build search_queries: try the full query first, then each " / " part
+    search_queries = [query]
+    if " / " in query:
+        for part in query.split(" / "):
+            part = part.strip()
+            if part and part not in search_queries:
+                search_queries.append(part)
+
     tmdb_key = get_config_api_key("tmdb")
     omdb_key = get_config_api_key("omdb")
 
     # Helpful error when no keys are configured
-    if not tmdb_key and not omdb_key:
+    if source not in ("tvmaze", "auto") and not tmdb_key and not omdb_key:
         raise RuntimeError(
             "未配置电影数据库 API Key，请在设置页面中配置 TMDB 或 OMDb API Key\n"
             "TMDB: https://www.themoviedb.org/settings/api\n"
             "OMDb: https://www.omdbapi.com/apikey.aspx"
         )
-
     if source == "tmdb" and not tmdb_key:
         raise RuntimeError("TMDB 搜索需要设置 TMDB_API_KEY，请在设置页面中配置")
     if source == "omdb" and not omdb_key:
@@ -259,23 +341,15 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False)
     results: list[MovieSearchResult] = []
 
     if source == "tmdb" and tmdb_key:
-        if dual_language:
-            results = search_tmdb_dual(query, tmdb_key)
-        else:
-            results = search_tmdb(query, tmdb_key)
+        _search_tmdb_variants(search_queries, tmdb_key, dual_language, results)
     elif source == "omdb" and omdb_key:
-        results = search_omdb(query, omdb_key)
+        _search_omdb_variants(search_queries, omdb_key, results)
+    elif source == "tvmaze":
+        _search_tvmaze_variants(search_queries, results)
     elif source == "auto":
-        # Try TMDB first, fallback to OMDb
-        if tmdb_key:
-            try:
-                results = search_tmdb(query, tmdb_key)
-            except RuntimeError:
-                results = []
-        if not results and omdb_key:
-            results = search_omdb(query, omdb_key)
+        _search_auto(search_queries, tmdb_key, omdb_key, results)
 
-    # Deduplicate by title
+    # Final deduplicate by title
     seen: set[str] = set()
     deduped: list[MovieSearchResult] = []
     for r in results:
@@ -287,11 +361,112 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False)
     return [r.to_dict() for r in deduped]
 
 
+def _merge_results(new_results: list[MovieSearchResult], target: list[MovieSearchResult]):
+    """Merge new_results into target, deduplicating by lowercased title."""
+    seen = set(r.title.lower().strip() for r in target)
+    for r in new_results:
+        key = r.title.lower().strip()
+        if key not in seen:
+            seen.add(key)
+            target.append(r)
+
+
+def _search_tmdb_variants(
+    search_queries: list[str],
+    tmdb_key: str,
+    dual_language: bool,
+    results: list[MovieSearchResult],
+):
+    """Search TMDB movies + TV, trying each query variant.
+    Stops trying new variants once we have results.
+    """
+    for q in search_queries:
+        movie_results: list[MovieSearchResult] = []
+        if dual_language:
+            movie_results = search_tmdb_dual(q, tmdb_key)
+        else:
+            movie_results = search_tmdb(q, tmdb_key)
+        tv_results: list[MovieSearchResult] = []
+        try:
+            if dual_language:
+                tv_results = search_tmdb_tv_dual(q, tmdb_key)
+            else:
+                tv_results = search_tmdb_tv(q, tmdb_key)
+        except RuntimeError as e:
+            logger.warning("TMDB TV search failed for '%s' (movie results still returned): %s", q, e)
+        # Merge q's movie + tv results (dedup by title within this query)
+        q_results: list[MovieSearchResult] = []
+        seen_titles: set[str] = set()
+        for r in movie_results:
+            seen_titles.add(r.title.lower().strip())
+            q_results.append(r)
+        for r in tv_results:
+            key = r.title.lower().strip()
+            if key not in seen_titles:
+                q_results.append(r)
+        _merge_results(q_results, results)
+        # Stop trying more variants if we already have results
+        if results:
+            break
+
+
+def _search_omdb_variants(
+    search_queries: list[str],
+    omdb_key: str,
+    results: list[MovieSearchResult],
+):
+    """Search OMDb, trying each query variant until we get results."""
+    for q in search_queries:
+        q_results = search_omdb(q, omdb_key)
+        if q_results:
+            _merge_results(q_results, results)
+            break
+
+
+def _search_tvmaze_variants(
+    search_queries: list[str],
+    results: list[MovieSearchResult],
+):
+    """Search TVmaze, trying each query variant and merging all results."""
+    for q in search_queries:
+        try:
+            q_results = search_tvmaze(q)
+            _merge_results(q_results, results)
+        except RuntimeError:
+            pass
+
+
+def _search_auto(
+    search_queries: list[str],
+    tmdb_key: Optional[str],
+    omdb_key: Optional[str],
+    results: list[MovieSearchResult],
+):
+    """Auto mode: TMDB first (variants until results), then OMDb fallback, then TVmaze append."""
+    # Step 1: TMDB — try each variant until we get results
+    if tmdb_key:
+        try:
+            _search_tmdb_variants(search_queries, tmdb_key, dual_language=False, results=results)
+        except RuntimeError:
+            pass
+
+    # Step 2: OMDb fallback — only if TMDB gave no results, try first query variant
+    if not results and omdb_key:
+        try:
+            q_results = search_omdb(search_queries[0], omdb_key)
+            _merge_results(q_results, results)
+        except RuntimeError:
+            logger.warning("OMDb fallback search failed for '%s'", search_queries[0])
+
+    # Step 3: TVmaze — always try all variants (TV-specific coverage, dedup by title)
+    _search_tvmaze_variants(search_queries, results)
+
+
 def get_movie_detail(source: str, source_id: str, media_type: str = "movie") -> dict:
     """Fetch full details from the specified source by ID.
 
     Args:
-        source: ``"tmdb"`` or ``"omdb"``.
+        source: ``"tmdb"``, ``"omdb"``, or ``"tvmaze"``.
         source_id: The ID in the source system.
         media_type: ``"movie"`` or ``"tv"`` (only used for TMDB).
     """
@@ -308,6 +483,8 @@ def get_movie_detail(source: str, source_id: str, media_type: str = "movie") -> 
         if not omdb_key:
             raise RuntimeError("OMDb API Key 未配置，请在设置页面中配置")
         return _get_omdb_detail(source_id, omdb_key)
+    elif source == "tvmaze":
+        return _get_tvmaze_detail(source_id)
     else:
         raise RuntimeError(f"Unknown source: {source}")
 
@@ -317,7 +494,7 @@ def _get_tmdb_detail(movie_id: str, api_key: str) -> dict:
     url = f"{TMDB_BASE}/movie/{movie_id}"
     params = {"api_key": api_key, "language": "zh-CN"}
     try:
-        with httpx.Client(timeout=10) as client:
+        with make_client(timeout=5) as client:
             resp = client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -351,7 +528,7 @@ def _get_omdb_detail(imdb_id: str, api_key: str) -> dict:
     url = OMDB_BASE
     params = {"apikey": api_key, "i": imdb_id, "plot": "full"}
     try:
-        with httpx.Client(timeout=10) as client:
+        with make_client(timeout=5) as client:
             resp = client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -423,7 +600,7 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str) -> dict:
     url = f"{TMDB_BASE}/tv/{tv_id}"
     params = {"api_key": api_key, "language": "zh-CN"}
     try:
-        with httpx.Client(timeout=10) as client:
+        with make_client(timeout=5) as client:
             resp = client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -455,6 +632,77 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str) -> dict:
         "media_type": "tv",
         "seasons": seasons,
         "episodes": episodes,
+    }
+
+
+# ============================================
+# TVmaze detail
+# ============================================
+
+
+def _get_tvmaze_detail(show_id: str) -> dict:
+    """Fetch full TV series details from TVmaze by show ID.
+
+    TVmaze is free and requires no API key. The response includes
+    rich metadata: name, status, network, genres, summary, image,
+    external IDs (IMDb, TheTVDB), and more.
+    """
+    url = f"{TVMAZE_BASE}/shows/{show_id}"
+    try:
+        with make_client(timeout=5) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        raise RuntimeError(f"TVmaze detail fetch failed: {e}")
+
+    premiered = data.get("premiered", "")
+    year = int(premiered[:4]) if premiered and len(premiered) >= 4 else None
+    image = data.get("image") or {}
+    poster_url = image.get("original") or image.get("medium") or None
+    genres = data.get("genres", [])
+    genre_str = " / ".join(genres) if genres else ""
+    summary = data.get("summary", "") or ""
+    if summary:
+        summary = _strip_html(summary)
+    network = data.get("network") or {}
+    network_name = network.get("name", "") if network else ""
+    web_channel = data.get("webChannel") or {}
+    web_channel_name = web_channel.get("name", "") if web_channel else ""
+    channel = network_name or web_channel_name
+    externals = data.get("externals", {}) or {}
+    imdb_id = externals.get("imdb", "") or ""
+    thetvdb_id = externals.get("thetvdb", "") or ""
+
+    # Build a runtime-like field: average episode runtime
+    avg_runtime = data.get("averageRuntime") or data.get("runtime") or None
+
+    return {
+        "title": data.get("name", ""),
+        "year": year,
+        "genre": genre_str,
+        "poster_url": poster_url,
+        "overview": summary,
+        "rating": data.get("rating", {}).get("average") if data.get("rating") else None,
+        "vote_count": None,
+        "runtime": avg_runtime,
+        "tagline": "",
+        "homepage": data.get("url", ""),
+        "original_language": data.get("language", ""),
+        "source": "tvmaze",
+        "source_id": show_id,
+        "media_type": "tv",
+        "director": "",
+        "actors": "",
+        "writer": "",
+        "awards": "",
+        "country": network.get("country", {}).get("name", "") if network else "",
+        "status": data.get("status", ""),
+        "network": channel,
+        "imdb_id": imdb_id if imdb_id.startswith("tt") else None,
+        "thetvdb_id": str(thetvdb_id) if thetvdb_id else None,
+        "seasons": None,
+        "episodes": None,
     }
 
 

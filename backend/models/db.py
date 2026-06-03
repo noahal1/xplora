@@ -1,0 +1,120 @@
+"""SQLModel ORM table models (database-backed)."""
+
+from datetime import datetime, timezone
+from typing import Optional
+
+from sqlmodel import SQLModel, Field, Relationship
+
+
+class UserRecord(SQLModel, table=True):
+    """A registered user."""
+
+    __tablename__ = "users"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(max_length=64, unique=True, nullable=False, index=True)
+    password_hash: str = Field(max_length=256, nullable=False)
+    is_admin: bool = Field(default=False, nullable=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+    movies: list["MovieRecord"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    sessions: list["SessionRecord"] = Relationship(
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class MovieRecord(SQLModel, table=True):
+    """A movie that the user has imported — either watched (rated) or wishlisted."""
+
+    __tablename__ = "movies"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(max_length=255, nullable=False, index=True)
+    rating: float = Field(nullable=False, default=5.0)
+    year: Optional[int] = Field(default=None, nullable=True)
+    genre: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    status: str = Field(
+        default="watched", max_length=20, nullable=False, index=True
+    )  # "watched" or "wish"
+    notes: Optional[str] = Field(default=None, max_length=500, nullable=True)
+
+    # === Metadata fields (populated by TMDB / OMDb scraping) ===
+    poster_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    overview: Optional[str] = Field(default=None, nullable=True)
+    director: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    actors: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    runtime: Optional[int] = Field(default=None, nullable=True)
+    imdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    tmdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    country: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    awards: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    tagline: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    scrape_error: Optional[str] = Field(default=None, nullable=True)
+    media_type: str = Field(default="movie", max_length=10, nullable=False, index=True)
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    user: Optional[UserRecord] = Relationship(back_populates="movies")
+
+    session_id: Optional[int] = Field(
+        default=None, foreign_key="sessions.id", nullable=True
+    )
+    session: Optional["SessionRecord"] = Relationship(back_populates="movies")
+
+
+class SessionRecord(SQLModel, table=True):
+    """A recommendation session — captures the context of a single AI recommend run."""
+
+    __tablename__ = "sessions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    model: str = Field(max_length=50, nullable=False, default="deepseek")
+    source_count: int = Field(nullable=False, default=0)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    user: Optional[UserRecord] = Relationship(back_populates="sessions")
+
+    movies: list[MovieRecord] = Relationship(
+        back_populates="session",
+        sa_relationship_kwargs={"cascade": "save-update"},
+    )
+    recommendations: list["RecommendationRecord"] = Relationship(
+        back_populates="session",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class RecommendationRecord(SQLModel, table=True):
+    """A single movie recommendation from the AI."""
+
+    __tablename__ = "recommendations"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(max_length=255, nullable=False)
+    year: Optional[int] = Field(default=None, nullable=True)
+    genre: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    reason: str = Field(nullable=False, default="")
+    confidence: float = Field(nullable=False, default=0.0)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+    session_id: int = Field(foreign_key="sessions.id", nullable=False)
+    session: Optional[SessionRecord] = Relationship(back_populates="recommendations")
+
+
+class OperationLogRecord(SQLModel, table=True):
+    """Audit log for user operations."""
+
+    __tablename__ = "operation_logs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    username: str = Field(max_length=64, nullable=False)
+    action: str = Field(max_length=64, nullable=False, index=True)
+    detail: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)

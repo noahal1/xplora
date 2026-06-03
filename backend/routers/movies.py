@@ -31,9 +31,10 @@ from crud import (
     enrich_movie_metadata as db_enrich_movie_metadata,
     clear_scrape_error as db_clear_scrape_error,
     set_scrape_error as db_set_scrape_error,
+    log_operation,
 )
 from movie_search import search_movies as search_external_movies, get_movie_detail as get_external_movie_detail
-from scraper import background_enrich_movies, background_cache_posters
+from scraper import async_background_enrich_movies, async_background_cache_posters
 from poster_cache import download_and_cache_poster
 
 router = APIRouter(prefix="/api", tags=["movies"])
@@ -60,8 +61,9 @@ async def replace_movies(
     # Launch background metadata scraping
     movie_ids = [r.id for r in records]
     if movie_ids:
-        background_tasks.add_task(background_enrich_movies, current_user["id"], movie_ids)
+        background_tasks.add_task(async_background_enrich_movies, current_user["id"], movie_ids)
 
+    log_operation(current_user["id"], current_user["username"], "replace_watched", f"替换已看列表: {len(records)} 部电影")
     return {"status": "saved", "count": len(records)}
 
 
@@ -85,10 +87,12 @@ async def list_movies(
     rating_min: Optional[float] = None,
     rating_max: Optional[float] = None,
     has_error: bool = False,
+    media_type: str = "",
     current_user: dict = Depends(get_current_user),
 ):
-    """List saved movies for current user. Optional filters: status ('watched'/'wish'), rating range, has_error."""
+    """List saved movies for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv')."""
     status_filter = status if status in ("watched", "wish") else None
+    media_type_filter = media_type if media_type in ("movie", "tv") else None
     records, total = db_get_movies(
         user_id=current_user["id"],
         search=search,
@@ -100,6 +104,7 @@ async def list_movies(
         rating_min=rating_min,
         rating_max=rating_max,
         has_error=has_error or None,
+        media_type=media_type_filter,
     )
     return {
         "movies": [
@@ -110,6 +115,7 @@ async def list_movies(
                 "year": r.year,
                 "genre": r.genre,
                 "status": r.status,
+                "media_type": r.media_type,
                 "poster_url": r.poster_url,
                 "overview": r.overview,
                 "director": r.director,
@@ -155,9 +161,11 @@ async def update_movie_endpoint(
         country=data.get("country"),
         awards=data.get("awards"),
         tagline=data.get("tagline"),
+        created_at=data.get("created_at"),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Movie not found")
+    log_operation(current_user["id"], current_user["username"], "update_movie", f"更新电影: {updated.title} (ID: {movie_id})")
     return {
         "id": updated.id,
         "title": updated.title,
@@ -204,8 +212,10 @@ async def enrich_movie_metadata_endpoint(
     if not source_id:
         raise HTTPException(status_code=502, detail="TMDB 搜索结果缺少 source_id")
 
+    # Pass media_type from search result so TV series use /tv/{id} instead of /movie/{id}
+    media_type = match.get("media_type", "movie")
     try:
-        detail = get_external_movie_detail("tmdb", source_id)
+        detail = get_external_movie_detail("tmdb", source_id, media_type=media_type)
     except RuntimeError as e:
         raise HTTPException(
             status_code=502,
@@ -279,6 +289,7 @@ async def mark_as_watched(
             status_code=404,
             detail="Movie not found or already marked as watched",
         )
+    log_operation(current_user["id"], current_user["username"], "mark_watched", f"标记已看: {updated.title}")
     return {
         "id": updated.id,
         "title": updated.title,
@@ -298,6 +309,7 @@ async def delete_movie(
     deleted = db_delete_movie(movie_id, current_user["id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Movie not found")
+    log_operation(current_user["id"], current_user["username"], "delete_movie", f"删除电影 ID: {movie_id}")
     return {"status": "deleted"}
 
 
@@ -311,6 +323,7 @@ async def batch_delete_movies_endpoint(
     if not isinstance(ids, list) or len(ids) == 0:
         raise HTTPException(status_code=400, detail="请提供要删除的电影 ID 列表")
     count = db_batch_delete_movies(ids, current_user["id"])
+    log_operation(current_user["id"], current_user["username"], "batch_delete_movies", f"批量删除: {count} 部电影")
     return {"status": "deleted", "count": count}
 
 
@@ -349,7 +362,8 @@ async def enrich_all_movies(
     if not movie_ids:
         return {"status": "ok", "enqueued": 0, "message": "All movies already have metadata"}
 
-    background_tasks.add_task(background_enrich_movies, current_user["id"], movie_ids)
+    background_tasks.add_task(async_background_enrich_movies, current_user["id"], movie_ids)
+    log_operation(current_user["id"], current_user["username"], "enrich_all", f"批量刮削: {len(movie_ids)} 部电影")
     return {"status": "ok", "enqueued": len(movie_ids)}
 
 
@@ -372,7 +386,8 @@ async def cache_posters(
     if not movies:
         return {"status": "ok", "enqueued": 0, "message": "All posters already cached locally"}
 
-    background_tasks.add_task(background_cache_posters, current_user["id"], movies)
+    background_tasks.add_task(async_background_cache_posters, current_user["id"], movies)
+    log_operation(current_user["id"], current_user["username"], "cache_posters", f"缓存海报: {len(movies)} 部")
     return {"status": "ok", "enqueued": len(movies)}
 
 
@@ -382,6 +397,7 @@ async def delete_all_movies_endpoint(
 ):
     """Delete all saved movies for current user."""
     count = delete_all_movies_for_user(current_user["id"])
+    log_operation(current_user["id"], current_user["username"], "clear_all_movies", f"清空所有电影: {count} 部")
     return {"status": "deleted", "count": count}
 
 
@@ -391,12 +407,13 @@ async def delete_all_movies_endpoint(
 @router.get("/movies/search")
 async def search_movies(
     q: str = Query(..., min_length=1, description="Search query"),
-    source: str = Query("auto", pattern="^(tmdb|omdb|auto)$", description="Data source: tmdb, omdb, or auto"),
+    source: str = Query("auto", pattern="^(tmdb|omdb|tvmaze|auto)$", description="Data source: tmdb, omdb, tvmaze, or auto"),
     current_user: dict = Depends(get_current_user),
 ):
     """Search for movies via external sources (TMDB / OMDb)."""
     try:
         results = search_external_movies(q, source)
+        log_operation(current_user["id"], current_user["username"], "search", f"搜索: {q} (来源: {source})")
         return {"results": results}
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -421,17 +438,18 @@ async def rematch_movie(
     """
     source = request.get("source", "")
     source_id = request.get("source_id", "")
+    media_type = request.get("media_type", "movie")
     if not source or not source_id:
         raise HTTPException(status_code=400, detail="需要提供 source 和 source_id")
-    if source not in ("tmdb", "omdb"):
-        raise HTTPException(status_code=400, detail="source 只能是 tmdb 或 omdb")
+    if source not in ("tmdb", "omdb", "tvmaze"):
+        raise HTTPException(status_code=400, detail="source 只能是 tmdb、omdb 或 tvmaze")
 
     movie = get_movie_for_user(movie_id, current_user["id"])
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
 
     try:
-        detail = get_external_movie_detail(source, source_id)
+        detail = get_external_movie_detail(source, source_id, media_type=media_type)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -446,7 +464,7 @@ async def rematch_movie(
             detail["poster_url"] = local_url
             poster_cached = True
 
-    # Update metadata fields (preserves user's title/year/genre)
+    # Update metadata fields (preserves user's title/year)
     updated = db_enrich_movie_metadata(movie_id, current_user["id"], detail)
     if not updated:
         raise HTTPException(status_code=404, detail="Movie not found")
@@ -454,6 +472,7 @@ async def rematch_movie(
     # Clear scrape_error on success
     db_clear_scrape_error(movie_id, current_user["id"])
 
+    log_operation(current_user["id"], current_user["username"], "rematch_movie", f"手动匹配: {updated.title}")
     return {
         "id": updated.id,
         "title": updated.title,
@@ -479,11 +498,12 @@ async def rematch_movie(
 async def movie_detail(
     source: str = Query(..., pattern="^(tmdb|omdb)$", description="Data source: tmdb or omdb"),
     source_id: str = Query(..., min_length=1, description="Movie ID from the source"),
+    media_type: str = Query("movie", pattern="^(movie|tv)$", description="Media type: movie or tv"),
     current_user: dict = Depends(get_current_user),
 ):
     """Fetch full movie details from external source."""
     try:
-        detail = get_external_movie_detail(source, source_id)
+        detail = get_external_movie_detail(source, source_id, media_type=media_type)
         return detail
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -519,8 +539,9 @@ async def replace_wishlist(
     # Launch background metadata scraping
     movie_ids = [r.id for r in records]
     if movie_ids:
-        background_tasks.add_task(background_enrich_movies, current_user["id"], movie_ids)
+        background_tasks.add_task(async_background_enrich_movies, current_user["id"], movie_ids)
 
+    log_operation(current_user["id"], current_user["username"], "replace_wishlist", f"替换想看列表: {len(records)} 部电影")
     return {"status": "saved", "count": len(records)}
 
 
@@ -540,8 +561,9 @@ async def add_to_wishlist(
     r = records[0]
 
     # Launch background metadata scraping for this single movie
-    background_tasks.add_task(background_enrich_movies, current_user["id"], [r.id])
+    background_tasks.add_task(async_background_enrich_movies, current_user["id"], [r.id])
 
+    log_operation(current_user["id"], current_user["username"], "add_to_wishlist", f"添加到想看: {r.title}")
     return {
         "id": r.id,
         "title": r.title,
@@ -557,4 +579,5 @@ async def clear_wishlist(
 ):
     """Delete all wishlist items for current user."""
     count = db_delete_movies_by_status(current_user["id"], "wish")
+    log_operation(current_user["id"], current_user["username"], "clear_wishlist", f"清空想看列表: {count} 部")
     return {"status": "deleted", "count": count}

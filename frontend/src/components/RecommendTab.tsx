@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { Movie, Recommendation, ChatMessage } from "../types";
 import * as api from "../api";
@@ -9,6 +9,7 @@ import {
   Sparkles, Send, Percent, MessageSquare, Film,
   Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star,
 } from "lucide-react";
+import { Badge } from "./ui/badge";
 
 const STRATEGIES = [
   { id: "taste", icon: Heart },
@@ -32,6 +33,8 @@ export function RecommendTab() {
   const [selectedModel, setSelectedModel] = useState("deepseek");
   const [recCount, setRecCount] = useState(5);
   const [strategy, setStrategy] = useState("taste");
+  const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState("all");
 
   // Strategy-specific inputs
   const [strategyMood, setStrategyMood] = useState("");
@@ -59,6 +62,7 @@ export function RecommendTab() {
           rating: m.rating,
           year: m.year,
           genre: m.genre,
+          media_type: m.media_type,
         }))
       );
     } catch {} finally {
@@ -85,8 +89,34 @@ export function RecommendTab() {
     }
   }, [strategy, strategyMood, strategyYearStart, strategyYearEnd]);
 
+  // Derive unique genre tags from watched movies
+  const uniqueGenres = useMemo(() => {
+    const set = new Set<string>();
+    movies.forEach((m) => {
+      if (m.genre) {
+        m.genre.split("/").forEach((g) => {
+          const trimmed = g.trim();
+          if (trimmed) set.add(trimmed);
+        });
+      }
+    });
+    return Array.from(set).sort();
+  }, [movies]);
+
+  const filteredMovies = useMemo(() => {
+    let result = mediaTypeFilter === "all" ? movies : movies.filter((m) => m.media_type === mediaTypeFilter);
+    if (genreFilter !== "all") {
+      result = result.filter((m) => m.genre && m.genre.toLowerCase().includes(genreFilter.toLowerCase()));
+    }
+    return result;
+  }, [movies, mediaTypeFilter, genreFilter]);
+
   const generateRecommendations = useCallback(async () => {
     if (movies.length < 2) {
+      showToast(t("recommend.need_more_movies"), "error");
+      return;
+    }
+    if (filteredMovies.length < 2) {
       showToast(t("recommend.need_more_movies"), "error");
       return;
     }
@@ -96,14 +126,14 @@ export function RecommendTab() {
     setShowChat(false);
     const modelNames: Record<string, string> = { deepseek: "DeepSeek", openai: "OpenAI (GPT-4o)" };
     setModelUsed(modelNames[selectedModel] || selectedModel);
-    setSourceInfo(t("recommend.source_info_loading", { count: movies.length }));
+    setSourceInfo(t("recommend.source_info_loading", { count: filteredMovies.length }));
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
       const payload: Record<string, unknown> = {
-        movies: movies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
+        movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
         model: selectedModel,
         count: recCount,
         strategy,
@@ -151,10 +181,15 @@ export function RecommendTab() {
               case "start":
                 setSourceInfo(t("recommend.source_info_loading", { count: data.source_count }));
                 break;
-              case "recommendation":
-                recs.push({ title: data.title, year: data.year, genre: data.genre, reason: data.reason, confidence: data.confidence });
+              case "recommendation": {
+                const rec: Recommendation = { title: data.title, year: data.year, genre: data.genre, reason: data.reason, confidence: data.confidence };
+                // Try to find media_type from all watched movies
+                const matched = movies.find((m) => m.title.toLowerCase() === (data.title || "").toLowerCase());
+                if (matched?.media_type) rec.media_type = matched.media_type;
+                recs.push(rec);
                 setRecommendations([...recs]);
                 break;
+              }
               case "done":
                 setSourceInfo(t("recommend.source_info_done", { count: data.source_count, recs: recs.length }));
                 break;
@@ -174,7 +209,7 @@ export function RecommendTab() {
       clearTimeout(timeoutId);
       setIsLoading(false);
     }
-  }, [movies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
+  }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
 
   const sendFollowUp = useCallback(async () => {
     const input = chatInputRef.current;
@@ -184,6 +219,9 @@ export function RecommendTab() {
     setChatMessages((prev) => [...prev, { role: "user", content: text }]);
     setIsChatProcessing(true);
 
+    // Use the same filters (media type + genre) as the main recommendation
+    const followUpMovies = filteredMovies
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -192,7 +230,7 @@ export function RecommendTab() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          movies: movies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
+          movies: followUpMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
           previous_recommendations: recommendations,
           conversation: chatMessages,
           question: text,
@@ -268,7 +306,7 @@ export function RecommendTab() {
       clearTimeout(timeoutId);
       setIsChatProcessing(false);
     }
-  }, [movies, recommendations, chatMessages, selectedModel, recCount, isChatProcessing, showToast, t]);
+  }, [filteredMovies, recommendations, chatMessages, selectedModel, recCount, isChatProcessing, showToast, t]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -366,6 +404,42 @@ export function RecommendTab() {
               </div>
             </div>
 
+            {/* ── Media Type Filter ─────────────────────── */}
+            <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap justify-start sm:justify-center pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+              <span className="text-xs text-muted-foreground mr-1">{t("manage.media_type")}</span>
+              {[
+                { value: "all", label: t("manage.media_type_all") },
+                { value: "movie", label: t("manage.media_type_movie") },
+                { value: "tv", label: t("manage.media_type_tv") },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  className={`pill ${mediaTypeFilter === opt.value ? "active" : ""}`}
+                  onClick={() => setMediaTypeFilter(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Genre Filter ─────────────────────────── */}
+            {uniqueGenres.length > 0 && (
+              <div className="flex items-center gap-1.5 mb-5 overflow-x-auto sm:flex-wrap justify-start sm:justify-center pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+                <span className="text-xs text-muted-foreground mr-1">{t("manage.genre_filter")}</span>
+                <select
+                  value={genreFilter}
+                  onChange={(e) => setGenreFilter(e.target.value)}
+                  className="input-field text-xs py-1.5 px-2.5 w-auto max-w-[160px]"
+                  style={{ appearance: "auto" }}
+                >
+                  <option value="all">{t("manage.media_type_all")}</option>
+                  {uniqueGenres.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* ── Strategy-specific inputs ──────────────────── */}
             {strategy === "mood" && (
               <div className="w-full max-w-[400px] mb-5">
@@ -453,20 +527,22 @@ export function RecommendTab() {
               </div>
 
               {/* Generate button */}
-              {movies.length < 2 && (
+              {filteredMovies.length < 2 && (
                 <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
-                  {t("recommend.need_more_movies")}
+                  {mediaTypeFilter !== "all"
+                    ? t("recommend.need_more_filtered", { type: t(`manage.media_type_${mediaTypeFilter}`) })
+                    : t("recommend.need_more_movies")}
                 </p>
               )}
 
               <button
                 onClick={generateRecommendations}
-                disabled={movies.length < 2}
+                disabled={filteredMovies.length < 2}
                 className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40"
                 style={{
-                  background: movies.length >= 2 ? "var(--seed-primary)" : "var(--bg-input)",
-                  color: movies.length >= 2 ? "#0f0f0f" : "var(--fg-dim)",
-                  border: movies.length >= 2 ? "none" : "1px solid var(--border-default)",
+                  background: filteredMovies.length >= 2 ? "var(--seed-primary)" : "var(--bg-input)",
+                  color: filteredMovies.length >= 2 ? "#0f0f0f" : "var(--fg-dim)",
+                  border: filteredMovies.length >= 2 ? "none" : "1px solid var(--border-default)",
                 }}
               >
                 <Sparkles size={14} />
@@ -474,7 +550,7 @@ export function RecommendTab() {
               </button>
 
               <p className="text-caption" style={{ color: "var(--fg-dim)" }}>
-                {t("recommend.based_on", { count: movies.length })} · Ctrl+Enter
+                {t("recommend.based_on", { count: filteredMovies.length })} · Ctrl+Enter
               </p>
             </div>
           </div>
@@ -547,6 +623,9 @@ export function RecommendTab() {
                         <p className="text-sm font-[590] truncate" style={{ color: "var(--seed-fg)" }}>
                           {rec.title}
                         </p>
+                        {rec.media_type === "tv" && (
+                          <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+                        )}
                         {rec.genre && <span className="badge">{rec.genre}</span>}
                       </div>
                       {rec.year && (

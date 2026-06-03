@@ -48,6 +48,7 @@
     "filter_0_4": "0-4 pts",
     "selected_count": "{{count}} selected",
     "batch_edit_rating": "Edit Rating",
+    "clear": "Clear",
     "clear_selection": "Clear Selection",
     "select_all": "Select all on page",
     "no_movies": "No movies yet",
@@ -230,6 +231,8 @@
     "search_tmdb_desc": "Search for movies on TMDB and import them with full metadata",
     "search_tmdb_placeholder": "Type movie title to search TMDB...",
     "search_tmdb_hint": "Start typing to search movies on TMDB",
+    "search_results": "Search results",
+    "search_failed": "Search failed",
     "searching": "Searching...",
     "no_search_results": "No results found for \"{{query}}\"",
     "imported_from_search": "Imported \"{{title}}\" with metadata",
@@ -274,7 +277,8 @@
     "rematch_success": "Updated with \"{{title}}\"",
     "rematch_failed": "Match failed: {{message}}",
     "rematch_select": "Select",
-    "rematch_current": "✓ Current"
+    "rematch_current": "✓ Current",
+    "genre_filter": "Genre:"
   },
   "history": {
     "trigger": "History",
@@ -413,13 +417,15 @@
   "genre_input": {
     "placeholder": "Select or type genre...",
     "custom_type": "Type custom genre...",
+    "quick_select": "Quick select",
     "enter_select": "Enter to select",
     "separate_hint": "Use / for multiple genres"
   },
   "search_source": {
     "auto": "Auto",
     "tmdb": "TMDB",
-    "omdb": "OMDb"
+    "omdb": "OMDb",
+    "tvmaze": "TVmaze"
   },
   "pagination": {
     "page_info": "{{start}}–{{end}}"

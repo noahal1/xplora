@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 
 from auth import get_current_user
 from models import MovieRating, WishlistItem
-from scraper import background_enrich_movies
+from scraper import async_background_enrich_movies
+from crud import log_operation
 
 router = APIRouter(prefix="/api/user", tags=["user-data"])
 
@@ -137,8 +138,9 @@ async def import_my_data(
     # Launch background metadata scraping for all imported records
     movie_ids = [r.id for r in total_records]
     if movie_ids:
-        background_tasks.add_task(background_enrich_movies, current_user["id"], movie_ids)
+        background_tasks.add_task(async_background_enrich_movies, current_user["id"], movie_ids)
 
     # Determine primary status type for response
     status_type = "watched" if len(watched_items) >= len(wish_items) else "wish"
+    log_operation(current_user["id"], current_user["username"], "import_data", f"导入数据: {len(total_records)} 部电影")
     return {"status": "imported", "count": len(total_records), "status_type": status_type}

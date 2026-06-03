@@ -1,155 +1,36 @@
-"""Database CRUD operations using SQLModel select/exec patterns."""
+"""Movie CRUD operations (user-scoped)."""
 
 from datetime import datetime, timezone
 from typing import Optional, Any
 
-from passlib.hash import bcrypt
 from sqlalchemy import func as sa_func
 from sqlmodel import Session, select, delete as sa_delete
 
 from database import get_session
-from models import (
-    UserRecord,
-    MovieRecord,
-    SessionRecord,
-    RecommendationRecord,
-    MovieRating,
-    MovieRecommendation,
-    WishlistItem,
-)
+from models import MovieRecord, MovieRating, WishlistItem
+
+
+# ── Helper: parse ISO datetime string ──────────────────────────────
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    """Parse an ISO-format datetime string, returning None on failure."""
+    if not value:
+        return None
+    try:
+        # Handle both "2024-01-15" and "2024-01-15T10:30:00" formats
+        if "T" not in value and len(value) == 10:
+            value = value + "T00:00:00"
+        if "+" not in value and not value.endswith("Z"):
+            value += "Z"
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return dt
+    except (ValueError, TypeError):
+        return None
 
 
 # ============================================
-# Auth / Users
-# ============================================
-
-
-def create_user(username: str, password: str, is_admin: bool = False) -> UserRecord:
-    """Create a new user. Raises ValueError if username already exists."""
-    db = get_session()
-    try:
-        existing = db.exec(
-            select(UserRecord).where(UserRecord.username == username)
-        ).first()
-        if existing:
-            raise ValueError(f"User '{username}' already exists")
-        user = UserRecord(
-            username=username,
-            password_hash=bcrypt.hash(password),
-            is_admin=is_admin,
-            created_at=datetime.now(timezone.utc),
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        return user
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-def authenticate_user(username: str, password: str) -> Optional[UserRecord]:
-    """Verify username/password. Returns UserRecord on success, None on failure."""
-    db = get_session()
-    try:
-        user = db.exec(
-            select(UserRecord).where(UserRecord.username == username)
-        ).first()
-        if not user:
-            return None
-        if not bcrypt.verify(password, user.password_hash):
-            return None
-        return user
-    finally:
-        db.close()
-
-
-def get_user_by_id(user_id: int) -> Optional[UserRecord]:
-    """Get a user by ID."""
-    db = get_session()
-    try:
-        return db.exec(
-            select(UserRecord).where(UserRecord.id == user_id)
-        ).first()
-    finally:
-        db.close()
-
-
-def change_password(user_id: int, old_password: str, new_password: str) -> bool:
-    """Change a user's password. Returns True on success, False if old password is wrong."""
-    db = get_session()
-    try:
-        user = db.exec(
-            select(UserRecord).where(UserRecord.id == user_id)
-        ).first()
-        if not user:
-            return False
-        if not bcrypt.verify(old_password, user.password_hash):
-            return False
-        user.password_hash = bcrypt.hash(new_password)
-        db.commit()
-        return True
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-def list_users() -> list[UserRecord]:
-    """List all users (admin panel)."""
-    db = get_session()
-    try:
-        results = db.exec(
-            select(UserRecord).order_by(UserRecord.created_at.desc())
-        ).all()
-        return list(results)
-    finally:
-        db.close()
-
-
-def admin_delete_user(target_user_id: int) -> bool:
-    """Admin: delete a user (cannot delete self). Returns True if deleted."""
-    db = get_session()
-    try:
-        user = db.exec(
-            select(UserRecord).where(UserRecord.id == target_user_id)
-        ).first()
-        if not user:
-            return False
-        db.delete(user)
-        db.commit()
-        return True
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-def admin_reset_user_password(target_user_id: int, new_password: str) -> bool:
-    """Admin: reset a user's password. Returns True if successful."""
-    db = get_session()
-    try:
-        user = db.exec(
-            select(UserRecord).where(UserRecord.id == target_user_id)
-        ).first()
-        if not user:
-            return False
-        user.password_hash = bcrypt.hash(new_password)
-        db.commit()
-        return True
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-# ============================================
-# Movies (user-scoped)
+# Movies
 # ============================================
 
 
@@ -264,14 +145,17 @@ def get_movies(
     rating_min: Optional[float] = None,
     rating_max: Optional[float] = None,
     has_error: Optional[bool] = None,
+    media_type: Optional[str] = None,
 ) -> tuple[list[MovieRecord], int]:
     """List saved movies for a user with optional search, status filter, rating range,
-    scrape_error filter, pagination, and sort."""
+    scrape_error filter, media_type filter, pagination, and sort."""
     db = get_session()
     try:
         query = select(MovieRecord).where(MovieRecord.user_id == user_id)
         if status:
             query = query.where(MovieRecord.status == status)
+        if media_type:
+            query = query.where(MovieRecord.media_type == media_type)
         if search:
             # Escape SQL LIKE wildcards in user input
             escaped_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -382,6 +266,7 @@ def update_movie(
     country: str = None,
     awards: str = None,
     tagline: str = None,
+    created_at: str = None,
 ) -> Optional[MovieRecord]:
     """Update a movie record. Returns updated record or None if not found."""
     db = get_session()
@@ -424,6 +309,10 @@ def update_movie(
             record.awards = awards
         if tagline is not None:
             record.tagline = tagline
+        if created_at is not None:
+            parsed = _parse_datetime(created_at)
+            if parsed:
+                record.created_at = parsed
         db.commit()
         db.refresh(record)
         return record
@@ -472,9 +361,11 @@ def enrich_movie_metadata(
             return None
 
         # Map metadata fields to model attributes.
-        # NOTE: title / year / genre are intentionally excluded — they
+        # NOTE: title / year are intentionally excluded — they
         # come from the user's import and must not be overwritten by
         # TMDB/OMDb data (which may differ in language or formatting).
+        # Genre IS included because many imports lack genre info,
+        # and TMDB data is a reliable source for it.
         field_map = {
             "poster_url": "poster_url",
             "overview": "overview",
@@ -486,6 +377,8 @@ def enrich_movie_metadata(
             "country": "country",
             "awards": "awards",
             "tagline": "tagline",
+            "media_type": "media_type",
+            "genre": "genre",
         }
         for key, attr in field_map.items():
             if key in metadata and metadata[key] is not None:
@@ -631,114 +524,6 @@ def delete_movie(movie_id: int, user_id: int) -> bool:
         if not record:
             return False
         db.delete(record)
-        db.commit()
-        return True
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-# ============================================
-# Sessions (user-scoped)
-# ============================================
-
-
-def save_session(
-    model: str,
-    source_count: int,
-    movies: list[MovieRating],
-    recommendations: list[MovieRecommendation],
-    user_id: int,
-) -> SessionRecord:
-    """Create a recommendation session for a user.
-
-    Note: ``movies`` is kept for API compatibility but is not persisted.
-    Only the recommendation results are stored."""
-    db = get_session()
-    try:
-        session = SessionRecord(
-            model=model,
-            source_count=source_count,
-            user_id=user_id,
-            created_at=datetime.now(timezone.utc),
-        )
-        db.add(session)
-        db.flush()
-
-        now = datetime.now(timezone.utc)
-        for rec in recommendations:
-            rec_record = RecommendationRecord(
-                title=rec.title,
-                year=rec.year,
-                genre=rec.genre,
-                reason=rec.reason,
-                confidence=rec.confidence,
-                session_id=session.id,
-                created_at=now,
-            )
-            db.add(rec_record)
-
-        db.commit()
-        db.refresh(session)
-        return session
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-def get_sessions(
-    user_id: int, page: int = 0, page_size: int = 20
-) -> tuple[list[SessionRecord], int]:
-    """List sessions for a user with pagination."""
-    db = get_session()
-    try:
-        base = select(SessionRecord).where(SessionRecord.user_id == user_id)
-        total = db.scalar(
-            select(sa_func.count()).select_from(base.subquery())
-        ) or 0
-        sessions = list(
-            db.exec(
-                base.order_by(SessionRecord.created_at.desc())
-                .offset(page * page_size)
-                .limit(page_size)
-            ).all()
-        )
-        return sessions, total
-    finally:
-        db.close()
-
-
-def get_session_detail(session_id: int, user_id: int) -> Optional[SessionRecord]:
-    """Get a single session (must belong to user)."""
-    db = get_session()
-    try:
-        return db.exec(
-            select(SessionRecord).where(
-                SessionRecord.id == session_id,
-                SessionRecord.user_id == user_id,
-            )
-        ).first()
-    finally:
-        db.close()
-
-
-def delete_session(session_id: int, user_id: int) -> bool:
-    """Delete a session (must belong to user)."""
-    db = get_session()
-    try:
-        session = db.exec(
-            select(SessionRecord).where(
-                SessionRecord.id == session_id,
-                SessionRecord.user_id == user_id,
-            )
-        ).first()
-        if not session:
-            return False
-        db.delete(session)
         db.commit()
         return True
     except Exception:

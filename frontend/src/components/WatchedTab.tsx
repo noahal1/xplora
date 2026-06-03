@@ -10,6 +10,7 @@ import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
 import { ProgressiveImage } from "./ProgressiveImage";
 import { Upload, List, LayoutGrid } from "lucide-react";
+import { Badge } from "./ui/badge";
 
 const PAGE_SIZE = 30;
 
@@ -25,6 +26,7 @@ export function WatchedTab() {
   const [currentPage, setCurrentPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [ratingFilter, setRatingFilter] = useState("all");
+  const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -47,7 +49,7 @@ export function WatchedTab() {
 
   // ── Load data from API ──
 
-  const loadMovies = useCallback(async (page: number, search: string, sortF: string, sortD: string, rating: string) => {
+  const loadMovies = useCallback(async (page: number, search: string, sortF: string, sortD: string, rating: string, mediaType: string) => {
     setLoading(true);
     let ratingMin: number | undefined;
     let ratingMax: number | undefined;
@@ -66,6 +68,7 @@ export function WatchedTab() {
         sort_dir: sortD,
         rating_min: ratingMin,
         rating_max: ratingMax,
+        media_type: (mediaType !== "all" ? mediaType : undefined),
       });
       setMovies(
         data.movies.map((m) => ({
@@ -75,6 +78,7 @@ export function WatchedTab() {
           year: m.year,
           genre: m.genre,
           poster_url: m.poster_url,
+          media_type: m.media_type,
         }))
       );
       setTotal(data.total);
@@ -86,8 +90,8 @@ export function WatchedTab() {
   }, []);
 
   useEffect(() => {
-    loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter);
-  }, [currentPage, searchQuery, sortField, sortDir, ratingFilter, reloadTrigger, loadMovies]);
+    loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter);
+  }, [currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, reloadTrigger, loadMovies]);
 
   // Check for ongoing enrichment on mount
   useEffect(() => {
@@ -356,33 +360,34 @@ export function WatchedTab() {
           }}
           role="button"
           tabIndex={0}
-          className="section-header w-full cursor-pointer"
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 w-full cursor-pointer mb-0"
         >
-          <h2 className="section-title flex items-center gap-2">
-            <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <h2 className="section-title flex items-center gap-2 text-base">
+            <svg className="w-4 h-4 text-primary shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="17 8 12 3 7 8" />
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
-            {t("watched.import_title")}
+            <span className="truncate">{t("watched.import_title")}</span>
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
             <button
-              className="btn btn-ghost btn-xs"
+              className="btn btn-ghost btn-xs shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowSampleModal(true);
               }}
+              title={t("watched.sample_format")}
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="16" x2="12" y2="12" />
                 <line x1="12" y1="8" x2="12.01" y2="8" />
               </svg>
-              {t("watched.sample_format")}
+              <span className="hidden sm:inline">{t("watched.sample_format")}</span>
             </button>
             <svg
-              className={`w-4 h-4 text-muted-foreground transition-transform ${importOpen ? "rotate-180" : ""}`}
+              className={`w-4 h-4 text-muted-foreground transition-transform shrink-0 ${importOpen ? "rotate-180" : ""}`}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -541,15 +546,16 @@ export function WatchedTab() {
             </div>
             <button
               onClick={() => setImportOpen(true)}
-              className="btn btn-ghost gap-1.5 shrink-0 text-xs"
+              className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
+              title={t("watched.import_title")}
             >
               <Upload size={14} />
-              {t("watched.import_title")}
+              <span className="hidden sm:inline">{t("watched.import_title")}</span>
             </button>
           </div>
 
           {/* Sort Controls */}
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
             <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.sort")}</span>
             {[
               { field: "created_at" as SortField, label: t("manage.sort_import_time") },
@@ -579,7 +585,7 @@ export function WatchedTab() {
           </div>
 
           {/* Rating Filters */}
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
             {[
               { value: "all", label: t("watched.filter_all") },
               { value: "8-10", label: t("watched.filter_8_10") },
@@ -600,6 +606,27 @@ export function WatchedTab() {
             ))}
           </div>
 
+          {/* Media Type Filter */}
+          <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+            <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.media_type")}</span>
+            {[
+              { value: "all", label: t("manage.media_type_all") },
+              { value: "movie", label: t("manage.media_type_movie") },
+              { value: "tv", label: t("manage.media_type_tv") },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                className={`pill ${mediaTypeFilter === opt.value ? "active" : ""}`}
+                onClick={() => {
+                  setMediaTypeFilter(opt.value);
+                  setCurrentPage(0);
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           {/* Loading state */}
           {loading ? (
             <div className="flex items-center justify-center py-10">
@@ -609,16 +636,18 @@ export function WatchedTab() {
             <>
               {/* Batch Toolbar */}
               {selectedIds.size > 0 && (
-                <div className="flex items-center gap-2.5 px-3 py-2 mb-3 bg-accent rounded-lg animate-slide-down">
-                  <span className="text-sm font-medium text-accent-foreground">
+                <div className="flex items-center gap-2 px-3 py-2 mb-3 bg-accent rounded-lg animate-slide-down">
+                  <span className="text-sm font-medium text-accent-foreground shrink-0">
                     {t("watched.selected_count", { count: selectedIds.size })}
                   </span>
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <button className="btn btn-ghost text-xs" onClick={openBatchRating}>
-                      {t("watched.batch_edit_rating")}
+                  <div className="flex items-center gap-1 ml-auto">
+                    <button className="btn btn-ghost btn-xs" onClick={openBatchRating} title={t("watched.batch_edit_rating")}>
+                      <span className="hidden sm:inline">{t("watched.batch_edit_rating")}</span>
+                      <span className="sm:hidden">{t("watched.batch_edit_rating")}</span>
                     </button>
-                    <button className="btn-subtle text-xs" onClick={clearSelection}>
-                      {t("watched.clear_selection")}
+                    <button className="btn-subtle btn-xs" onClick={clearSelection} title={t("watched.clear_selection")}>
+                      <span className="hidden sm:inline">{t("watched.clear_selection")}</span>
+                      <span className="sm:hidden">{t("watched.clear")}</span>
                     </button>
                   </div>
                 </div>
@@ -639,7 +668,7 @@ export function WatchedTab() {
               )}
 
               {/* Movie List / Grid */}
-              {movies.length === 0 && (searchQuery || ratingFilter !== "all") ? (
+              {movies.length === 0 && (searchQuery || ratingFilter !== "all" || mediaTypeFilter !== "all") ? (
                 <div className="text-center py-6 text-muted-foreground text-sm">
                   {t("watched.no_match")}
                 </div>
@@ -680,7 +709,12 @@ export function WatchedTab() {
                           {m.title}
                         </div>
                         <div className="flex items-center justify-between gap-1 mt-1">
-                          <span className="shrink-0 text-xs text-muted-foreground">{m.year ?? ""}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="shrink-0 text-xs text-muted-foreground">{m.year ?? ""}</span>
+                            {m.media_type === "tv" && (
+                              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>
+                            )}
+                          </span>
                           {editingRating === m.id ? (
                             <span
                               className="inline-flex items-center gap-1.5"
@@ -743,6 +777,9 @@ export function WatchedTab() {
                         <span className="truncate max-w-[180px] font-medium" title={m.title}>
                           {m.title}
                         </span>
+                        {m.media_type === "tv" && (
+                          <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+                        )}
                         <span className="shrink-0 text-xs text-muted-foreground">
                           {editingRating === m.id ? (
                             <span
@@ -826,6 +863,7 @@ export function WatchedTab() {
                   onClick={() => {
                     setSearchQuery("");
                     setRatingFilter("all");
+                    setMediaTypeFilter("all");
                     setCurrentPage(0);
                   }}
                 >

@@ -12,6 +12,7 @@ from config_manager import (
     set_api_key as set_config_api_key,
     API_KEY_NAMES,
 )
+from crud import log_operation
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -113,4 +114,5 @@ async def update_config(
             value = api_keys[key_name]
             set_config_api_key(key_name, value.strip() if value else "")
 
+    log_operation(_admin["id"], _admin["username"], "update_config", f"更新 API Key 配置")
     return {"status": "ok", "api_keys": get_config_status()}

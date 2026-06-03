@@ -51,6 +51,7 @@ export async function listMovies(params: {
   rating_min?: number;
   rating_max?: number;
   has_error?: boolean;
+  media_type?: string;
 }): Promise<{ movies: DBMovie[]; total: number }> {
   const qs = new URLSearchParams();
   if (params.search) qs.set("search", params.search);
@@ -62,13 +63,14 @@ export async function listMovies(params: {
   if (params.rating_min !== undefined) qs.set("rating_min", String(params.rating_min));
   if (params.rating_max !== undefined) qs.set("rating_max", String(params.rating_max));
   if (params.has_error) qs.set("has_error", "true");
+  if (params.media_type) qs.set("media_type", params.media_type);
   return fetchJSON(`${API_BASE}/movies?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
 /** Update a single movie */
 export async function updateMovie(
   id: number,
-  data: { title: string; rating: number; year?: number | null; genre?: string | null }
+  data: { title: string; rating: number; year?: number | null; genre?: string | null; created_at?: string }
 ): Promise<DBMovie> {
   return fetchJSON(`${API_BASE}/movies/${id}`, {
     method: "PUT",
@@ -249,12 +251,13 @@ export async function exportAllData(): Promise<void> {
 export async function rematchMovie(
   movieId: number,
   source: string,
-  sourceId: string
+  sourceId: string,
+  mediaType: string = "movie"
 ): Promise<DBMovie> {
   return fetchJSON(`${API_BASE}/movies/${movieId}/rematch`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ source, source_id: sourceId }),
+    body: JSON.stringify({ source, source_id: sourceId, media_type: mediaType }),
   });
 }
 
@@ -300,6 +303,24 @@ export async function adminResetPassword(userId: number, newPassword: string): P
     headers: getAuthHeaders(),
     body: JSON.stringify({ new_password: newPassword }),
   });
+}
+
+/** List operation logs (admin only) */
+export async function listOperationLogs(params: {
+  user_id?: number;
+  action?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{
+  logs: Array<{ id: number; user_id: number; username: string; action: string; detail: string | null; created_at: string }>;
+  total: number;
+}> {
+  const qs = new URLSearchParams();
+  if (params.user_id !== undefined) qs.set("user_id", String(params.user_id));
+  if (params.action) qs.set("action", params.action);
+  if (params.page !== undefined) qs.set("page", String(params.page));
+  if (params.page_size) qs.set("page_size", String(params.page_size));
+  return fetchJSON(`${API_BASE}/logs?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
 /** Get health status */

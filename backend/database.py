@@ -132,6 +132,19 @@ def _run_migrations():
         ("awards", "VARCHAR(500)"),
         ("tagline", "VARCHAR(500)"),
         ("scrape_error", "TEXT"),
+        ("media_type", "VARCHAR(10) NOT NULL DEFAULT 'movie'"),
+    ])
+
+    # Operation logs table
+    try:
+        log_columns = [c["name"] for c in inspector.get_columns("operation_logs")]
+    except Exception:
+        log_columns = []
+    _add_columns_if_missing("operation_logs", log_columns, [
+        ("user_id", "INTEGER NOT NULL REFERENCES users(id)"),
+        ("username", "VARCHAR(64) NOT NULL"),
+        ("action", "VARCHAR(64) NOT NULL"),
+        ("detail", "VARCHAR(500)"),
     ])
 
 

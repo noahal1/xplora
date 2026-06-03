@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from config_manager import get_api_key
 from movie_search import search_tmdb_tv_dual, search_omdb, get_movie_detail
-from scraper import scrape_movie_metadata, _search_tmdb, _search_tmdb_tv
+from scraper.search import scrape_movie_metadata, search_tmdb, search_tmdb_tv
 
 tmdb_key = get_api_key("tmdb")
 omdb_key = get_api_key("omdb")

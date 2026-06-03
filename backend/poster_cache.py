@@ -17,7 +17,7 @@ import hashlib
 import logging
 import os
 
-import httpx
+from http_client import make_client
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def download_and_cache_poster(
     ensure_poster_dir()
 
     try:
-        with httpx.Client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
+        with make_client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
             resp = client.get(poster_url)
             resp.raise_for_status()
 

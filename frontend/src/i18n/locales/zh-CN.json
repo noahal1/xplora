@@ -48,6 +48,7 @@
     "filter_0_4": "0-4 分",
     "selected_count": "已选 {{count}} 部",
     "batch_edit_rating": "修改评分",
+    "clear": "清除",
     "clear_selection": "取消选择",
     "select_all": "全选本页",
     "no_movies": "暂无电影",
@@ -134,6 +135,7 @@
     "title": "AI 电影推荐",
     "based_on": "基于 {{count}} 部已看过的电影",
     "need_more_movies": "请先在「我看过的」页面导入至少 2 部电影后再来推荐",
+    "need_more_filtered": "{{type}}数量不足（至少需要 2 部），请切换筛选条件",
     "settings": "AI 推荐设置",
     "model_deepseek": "DeepSeek",
     "model_openai": "OpenAI",
@@ -207,6 +209,7 @@
     "col_rating": "评分",
     "col_year": "年份",
     "col_genre": "类型",
+    "col_date": "日期",
     "col_actions": "操作",
     "delete_confirm": "确定删除这部电影？",
     "delete_confirm_selected": "确定删除选中的 {{count}} 部电影？",
@@ -230,6 +233,8 @@
     "search_tmdb_desc": "在 TMDB 上搜索电影并导入完整元数据",
     "search_tmdb_placeholder": "输入电影名称搜索 TMDB...",
     "search_tmdb_hint": "输入关键词开始搜索",
+    "search_results": "搜索结果",
+    "search_failed": "搜索失败",
     "searching": "搜索中...",
     "no_search_results": "没有找到匹配「{{query}}」的电影",
     "imported_from_search": "已导入「{{title}}」及完整元数据",
@@ -274,7 +279,12 @@
     "rematch_success": "已更新为「{{title}}」的元数据",
     "rematch_failed": "匹配失败：{{message}}",
     "rematch_select": "选择",
-    "rematch_current": "✓ 当前"
+    "rematch_current": "✓ 当前",
+    "media_type": "类型：",
+    "media_type_all": "全部",
+    "media_type_movie": "🎬 电影",
+    "media_type_tv": "📺 剧集",
+    "genre_filter": "类型筛选："
   },
   "history": {
     "trigger": "历史",
@@ -343,6 +353,15 @@
     "pwd_reset": "用户 {{username}} 的密码已重置",
     "pwd_too_short": "密码长度不能少于4位",
     "user_deleted": "用户 {{username}} 已删除",
+    "tab_users": "用户管理",
+    "tab_logs": "操作日志",
+    "logs_title": "操作日志",
+    "logs_empty": "暂无操作日志",
+    "logs_col_time": "时间",
+    "logs_col_user": "用户",
+    "logs_col_action": "操作",
+    "logs_col_detail": "详情",
+    "logs_load_failed": "加载操作日志失败",
     "load_failed": "加载用户列表失败",
     "export_success": "数据导出成功",
     "export_failed": "导出失败"
@@ -413,13 +432,15 @@
   "genre_input": {
     "placeholder": "选择或输入类型...",
     "custom_type": "输入自定义类型...",
+    "quick_select": "快速选择",
     "enter_select": "Enter 选择",
     "separate_hint": "多类型用 / 分隔"
   },
   "search_source": {
     "auto": "智能",
     "tmdb": "TMDB",
-    "omdb": "OMDb"
+    "omdb": "OMDb",
+    "tvmaze": "TVmaze"
   },
   "pagination": {
     "page_info": "{{start}}–{{end}}"
