@@ -62,6 +62,7 @@
     "total_movies": "{{count}} 部电影",
     "update_count": "已更新 {{count}} 部电影的评分",
     "batch_update_failed": "{{count}} 部更新失败",
+    "save_rating_failed": "评分保存失败：{{message}}",
     "view_list": "列表",
     "view_grid": "网格"
   },
@@ -434,7 +435,21 @@
     "custom_type": "输入自定义类型...",
     "quick_select": "快速选择",
     "enter_select": "Enter 选择",
-    "separate_hint": "多类型用 / 分隔"
+    "separate_hint": "多类型用 / 分隔",
+    "genres": {
+      "Action": "动作",
+      "Comedy": "喜剧",
+      "Drama": "剧情",
+      "Horror": "恐怖",
+      "Sci-Fi": "科幻",
+      "Romance": "爱情",
+      "Thriller": "惊悚",
+      "Animation": "动画",
+      "Documentary": "纪录片",
+      "Fantasy": "奇幻",
+      "Mystery": "悬疑",
+      "Crime": "犯罪"
+    }
   },
   "search_source": {
     "auto": "智能",

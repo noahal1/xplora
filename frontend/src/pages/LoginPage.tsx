@@ -34,8 +34,8 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-page relative overflow-hidden">
-      {/* Interactive Orb background */}
-      <div className="absolute inset-0 z-0 opacity-40">
+      {/* Interactive Orb background — larger & brighter on mobile */}
+      <div className="absolute inset-0 z-0 opacity-40 max-sm:opacity-70 max-sm:scale-110">
         <Orb
           hoverIntensity={0.3}
           backgroundColor="#08090a"

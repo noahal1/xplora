@@ -20,7 +20,10 @@ interface ModalProps {
 export function Modal({ open, onClose, title, children, footer, description }: ModalProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[580px] w-[95vw] max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent
+        className="sm:max-w-[580px] w-[95vw] max-h-[85vh] overflow-y-auto p-4 sm:p-6"
+        {...(!description ? { 'aria-describedby': undefined } : {})}
+      >
         <DialogHeader>
           <DialogTitle className="text-lg">{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}

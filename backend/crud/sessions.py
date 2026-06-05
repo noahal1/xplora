@@ -7,14 +7,14 @@ from sqlalchemy import func as sa_func
 from sqlmodel import select
 
 from database import get_session
-from models import SessionRecord, RecommendationRecord, MovieRating, MovieRecommendation
+from models import SessionRecord, RecommendationRecord, MediaRating, MediaRecommendation
 
 
 def save_session(
     model: str,
     source_count: int,
-    movies: list[MovieRating],
-    recommendations: list[MovieRecommendation],
+    movies: list[MediaRating],
+    recommendations: list[MediaRecommendation],
     user_id: int,
 ) -> SessionRecord:
     """Create a recommendation session for a user.

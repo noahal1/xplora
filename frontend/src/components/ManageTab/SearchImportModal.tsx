@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { MovieSearchResult } from "../../types";
+import type { MediaSearchResult } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { Badge } from "../ui/badge";
@@ -18,7 +18,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<MovieSearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<MediaSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedSearchIds, setSelectedSearchIds] = useState<Set<number>>(new Set());
   const [importingBatch, setImportingBatch] = useState(false);
@@ -35,7 +35,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
     setSearchLoading(true);
     setSelectedSearchIds(new Set());
     try {
-      const data = await api.searchMovies(q, "auto");
+      const data = await api.searchMedia(q, "auto");
       setSearchResults(data.results);
     } catch (err: any) {
       showToast(err.message, "error");
@@ -50,10 +50,10 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
     searchTmdbTimeout.current = setTimeout(() => handleSearchTMDB(value), 400);
   }, [handleSearchTMDB]);
 
-  const handleImportFromSearch = useCallback(async (result: MovieSearchResult) => {
+  const handleImportFromSearch = useCallback(async (result: MediaSearchResult) => {
     try {
       const movie = await api.addToWishlist({ title: result.title, year: result.year ?? undefined, genre: result.genre || undefined });
-      try { await api.enrichMovie(movie.id); } catch {}
+      try { await api.enrichMedia(movie.id); } catch {}
       showToast(t("manage.imported_from_search", { title: result.title }), "success");
       onImportComplete();
     } catch (err: any) {
@@ -76,8 +76,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
     setImportingBatch(true);
     setBatchImportProgress({ current: 0, total: indices.length });
 
-    let existingTitles = new Set<string>();
-    try { const titles = await api.listMovieTitles(); titles.forEach((t) => existingTitles.add(t.toLowerCase().trim())); } catch {}
+    let existingTitles = new Set<string>();        try { const titles = await api.listMediaTitles(); titles.forEach((t) => existingTitles.add(t.toLowerCase().trim())); } catch {}
 
     let successCount = 0, skipCount = 0, failCount = 0, processedCount = 0;
     for (const idx of indices) {
@@ -88,7 +87,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
       try {
         const movie = await api.addToWishlist({ title: result.title, year: result.year ?? undefined, genre: result.genre || undefined });
         existingTitles.add(normalizedTitle);
-        try { await api.enrichMovie(movie.id); } catch {}
+        try { await api.enrichMedia(movie.id); } catch {}
         successCount++;
       } catch { failCount++; }
       processedCount++;
@@ -163,22 +162,37 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
                 >
                   <input type="checkbox" className="w-4 h-4 accent-primary cursor-pointer shrink-0"
                     checked={selectedSearchIds.has(idx)} onChange={() => toggleSearchSelection(idx)} />
-                  <div className="w-10 h-14 rounded shrink-0 overflow-hidden bg-muted flex items-center justify-center cursor-pointer"
+                  <div className="w-10 h-14 rounded shrink-0 overflow-hidden bg-muted flex items-center justify-center cursor-pointer relative group"
                     style={{ border: "1px solid var(--border-subtle)" }}
                     onClick={() => handleImportFromSearch(result)}>
                     {result.poster_url ? (
-                      <img src={result.poster_url} alt={result.title} className="w-full h-full object-cover" loading="lazy"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      <>
+                        <img src={result.poster_url} alt={result.title} className="w-full h-full object-cover" loading="lazy"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        {result.series_poster_url && result.series_poster_url !== result.poster_url && (
+                          <div className="absolute bottom-0.5 right-0.5 w-[18px] h-[24px] rounded-[3px] overflow-hidden shadow-md ring-1 ring-border/50 bg-muted opacity-80 group-hover:opacity-100 group-hover:scale-[2.2] group-hover:z-20 group-hover:shadow-xl transition-all duration-200 origin-bottom-right"
+                            title="Series poster (zoom on hover)">
+                            <img src={result.series_poster_url} alt="" className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          </div>
+                        )}
+                      </>
                     ) : <Film size={14} className="text-muted-foreground/40" />}
                   </div>
                   <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleImportFromSearch(result)}>
                     <p className="text-sm font-medium truncate">{result.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {result.year && <span className="text-xs text-muted-foreground">{result.year}</span>}
-                      {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground truncate">{result.genre}</span>}
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {result.year && <span className="text-xs text-muted-foreground tabular-nums">{result.year}</span>}
+                      {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground truncate max-w-[120px]">{result.genre}</span>}
+                      {result.season_number != null && (
+                        <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
+                          S{result.season_number}
+                          {result.episode_count != null && <span className="ml-0.5 opacity-70">· {result.episode_count}ep</span>}
+                        </Badge>
+                      )}
                     </div>
                   </div>
-                  <div className="shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     {result.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
                     <Badge variant="outline" className="text-[10px]">{result.source.toUpperCase()}</Badge>
                   </div>

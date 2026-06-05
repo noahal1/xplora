@@ -17,7 +17,7 @@ class UserRecord(SQLModel, table=True):
     is_admin: bool = Field(default=False, nullable=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
-    movies: list["MovieRecord"] = Relationship(
+    media: list["MediaItemRecord"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
@@ -27,10 +27,10 @@ class UserRecord(SQLModel, table=True):
     )
 
 
-class MovieRecord(SQLModel, table=True):
-    """A movie that the user has imported — either watched (rated) or wishlisted."""
+class MediaItemRecord(SQLModel, table=True):
+    """A media item (movie or TV series) that the user has imported — either watched (rated) or wishlisted."""
 
-    __tablename__ = "movies"
+    __tablename__ = "media_items"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str = Field(max_length=255, nullable=False, index=True)
@@ -56,15 +56,21 @@ class MovieRecord(SQLModel, table=True):
     scrape_error: Optional[str] = Field(default=None, nullable=True)
     media_type: str = Field(default="movie", max_length=10, nullable=False, index=True)
 
+    # === TV series-specific fields (only used when media_type="tv") ===
+    tv_series_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    season_number: Optional[int] = Field(default=None, nullable=True)
+    episode_count: Optional[int] = Field(default=None, nullable=True)
+    series_poster_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
-    user: Optional[UserRecord] = Relationship(back_populates="movies")
+    user: Optional[UserRecord] = Relationship(back_populates="media")
 
     session_id: Optional[int] = Field(
         default=None, foreign_key="sessions.id", nullable=True
     )
-    session: Optional["SessionRecord"] = Relationship(back_populates="movies")
+    session: Optional["SessionRecord"] = Relationship(back_populates="media_items")
 
 
 class SessionRecord(SQLModel, table=True):
@@ -80,7 +86,7 @@ class SessionRecord(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     user: Optional[UserRecord] = Relationship(back_populates="sessions")
 
-    movies: list[MovieRecord] = Relationship(
+    media_items: list[MediaItemRecord] = Relationship(
         back_populates="session",
         sa_relationship_kwargs={"cascade": "save-update"},
     )

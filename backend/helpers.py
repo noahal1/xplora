@@ -3,7 +3,7 @@
 from fastapi import HTTPException
 
 from config_manager import get_api_key as get_config_api_key
-from models import MovieRating
+from models import MediaRating
 
 
 def get_api_key(model: str) -> str:
@@ -22,14 +22,14 @@ def get_api_key(model: str) -> str:
     return api_key
 
 
-def _normalize_ratings(movies: list[MovieRating]) -> list[MovieRating]:
+def _normalize_ratings(movies: list[MediaRating]) -> list[MediaRating]:
     """Normalize ratings to a 0-10 scale."""
     if not movies:
         return movies
     max_rating = max(m.rating for m in movies)
     if max_rating <= 5:
         return [
-            MovieRating(
+            MediaRating(
                 title=m.title,
                 rating=round(m.rating * 2, 1),
                 year=m.year,
@@ -38,7 +38,7 @@ def _normalize_ratings(movies: list[MovieRating]) -> list[MovieRating]:
             for m in movies
         ]
     return [
-        MovieRating(
+        MediaRating(
             title=m.title,
             rating=max(0.0, min(10.0, m.rating)),
             year=m.year,
@@ -48,8 +48,8 @@ def _normalize_ratings(movies: list[MovieRating]) -> list[MovieRating]:
     ]
 
 
-def parse_movie_data(raw_data) -> list[MovieRating]:
-    """Parse raw input data into a list of MovieRating objects."""
+def parse_movie_data(raw_data) -> list[MediaRating]:
+    """Parse raw input data into a list of MediaRating objects."""
     if isinstance(raw_data, list):
         items = raw_data
     elif isinstance(raw_data, dict):
@@ -77,7 +77,7 @@ def parse_movie_data(raw_data) -> list[MovieRating]:
         except (ValueError, TypeError):
             rating = 5.0
         movies.append(
-            MovieRating(
+            MediaRating(
                 title=title.strip(),
                 rating=rating,
                 year=item.get("year"),

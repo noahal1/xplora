@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from fastapi.responses import StreamingResponse
 
 from auth import get_current_user
-from models import MovieRating, WishlistItem
+from models import MediaRating, WishlistItem
 from scraper import async_background_enrich_movies
 from crud import log_operation
 
@@ -20,12 +20,12 @@ async def export_my_data(
 ):
     """Export current user's data as JSON (movies + wishlist + sessions)."""
     from database import get_session
-    from models import MovieRecord, SessionRecord, RecommendationRecord
+    from models import MediaItemRecord, SessionRecord, RecommendationRecord
 
     db = get_session()
     try:
         user_id = current_user["id"]
-        movies = db.query(MovieRecord).filter(MovieRecord.user_id == user_id).all()
+        movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == user_id).all()
         sessions = db.query(SessionRecord).filter(SessionRecord.user_id == user_id).all()
 
         sessions_data = []
@@ -96,7 +96,7 @@ async def import_my_data(
     if not isinstance(movies, list) or len(movies) == 0:
         raise HTTPException(status_code=400, detail="未找到有效的电影数据")
 
-    from crud import save_movies, save_wishlist_items
+    from crud import save_media, save_wishlist_items
 
     # Parse and group by status in a single pass (avoids index mismatch
     # when empty-title items are skipped)
@@ -129,8 +129,8 @@ async def import_my_data(
 
     total_records = []
     if watched_items:
-        rating_items = [MovieRating(title=m["title"], rating=m["rating"], year=m["year"], genre=m.get("genre")) for m in watched_items]
-        total_records.extend(save_movies(rating_items, current_user["id"], status="watched"))
+        rating_items = [MediaRating(title=m["title"], rating=m["rating"], year=m["year"], genre=m.get("genre")) for m in watched_items]
+        total_records.extend(save_media(rating_items, current_user["id"], status="watched"))
     if wish_items:
         wish_list = [WishlistItem(title=m["title"], year=m["year"], genre=m.get("genre")) for m in wish_items]
         total_records.extend(save_wishlist_items(wish_list, current_user["id"]))

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { Movie, MovieImport, SortField, SortDir } from "../types";
+import type { MediaItem, MediaImport, SortField, SortDir } from "../types";
 import { parseCSV, parseMovieData } from "../utils/csv";
 import * as api from "../api";
 import { useToast } from "../context/ToastContext";
@@ -17,11 +17,11 @@ const PAGE_SIZE = 30;
 export function WatchedTab() {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { startPolling, checkStatus } = useEnrich();
+  const { startPolling } = useEnrich();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,6 +39,7 @@ export function WatchedTab() {
 
   const [editingRating, setEditingRating] = useState<number | null>(null);
   const [sliderValue, setSliderValue] = useState(0);
+  const [justSavedIds, setJustSavedIds] = useState<Set<number>>(new Set());
   const [importOpen, setImportOpen] = useState(false);
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
   const [batchRatingValue, setBatchRatingValue] = useState(7);
@@ -59,7 +60,7 @@ export function WatchedTab() {
       ratingMax = max;
     }
     try {
-      const data = await api.listMovies({
+      const data = await api.listMedia({
         page,
         page_size: PAGE_SIZE,
         status: "watched",
@@ -70,8 +71,8 @@ export function WatchedTab() {
         rating_max: ratingMax,
         media_type: (mediaType !== "all" ? mediaType : undefined),
       });
-      setMovies(
-        data.movies.map((m) => ({
+      setMedia(
+        data.media.map((m) => ({
           id: m.id,
           title: m.title,
           rating: m.rating,
@@ -79,6 +80,10 @@ export function WatchedTab() {
           genre: m.genre,
           poster_url: m.poster_url,
           media_type: m.media_type,
+          tv_series_id: m.tv_series_id,
+          season_number: m.season_number,
+          episode_count: m.episode_count,
+          series_poster_url: m.series_poster_url,
         }))
       );
       setTotal(data.total);
@@ -93,11 +98,6 @@ export function WatchedTab() {
     loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter);
   }, [currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, reloadTrigger, loadMovies]);
 
-  // Check for ongoing enrichment on mount
-  useEffect(() => {
-    checkStatus();
-  }, [checkStatus]);
-
   // Auto-refresh when background enrichment completes
   useEffect(() => {
     const handler = () => {
@@ -110,9 +110,9 @@ export function WatchedTab() {
   useEffect(() => {
     if (selectAllRef.current) {
       selectAllRef.current.indeterminate =
-        selectedIds.size > 0 && !movies.every((m) => selectedIds.has(m.id));
+        selectedIds.size > 0 && !media.every((m) => selectedIds.has(m.id));
     }
-  }, [selectedIds, movies]);
+  }, [selectedIds, media]);
 
   useEffect(() => {
     localStorage.setItem("xplore-watched-view", viewMode);
@@ -123,7 +123,7 @@ export function WatchedTab() {
   const saveAndReload = useCallback(
     async (raw: MovieImport[], toastMsg: string) => {
       try {
-        await api.replaceMovies(raw);
+        await api.replaceMedia(raw);
         showToast(toastMsg, "success");
         // Start polling for background metadata enrichment
         startPolling();
@@ -249,14 +249,14 @@ export function WatchedTab() {
   }, []);
 
   const toggleSelectAll = useCallback(() => {
-    const allSelected = movies.every((m) => selectedIds.has(m.id));
+    const allSelected = media.every((m) => selectedIds.has(m.id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allSelected) movies.forEach((m) => next.delete(m.id));
-      else movies.forEach((m) => next.add(m.id));
+      if (allSelected) media.forEach((m) => next.delete(m.id));
+      else media.forEach((m) => next.add(m.id));
       return next;
     });
-  }, [movies, selectedIds]);
+  }, [media, selectedIds]);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
@@ -268,10 +268,12 @@ export function WatchedTab() {
 
   const confirmBatchRating = useCallback(async () => {
     const rounded = Math.round(batchRatingValue * 10) / 10;
-    const targets = movies.filter((m) => selectedIds.has(m.id));
+    const targets = media.filter((m) => selectedIds.has(m.id));
+    // Update local state immediately
+    setMedia((prev) => prev.map((m) => selectedIds.has(m.id) ? { ...m, rating: rounded } : m));
     const results = await Promise.allSettled(
       targets.map((movie) =>
-        api.updateMovie(movie.id, {
+        api.updateMedia(movie.id, {
           title: movie.title,
           rating: rounded,
           year: movie.year,
@@ -289,15 +291,14 @@ export function WatchedTab() {
     }
     setBatchRatingOpen(false);
     setSelectedIds(new Set());
-    reloadCurrentPage();
-  }, [batchRatingValue, selectedIds, movies, showToast, reloadCurrentPage, t]);
+  }, [batchRatingValue, selectedIds, media, showToast, t]);
 
   const removeMovie = useCallback(
     async (id: number) => {
       try {
-        await api.deleteMovie(id);
+        await api.deleteMedia(id);
         // If we just deleted the last item on a non-first page, go back
-        const willBeEmpty = movies.length <= 1;
+        const willBeEmpty = media.length <= 1;
         if (willBeEmpty && currentPage > 0) {
           setCurrentPage((p) => p - 1);
         } else {
@@ -307,37 +308,43 @@ export function WatchedTab() {
         showToast(t("watched.delete_failed", { message: err.message }), "error");
       }
     },
-    [movies.length, currentPage, reloadCurrentPage, showToast, t]
+    [media.length, currentPage, reloadCurrentPage, showToast, t]
   );
 
   const startRatingEdit = useCallback(
     (id: number) => {
-      const movie = movies.find((m) => m.id === id);
+      const movie = media.find((m) => m.id === id);
       setSliderValue(movie ? movie.rating : 7);
       setEditingRating(id);
     },
-    [movies]
+    [media]
   );
 
   const saveRatingEdit = useCallback(
     async (id: number, newRating: number) => {
       const val = Math.round(Math.max(0, Math.min(10, newRating)) * 10) / 10;
+      // Update local state immediately — no full reload needed
       setEditingRating(null);
+      setMedia((prev) => prev.map((m) => m.id === id ? { ...m, rating: val } : m));
+      // Show saved confirmation animation
+      setJustSavedIds((prev) => new Set(prev).add(id));
+      setTimeout(() => {
+        setJustSavedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      }, 1500);
       try {
-        const movie = movies.find((m) => m.id === id);
+        const movie = media.find((m) => m.id === id);
         if (!movie) return;
-        await api.updateMovie(id, {
+        await api.updateMedia(id, {
           title: movie.title,
           rating: val,
           year: movie.year,
           genre: movie.genre,
         });
-        reloadCurrentPage();
-      } catch {
-        // silent
+      } catch (err: any) {
+        showToast(t("watched.save_rating_failed", { message: err.message }), "error");
       }
     },
-    [movies, reloadCurrentPage]
+    [media]
   );
 
   // ── Filtering & pagination ──
@@ -654,13 +661,13 @@ export function WatchedTab() {
               )}
 
               {/* Select all */}
-              {movies.length > 0 && (
+              {media.length > 0 && (
                 <label className="flex items-center gap-2 mb-2 px-1 w-fit cursor-pointer select-none">
                   <input
                     type="checkbox"
                     ref={selectAllRef}
                     className="w-4 h-4 accent-primary cursor-pointer"
-                    checked={movies.length > 0 && movies.every((m) => selectedIds.has(m.id))}
+                    checked={media.length > 0 && media.every((m) => selectedIds.has(m.id))}
                     onChange={toggleSelectAll}
                   />
                   <span className="text-xs text-muted-foreground">{t("watched.select_all")}</span>
@@ -668,13 +675,13 @@ export function WatchedTab() {
               )}
 
               {/* Movie List / Grid */}
-              {movies.length === 0 && (searchQuery || ratingFilter !== "all" || mediaTypeFilter !== "all") ? (
+              {media.length === 0 && (searchQuery || ratingFilter !== "all" || mediaTypeFilter !== "all") ? (
                 <div className="text-center py-6 text-muted-foreground text-sm">
                   {t("watched.no_match")}
                 </div>
               ) : viewMode === "grid" ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {movies.map((m) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                  {media.map((m) => (
                     <div
                       key={m.id}
                       className={`card card-lift group relative overflow-hidden ${
@@ -712,7 +719,13 @@ export function WatchedTab() {
                           <span className="flex items-center gap-1.5">
                             <span className="shrink-0 text-xs text-muted-foreground">{m.year ?? ""}</span>
                             {m.media_type === "tv" && (
-                              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>
+                              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+                            )}
+                            {m.season_number != null && (
+                              <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
+                                S{m.season_number}
+                                {m.episode_count != null && <span className="ml-0.5 opacity-70">· {m.episode_count}ep</span>}
+                              </Badge>
                             )}
                           </span>
                           {editingRating === m.id ? (
@@ -726,7 +739,7 @@ export function WatchedTab() {
                                 max={10}
                                 step={0.5}
                                 value={sliderValue}
-                                onChange={(e) => setSliderValue(parseFloat(e.target.value))}
+                                onChange={(e) => { setSliderValue(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
                                 onMouseUp={() => saveRatingEdit(m.id, sliderValue)}
                                 onTouchEnd={() => saveRatingEdit(m.id, sliderValue)}
                                 onBlur={() => saveRatingEdit(m.id, sliderValue)}
@@ -734,10 +747,14 @@ export function WatchedTab() {
                                   if (e.key === "Escape") setEditingRating(null);
                                   if (e.key === "Enter") saveRatingEdit(m.id, sliderValue);
                                 }}
-                                className="w-14 h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer
+                                className="w-14 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
                                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                                  max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6
                                   [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
-                                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background"
+                                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
+                                  [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
+                                  active:[&::-webkit-slider-thumb]:scale-125
+                                  max-sm:h-2"
                                 autoFocus
                               />
                               <span className="text-amber font-medium text-xs min-w-[24px] text-center count-badge" key={sliderValue}>
@@ -746,11 +763,13 @@ export function WatchedTab() {
                             </span>
                           ) : (
                             <span
-                              className="inline-flex items-center gap-1 text-xs cursor-pointer border-b border-dashed border-border hover:border-primary"
+                              className={`inline-flex items-center gap-1 text-xs cursor-pointer border-b border-dashed ${justSavedIds.has(m.id) ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
                               onClick={() => startRatingEdit(m.id)}
                               title={t("watched.click_to_edit")}
                             >
-                              <span className="text-amber">★</span> {m.rating.toFixed(1)}
+                              <span className="text-amber">★</span>
+                              {justSavedIds.has(m.id) && <span className="text-green text-[10px]">✓</span>}
+                              <span>{m.rating.toFixed(1)}</span>
                             </span>
                           )}
                         </div>
@@ -760,7 +779,7 @@ export function WatchedTab() {
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  {movies.map((m) => (
+                  {media.map((m) => (
                     <div
                       key={m.id}
                       className={`card card-lift p-3 flex items-center gap-2.5 text-sm transition-all ${
@@ -780,6 +799,12 @@ export function WatchedTab() {
                         {m.media_type === "tv" && (
                           <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
                         )}
+                        {m.season_number != null && (
+                          <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
+                            S{m.season_number}
+                            {m.episode_count != null && <span className="ml-0.5 opacity-70">· {m.episode_count}ep</span>}
+                          </Badge>
+                        )}
                         <span className="shrink-0 text-xs text-muted-foreground">
                           {editingRating === m.id ? (
                             <span
@@ -792,7 +817,7 @@ export function WatchedTab() {
                                 max={10}
                                 step={0.5}
                                 value={sliderValue}
-                                onChange={(e) => setSliderValue(parseFloat(e.target.value))}
+                                onChange={(e) => { setSliderValue(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
                                 onMouseUp={() => saveRatingEdit(m.id, sliderValue)}
                                 onTouchEnd={() => saveRatingEdit(m.id, sliderValue)}
                                 onBlur={() => saveRatingEdit(m.id, sliderValue)}
@@ -800,10 +825,14 @@ export function WatchedTab() {
                                   if (e.key === "Escape") setEditingRating(null);
                                   if (e.key === "Enter") saveRatingEdit(m.id, sliderValue);
                                 }}
-                                className="w-20 h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer
+                                className="w-20 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
                                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+                                  max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6
                                   [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
-                                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background"
+                                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
+                                  [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
+                                  active:[&::-webkit-slider-thumb]:scale-125
+                                  max-sm:h-2"
                                 autoFocus
                               />
                               <span className="text-amber font-medium min-w-[28px] text-center count-badge" key={sliderValue}>
@@ -812,11 +841,13 @@ export function WatchedTab() {
                             </span>
                           ) : (
                             <span
-                              className="inline-flex items-center gap-1 cursor-pointer border-b border-dashed border-border hover:border-primary"
+                              className={`inline-flex items-center gap-1 cursor-pointer border-b border-dashed ${justSavedIds.has(m.id) ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
                               onClick={() => startRatingEdit(m.id)}
                               title={t("watched.click_to_edit")}
                             >
-                              <span className="text-amber">★</span> {m.rating.toFixed(1)}
+                              <span className="text-amber">★</span>
+                              {justSavedIds.has(m.id) && <span className="text-green text-[10px]">✓</span>}
+                              <span>{m.rating.toFixed(1)}</span>
                             </span>
                           )}
                         </span>
@@ -937,13 +968,17 @@ export function WatchedTab() {
             max={10}
             step={0.5}
             value={batchRatingValue}
-            onChange={(e) => setBatchRatingValue(parseFloat(e.target.value))}
-            className="w-full max-w-xs h-1.5 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer
+            onChange={(e) => { setBatchRatingValue(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+            className="w-full max-w-xs h-1.5 sm:h-1.5 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
               [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
+              max-sm:[&::-webkit-slider-thumb]:w-7 max-sm:[&::-webkit-slider-thumb]:h-7
               [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-lg
               [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
-              [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110
-              [&::-webkit-slider-track]:h-1.5 [&::-webkit-slider-track]:rounded-full"
+              [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
+              [&::-webkit-slider-thumb]:hover:scale-110
+              active:[&::-webkit-slider-thumb]:scale-125 active:[&::-webkit-slider-thumb]:shadow-amber/40
+              [&::-webkit-slider-track]:h-1.5 [&::-webkit-slider-track]:rounded-full
+              max-sm:[&::-webkit-slider-track]:h-2.5"
           />
           <div className="flex items-center justify-between w-full max-w-xs text-xs text-muted-foreground">
             <span>0</span>

@@ -1,18 +1,18 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { DBMovie } from "../../types";
+import type { MediaDetail } from "../../types";
 import { Modal } from "../Modal";
 import { GenreInput } from "../GenreInput";
 import { Film } from "lucide-react";
 
 interface GenreEditModalProps {
   open: boolean;
-  movie: DBMovie | null;
+  movie: MediaDetail | null;
   onClose: () => void;
   onSave: (movieId: number, genre: string) => Promise<void>;
 }
 
-const QUICK_GENRES = ["Action", "Comedy", "Drama", "Horror", "Sci-Fi", "Romance", "Thriller", "Animation", "Documentary", "Fantasy", "Mystery", "Crime"];
+const QUICK_GENRES = ["Action", "Comedy", "Drama", "Horror", "Sci-Fi", "Romance", "Thriller", "Animation", "Documentary", "Fantasy", "Mystery", "Crime"] as const;
 
 export function GenreEditModal({ open, movie, onClose, onSave }: GenreEditModalProps) {
   const { t } = useTranslation();
@@ -91,7 +91,7 @@ export function GenreEditModal({ open, movie, onClose, onSave }: GenreEditModalP
           <div className="space-y-3">
             {/* Quick-genre chips */}
             <div>
-              <p className="text-xs text-muted-foreground font-medium mb-2">{t("genre_input.quick_select", "快速选择")}</p>
+              <p className="text-xs text-muted-foreground font-medium mb-2">{t("genre_input.quick_select")}</p>
               <div className="flex flex-wrap gap-1.5">
                 {QUICK_GENRES.map((genre) => {
                   const isSelected = value.split(" / ").map((s) => s.trim()).includes(genre);
@@ -100,7 +100,7 @@ export function GenreEditModal({ open, movie, onClose, onSave }: GenreEditModalP
                       className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-150 border ${
                         isSelected ? "bg-primary/10 text-primary border-primary/25 shadow-sm"
                           : "bg-muted/40 text-muted-foreground border-border/60 hover:border-primary/30 hover:text-foreground hover:bg-accent/40"
-                      }`}>{genre}</button>
+                      }`}>{t(`genre_input.genres.${genre}`)}</button>
                   );
                 })}
               </div>

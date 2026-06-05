@@ -31,7 +31,7 @@ def background_enrich_movies(user_id: int, movie_ids: list[int]):
     Processes movies sequentially with rate limiting between TMDB requests.
     On failure, the error reason is stored in ``scrape_error`` for debugging.
     """
-    from crud import get_movie_for_user, enrich_movie_metadata, set_scrape_error, clear_scrape_error
+    from crud import get_media_for_user, enrich_media_metadata, set_scrape_error, clear_scrape_error
 
     total = len(movie_ids)
     enriched = 0
@@ -45,7 +45,7 @@ def background_enrich_movies(user_id: int, movie_ids: list[int]):
 
     for idx, movie_id in enumerate(movie_ids):
         try:
-            movie = get_movie_for_user(movie_id, user_id)
+            movie = get_media_for_user(movie_id, user_id)
             if not movie:
                 logger.warning("Movie %d not found — skipping", movie_id)
                 set_scrape_error(movie_id, user_id, "电影记录不存在")
@@ -80,7 +80,7 @@ def background_enrich_movies(user_id: int, movie_ids: list[int]):
                     metadata["poster_url"] = local_url
                     poster_cached = True
 
-            updated = enrich_movie_metadata(movie_id, user_id, metadata)
+            updated = enrich_media_metadata(movie_id, user_id, metadata)
             if updated:
                 if poster_cached:
                     clear_scrape_error(movie_id, user_id)
@@ -126,7 +126,7 @@ def background_cache_posters(user_id: int, movie_ids: list[tuple[int, str, str |
     scrape metadata, it only downloads the poster image and updates
     ``poster_url`` to the local path.
     """
-    from crud import get_movie_for_user, enrich_movie_metadata, set_scrape_error, clear_scrape_error
+    from crud import get_media_for_user, enrich_media_metadata, set_scrape_error, clear_scrape_error
 
     total = len(movie_ids)
     cached = 0
@@ -140,7 +140,7 @@ def background_cache_posters(user_id: int, movie_ids: list[tuple[int, str, str |
 
     for movie_id, poster_url, tmdb_id in movie_ids:
         try:
-            movie = get_movie_for_user(movie_id, user_id)
+            movie = get_media_for_user(movie_id, user_id)
             if not movie:
                 logger.warning("Movie %d not found — skipping", movie_id)
                 failed += 1
@@ -164,7 +164,7 @@ def background_cache_posters(user_id: int, movie_ids: list[tuple[int, str, str |
             )
             if local_url:
                 # Update poster_url in DB to local path
-                enrich_movie_metadata(movie_id, user_id, {"poster_url": local_url})
+                enrich_media_metadata(movie_id, user_id, {"poster_url": local_url})
                 clear_scrape_error(movie_id, user_id)
                 cached += 1
             else:

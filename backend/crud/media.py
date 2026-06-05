@@ -1,4 +1,4 @@
-"""Movie CRUD operations (user-scoped)."""
+"""Media item CRUD operations (user-scoped)."""
 
 from datetime import datetime, timezone
 from typing import Optional, Any
@@ -7,7 +7,7 @@ from sqlalchemy import func as sa_func
 from sqlmodel import Session, select, delete as sa_delete
 
 from database import get_session
-from models import MovieRecord, MovieRating, WishlistItem
+from models import MediaItemRecord, MediaRating, WishlistItem
 
 
 # ── Helper: parse ISO datetime string ──────────────────────────────
@@ -30,16 +30,16 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 
 # ============================================
-# Movies
+# Media items
 # ============================================
 
 
-def delete_all_movies_for_user(user_id: int) -> int:
-    """Delete all movie records for a specific user. Returns count."""
+def delete_all_media_for_user(user_id: int) -> int:
+    """Delete all media records for a specific user. Returns count."""
     db = get_session()
     try:
         result = db.exec(
-            sa_delete(MovieRecord).where(MovieRecord.user_id == user_id)
+            sa_delete(MediaItemRecord).where(MediaItemRecord.user_id == user_id)
         )
         db.commit()
         return result.rowcount
@@ -50,14 +50,14 @@ def delete_all_movies_for_user(user_id: int) -> int:
         db.close()
 
 
-def db_delete_movies_by_status(user_id: int, status: str) -> int:
-    """Delete all movie records for a user with a specific status. Returns count."""
+def db_delete_media_by_status(user_id: int, status: str) -> int:
+    """Delete all media records for a user with a specific status. Returns count."""
     db = get_session()
     try:
         result = db.exec(
-            sa_delete(MovieRecord).where(
-                MovieRecord.user_id == user_id,
-                MovieRecord.status == status,
+            sa_delete(MediaItemRecord).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.status == status,
             )
         )
         db.commit()
@@ -69,18 +69,18 @@ def db_delete_movies_by_status(user_id: int, status: str) -> int:
         db.close()
 
 
-def save_movies(
-    movies: list[MovieRating],
+def save_media(
+    items: list[MediaRating],
     user_id: int,
     status: str = "watched",
-) -> list[MovieRecord]:
-    """Persist a list of imported MovieRating objects for a user with the given status."""
+) -> list[MediaItemRecord]:
+    """Persist a list of imported MediaRating objects for a user with the given status."""
     db = get_session()
     try:
-        records: list[MovieRecord] = []
+        records: list[MediaItemRecord] = []
         now = datetime.now(timezone.utc)
-        for m in movies:
-            record = MovieRecord(
+        for m in items:
+            record = MediaItemRecord(
                 title=m.title,
                 rating=m.rating,
                 year=m.year,
@@ -105,14 +105,14 @@ def save_movies(
 def save_wishlist_items(
     items: list[WishlistItem],
     user_id: int,
-) -> list[MovieRecord]:
+) -> list[MediaItemRecord]:
     """Persist a list of wishlist items for a user."""
     db = get_session()
     try:
-        records: list[MovieRecord] = []
+        records: list[MediaItemRecord] = []
         now = datetime.now(timezone.utc)
         for m in items:
-            record = MovieRecord(
+            record = MediaItemRecord(
                 title=m.title,
                 rating=0.0,
                 year=m.year,
@@ -134,7 +134,7 @@ def save_wishlist_items(
         db.close()
 
 
-def get_movies(
+def get_media(
     user_id: int,
     search: str = "",
     page: int = 0,
@@ -146,26 +146,26 @@ def get_movies(
     rating_max: Optional[float] = None,
     has_error: Optional[bool] = None,
     media_type: Optional[str] = None,
-) -> tuple[list[MovieRecord], int]:
-    """List saved movies for a user with optional search, status filter, rating range,
+) -> tuple[list[MediaItemRecord], int]:
+    """List saved media items for a user with optional search, status filter, rating range,
     scrape_error filter, media_type filter, pagination, and sort."""
     db = get_session()
     try:
-        query = select(MovieRecord).where(MovieRecord.user_id == user_id)
+        query = select(MediaItemRecord).where(MediaItemRecord.user_id == user_id)
         if status:
-            query = query.where(MovieRecord.status == status)
+            query = query.where(MediaItemRecord.status == status)
         if media_type:
-            query = query.where(MovieRecord.media_type == media_type)
+            query = query.where(MediaItemRecord.media_type == media_type)
         if search:
             # Escape SQL LIKE wildcards in user input
             escaped_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            query = query.where(MovieRecord.title.ilike(f"%{escaped_search}%", escape="\\"))
+            query = query.where(MediaItemRecord.title.ilike(f"%{escaped_search}%", escape="\\"))
         if rating_min is not None:
-            query = query.where(MovieRecord.rating >= rating_min)
+            query = query.where(MediaItemRecord.rating >= rating_min)
         if rating_max is not None:
-            query = query.where(MovieRecord.rating <= rating_max)
+            query = query.where(MediaItemRecord.rating <= rating_max)
         if has_error:
-            query = query.where(MovieRecord.scrape_error.isnot(None))
+            query = query.where(MediaItemRecord.scrape_error.isnot(None))
 
         total = db.scalar(
             select(sa_func.count()).select_from(query.subquery())
@@ -173,13 +173,13 @@ def get_movies(
 
         # Map sort_field to model attribute (prevent injection)
         allowed_fields = {
-            "title": MovieRecord.title,
-            "rating": MovieRecord.rating,
-            "year": MovieRecord.year,
-            "genre": MovieRecord.genre,
-            "created_at": MovieRecord.created_at,
+            "title": MediaItemRecord.title,
+            "rating": MediaItemRecord.rating,
+            "year": MediaItemRecord.year,
+            "genre": MediaItemRecord.genre,
+            "created_at": MediaItemRecord.created_at,
         }
-        order_col = allowed_fields.get(sort_field, MovieRecord.created_at)
+        order_col = allowed_fields.get(sort_field, MediaItemRecord.created_at)
         order_fn = order_col.asc if sort_dir == "asc" else order_col.desc
 
         records = list(
@@ -194,44 +194,44 @@ def get_movies(
         db.close()
 
 
-def get_movie_titles(user_id: int) -> list[str]:
-    """Return just the titles of all movies for a user (lightweight, no pagination)."""
+def get_media_titles(user_id: int) -> list[str]:
+    """Return just the titles of all media items for a user (lightweight, no pagination)."""
     db = get_session()
     try:
         results = db.exec(
-            select(MovieRecord.title).where(MovieRecord.user_id == user_id)
+            select(MediaItemRecord.title).where(MediaItemRecord.user_id == user_id)
         ).all()
         return list(results)
     finally:
         db.close()
 
 
-def get_movie_for_user(movie_id: int, user_id: int) -> Optional[MovieRecord]:
-    """Get a movie by ID, ensuring it belongs to the user."""
+def get_media_for_user(media_id: int, user_id: int) -> Optional[MediaItemRecord]:
+    """Get a media item by ID, ensuring it belongs to the user."""
     db = get_session()
     try:
         return db.exec(
-            select(MovieRecord).where(
-                MovieRecord.id == movie_id, MovieRecord.user_id == user_id
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
     finally:
         db.close()
 
 
-def mark_movie_as_watched(
-    movie_id: int,
+def mark_media_as_watched(
+    media_id: int,
     user_id: int,
     rating: float = 5.0,
-) -> Optional[MovieRecord]:
-    """Move a movie from wishlist to watched with a rating."""
+) -> Optional[MediaItemRecord]:
+    """Move a media item from wishlist to watched with a rating."""
     db = get_session()
     try:
         record = db.exec(
-            select(MovieRecord).where(
-                MovieRecord.id == movie_id,
-                MovieRecord.user_id == user_id,
-                MovieRecord.status == "wish",
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id,
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.status == "wish",
             )
         ).first()
         if not record:
@@ -248,8 +248,8 @@ def mark_movie_as_watched(
         db.close()
 
 
-def update_movie(
-    movie_id: int,
+def update_media(
+    media_id: int,
     user_id: int,
     title: str = None,
     rating: float = None,
@@ -266,14 +266,18 @@ def update_movie(
     country: str = None,
     awards: str = None,
     tagline: str = None,
+    tv_series_id: str = None,
+    season_number: int = None,
+    episode_count: int = None,
+    series_poster_url: str = None,
     created_at: str = None,
-) -> Optional[MovieRecord]:
-    """Update a movie record. Returns updated record or None if not found."""
+) -> Optional[MediaItemRecord]:
+    """Update a media record. Returns updated record or None if not found."""
     db = get_session()
     try:
         record = db.exec(
-            select(MovieRecord).where(
-                MovieRecord.id == movie_id, MovieRecord.user_id == user_id
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if not record:
@@ -309,6 +313,15 @@ def update_movie(
             record.awards = awards
         if tagline is not None:
             record.tagline = tagline
+        # TV series-specific fields
+        if tv_series_id is not None:
+            record.tv_series_id = tv_series_id
+        if season_number is not None:
+            record.season_number = season_number
+        if episode_count is not None:
+            record.episode_count = episode_count
+        if series_poster_url is not None:
+            record.series_poster_url = series_poster_url
         if created_at is not None:
             parsed = _parse_datetime(created_at)
             if parsed:
@@ -323,14 +336,14 @@ def update_movie(
         db.close()
 
 
-def batch_delete_movies(movie_ids: list[int], user_id: int) -> int:
-    """Delete multiple movies by IDs (must all belong to user). Returns count."""
+def batch_delete_media(media_ids: list[int], user_id: int) -> int:
+    """Delete multiple media items by IDs (must all belong to user). Returns count."""
     db = get_session()
     try:
         result = db.exec(
-            sa_delete(MovieRecord).where(
-                MovieRecord.id.in_(movie_ids),
-                MovieRecord.user_id == user_id,
+            sa_delete(MediaItemRecord).where(
+                MediaItemRecord.id.in_(media_ids),
+                MediaItemRecord.user_id == user_id,
             )
         )
         db.commit()
@@ -342,28 +355,28 @@ def batch_delete_movies(movie_ids: list[int], user_id: int) -> int:
         db.close()
 
 
-def enrich_movie_metadata(
-    movie_id: int,
+def enrich_media_metadata(
+    media_id: int,
     user_id: int,
     metadata: dict[str, Any],
-) -> Optional[MovieRecord]:
-    """Update a movie record with scraped metadata fields.
+) -> Optional[MediaItemRecord]:
+    """Update a media record with scraped metadata fields.
     Only updates fields that are present in the metadata dict.
     """
     db = get_session()
     try:
         record = db.exec(
-            select(MovieRecord).where(
-                MovieRecord.id == movie_id, MovieRecord.user_id == user_id
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if not record:
             return None
 
         # Map metadata fields to model attributes.
-        # NOTE: title / year are intentionally excluded — they
-        # come from the user's import and must not be overwritten by
-        # TMDB/OMDb data (which may differ in language or formatting).
+        # NOTE: title is intentionally excluded — it comes from the
+        # user's import and must not be overwritten by TMDB/OMDb data
+        # (which may differ in language or formatting).
         # Genre IS included because many imports lack genre info,
         # and TMDB data is a reliable source for it.
         field_map = {
@@ -379,10 +392,21 @@ def enrich_movie_metadata(
             "tagline": "tagline",
             "media_type": "media_type",
             "genre": "genre",
+            # TV series-specific fields
+            "tv_series_id": "tv_series_id",
+            "season_number": "season_number",
+            "season_episode_count": "episode_count",
+            "series_poster_url": "series_poster_url",
         }
         for key, attr in field_map.items():
             if key in metadata and metadata[key] is not None:
                 setattr(record, attr, metadata[key])
+
+        # Update year from scraped data ONLY for movies (not TV series,
+        # where the year is the series' first air date and may not match
+        # the specific season the user imported).
+        if metadata.get("media_type") != "tv" and "year" in metadata and metadata["year"] is not None:
+            record.year = metadata["year"]
 
         db.commit()
         db.refresh(record)
@@ -394,13 +418,13 @@ def enrich_movie_metadata(
         db.close()
 
 
-def set_scrape_error(movie_id: int, user_id: int, error: str):
-    """Record a scrape error message for a movie."""
+def set_scrape_error(media_id: int, user_id: int, error: str):
+    """Record a scrape error message for a media item."""
     db = get_session()
     try:
         record = db.exec(
-            select(MovieRecord).where(
-                MovieRecord.id == movie_id, MovieRecord.user_id == user_id
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if record:
@@ -413,13 +437,13 @@ def set_scrape_error(movie_id: int, user_id: int, error: str):
         db.close()
 
 
-def clear_scrape_error(movie_id: int, user_id: int):
-    """Clear the scrape error for a movie (on successful scrape)."""
+def clear_scrape_error(media_id: int, user_id: int):
+    """Clear the scrape error for a media item (on successful scrape)."""
     db = get_session()
     try:
         record = db.exec(
-            select(MovieRecord).where(
-                MovieRecord.id == movie_id, MovieRecord.user_id == user_id
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if record:
@@ -432,14 +456,14 @@ def clear_scrape_error(movie_id: int, user_id: int):
         db.close()
 
 
-def get_unenriched_movie_ids(user_id: int) -> list[int]:
-    """Return IDs of all movies for a user that don't have poster_url yet."""
+def get_unenriched_media_ids(user_id: int) -> list[int]:
+    """Return IDs of all media items for a user that don't have poster_url yet."""
     db = get_session()
     try:
         records = db.exec(
-            select(MovieRecord.id).where(
-                MovieRecord.user_id == user_id,
-                MovieRecord.poster_url.is_(None),
+            select(MediaItemRecord.id).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.poster_url.is_(None),
             )
         ).all()
         return list(records)
@@ -447,21 +471,21 @@ def get_unenriched_movie_ids(user_id: int) -> list[int]:
         db.close()
 
 
-def get_external_poster_movie_ids(user_id: int) -> list[tuple[int, str, str | None]]:
-    """Return (id, poster_url, tmdb_id) for movies whose poster_url points
+def get_external_poster_media_ids(user_id: int) -> list[tuple[int, str, str | None]]:
+    """Return (id, poster_url, tmdb_id) for media items whose poster_url points
     to an external CDN (i.e. not a local ``/static/`` path).
 
-    These are movies that were scraped before local poster caching was
+    These are items that were scraped before local poster caching was
     introduced — they have valid poster URLs from TMDB but the image
     hasn't been downloaded to the local filesystem yet.
     """
     db = get_session()
     try:
         records = db.exec(
-            select(MovieRecord.id, MovieRecord.poster_url, MovieRecord.tmdb_id).where(
-                MovieRecord.user_id == user_id,
-                MovieRecord.poster_url.isnot(None),
-                MovieRecord.poster_url.not_like("/static/%"),
+            select(MediaItemRecord.id, MediaItemRecord.poster_url, MediaItemRecord.tmdb_id).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.poster_url.isnot(None),
+                MediaItemRecord.poster_url.not_like("/static/%"),
             )
         ).all()
         return [
@@ -474,9 +498,9 @@ def get_external_poster_movie_ids(user_id: int) -> list[tuple[int, str, str | No
 
 
 def get_enrich_progress(user_id: int) -> tuple[int, int, int]:
-    """Count total, processed, and failed movies for enrichment progress.
+    """Count total, processed, and failed items for enrichment progress.
 
-    "Processed" means the movie either has a poster_url (success)
+    "Processed" means the item either has a poster_url (success)
     or has a scrape_error (failure — TMDB couldn't find it, etc.).
     "Failed" means scrape_error is set but poster_url is still NULL
     (i.e. processed but unsuccessful).
@@ -487,23 +511,23 @@ def get_enrich_progress(user_id: int) -> tuple[int, int, int]:
     try:
         total = db.scalar(
             select(sa_func.count()).select_from(
-                select(MovieRecord).where(MovieRecord.user_id == user_id).subquery()
+                select(MediaItemRecord).where(MediaItemRecord.user_id == user_id).subquery()
             )
         ) or 0
         processed = db.scalar(
             select(sa_func.count()).select_from(
-                select(MovieRecord).where(
-                    MovieRecord.user_id == user_id,
-                    sa_func.coalesce(MovieRecord.poster_url, MovieRecord.scrape_error).isnot(None),
+                select(MediaItemRecord).where(
+                    MediaItemRecord.user_id == user_id,
+                    sa_func.coalesce(MediaItemRecord.poster_url, MediaItemRecord.scrape_error).isnot(None),
                 ).subquery()
             )
         ) or 0
         failed = db.scalar(
             select(sa_func.count()).select_from(
-                select(MovieRecord).where(
-                    MovieRecord.user_id == user_id,
-                    MovieRecord.poster_url.is_(None),
-                    MovieRecord.scrape_error.isnot(None),
+                select(MediaItemRecord).where(
+                    MediaItemRecord.user_id == user_id,
+                    MediaItemRecord.poster_url.is_(None),
+                    MediaItemRecord.scrape_error.isnot(None),
                 ).subquery()
             )
         ) or 0
@@ -512,13 +536,13 @@ def get_enrich_progress(user_id: int) -> tuple[int, int, int]:
         db.close()
 
 
-def delete_movie(movie_id: int, user_id: int) -> bool:
-    """Delete a movie by ID (must belong to user)."""
+def delete_media(media_id: int, user_id: int) -> bool:
+    """Delete a media item by ID (must belong to user)."""
     db = get_session()
     try:
         record = db.exec(
-            select(MovieRecord).where(
-                MovieRecord.id == movie_id, MovieRecord.user_id == user_id
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if not record:

@@ -6,7 +6,7 @@ from typing import Optional
 
 from openai import OpenAI, APIError, APITimeoutError, RateLimitError, AuthenticationError
 
-from models import MovieRating, MovieRecommendation
+from models import MediaRating, MediaRecommendation
 
 
 # Model configuration
@@ -50,7 +50,7 @@ class AIService:
             base_url=config["api_base"],
         )
 
-    def _build_prompt(self, movies: list[MovieRating], count: int, strategy: str = "taste", strategy_params: Optional[dict] = None) -> str:
+    def _build_prompt(self, movies: list[MediaRating], count: int, strategy: str = "taste", strategy_params: Optional[dict] = None) -> str:
         """Build the prompt for the AI model with strategy support."""
         movies_list = "\n".join(
             f"- {m.title}" + (f" ({m.year})" if m.year else "") +
@@ -75,9 +75,9 @@ Requirements:
 2. The reason should analyze the user's taste based on movies they've watched
 3. Give a confidence score (0-1) indicating how confident you are about this recommendation
 4. Recommendations should be diverse, covering different genres and eras
-5. Keep movie titles in their original language (English titles stay English, Chinese titles stay Chinese)
+5. Use Chinese/localized titles for ALL movies where a Chinese title exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", "Inception" → "盗梦空间"). Only use English titles for movies without a known Chinese translation.
 
-Respond in Chinese for the reasons, but keep movie titles in their original language.
+Respond in Chinese for the reasons, and use Chinese movie titles where available.
 
 Please respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
 {{
@@ -155,7 +155,7 @@ Please respond with ONLY valid JSON in the following format, without any markdow
 
         raise ValueError("No valid JSON object found in AI response")
 
-    def _parse_response(self, content: str) -> list[MovieRecommendation]:
+    def _parse_response(self, content: str) -> list[MediaRecommendation]:
         """Parse the AI response into structured recommendations."""
         json_str = self._extract_json(content)
 
@@ -169,7 +169,7 @@ Please respond with ONLY valid JSON in the following format, without any markdow
             raise ValueError("No recommendations found in AI response")
 
         return [
-            MovieRecommendation(
+            MediaRecommendation(
                 title=r.get("title", "Unknown"),
                 year=r.get("year"),
                 genre=r.get("genre"),
@@ -180,9 +180,9 @@ Please respond with ONLY valid JSON in the following format, without any markdow
         ]
 
     def get_recommendations(
-        self, movies: list[MovieRating], count: int = 5,
+        self, movies: list[MediaRating], count: int = 5,
         strategy: str = "taste", strategy_params: Optional[dict] = None,
-    ) -> list[MovieRecommendation]:
+    ) -> list[MediaRecommendation]:
         """
         Generate movie recommendations (non-streaming).
         """
@@ -227,7 +227,7 @@ Please respond with ONLY valid JSON in the following format, without any markdow
 
     def _build_followup_prompt(
         self,
-        movies: list[MovieRating],
+        movies: list[MediaRating],
         previous_recommendations: list,
         conversation: list,
         question: str,
@@ -268,9 +268,9 @@ Conversation so far:
 The user now asks: {question}
 
 Note: All ratings are on a 0-10 scale. 8/10 is very good, 5/10 is average, 2/10 is poor.
-Keep movie titles in their original language (English titles stay English, Chinese titles stay Chinese).
+Use Chinese/localized titles for ALL movies where a Chinese title exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", "Inception" → "盗梦空间"). Only use English titles for movies without a known Chinese translation.
 
-Respond in Chinese for explanations, but keep movie titles in their original language.
+Respond in Chinese for explanations, and use Chinese movie titles where available.
 
 IMPORTANT: You must respond with valid JSON only, without markdown code blocks, in one of these two formats:
 
@@ -298,7 +298,7 @@ Format 2 - For explanation or other questions:
 
     def get_followup_stream(
         self,
-        movies: list[MovieRating],
+        movies: list[MediaRating],
         previous_recommendations: list,
         conversation: list,
         question: str,
@@ -385,7 +385,7 @@ Format 2 - For explanation or other questions:
             yield f"event: result\ndata: {fallback}\n\n"
 
     def get_recommendations_stream(
-        self, movies: list[MovieRating], count: int = 5,
+        self, movies: list[MediaRating], count: int = 5,
         strategy: str = "taste", strategy_params: Optional[dict] = None,
     ):
         """

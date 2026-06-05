@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 async def export_all_data(_admin: dict = Depends(require_admin)):
     """Admin only: export all user data as JSON."""
     from database import get_session
-    from models import UserRecord, MovieRecord, SessionRecord, RecommendationRecord
+    from models import UserRecord, MediaItemRecord, SessionRecord, RecommendationRecord
 
     db = get_session()
     try:
@@ -32,7 +32,7 @@ async def export_all_data(_admin: dict = Depends(require_admin)):
             "users": [],
         }
         for u in users:
-            user_movies = db.query(MovieRecord).filter(MovieRecord.user_id == u.id).all()
+            user_movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == u.id).all()
             user_sessions = db.query(SessionRecord).filter(SessionRecord.user_id == u.id).all()
 
             sessions_data = []

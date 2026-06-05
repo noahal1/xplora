@@ -52,11 +52,15 @@ export function WishlistRatingModal({ open, movie, onClose, onConfirm }: RatingM
             </div>
             <div className="px-2">
               <input type="range" min={0} max={10} step={0.5} value={rating}
-                onChange={(e) => setRating(parseFloat(e.target.value))}
-                className="w-full h-1.5 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer
+                onChange={(e) => { setRating(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+                className="w-full h-1.5 sm:h-1.5 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                  max-sm:[&::-webkit-slider-thumb]:w-7 max-sm:[&::-webkit-slider-thumb]:h-7
                   [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
-                  [&::-webkit-slider-thumb]:cursor-pointer"
+                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
+                  [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
+                  active:[&::-webkit-slider-thumb]:scale-125
+                  max-sm:[&::-webkit-slider-track]:h-2.5"
               />
               <div className="flex justify-between text-[10px] text-muted-foreground mt-1 px-0.5">
                 <span>0</span><span>2.5</span><span>5</span><span>7.5</span><span>10</span>

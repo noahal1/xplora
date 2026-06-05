@@ -62,6 +62,7 @@
     "total_movies": "{{count}} movies",
     "update_count": "Updated ratings for {{count}} movies",
     "batch_update_failed": "{{count}} failed to update",
+    "save_rating_failed": "Rating save failed: {{message}}",
     "view_list": "List",
     "view_grid": "Grid"
   },
@@ -419,7 +420,21 @@
     "custom_type": "Type custom genre...",
     "quick_select": "Quick select",
     "enter_select": "Enter to select",
-    "separate_hint": "Use / for multiple genres"
+    "separate_hint": "Use / for multiple genres",
+    "genres": {
+      "Action": "Action",
+      "Comedy": "Comedy",
+      "Drama": "Drama",
+      "Horror": "Horror",
+      "Sci-Fi": "Sci-Fi",
+      "Romance": "Romance",
+      "Thriller": "Thriller",
+      "Animation": "Animation",
+      "Documentary": "Documentary",
+      "Fantasy": "Fantasy",
+      "Mystery": "Mystery",
+      "Crime": "Crime"
+    }
   },
   "search_source": {
     "auto": "Auto",

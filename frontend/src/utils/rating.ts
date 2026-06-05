@@ -1,12 +1,12 @@
 /** Rating scale normalization and star rendering */
 
-import type { Movie } from "../types";
+import type { MediaItem } from "../types";
 
 /**
  * Normalize rating scale: if max rating <= 5, assume 1-5 star scale
  * and multiply by 2 to map to 0-10 range.
  */
-export function normalizeRatingScale(movies: Movie[]): Movie[] {
+export function normalizeRatingScale(movies: MediaItem[]): MediaItem[] {
   if (movies.length === 0) return movies;
   const maxRating = Math.max(...movies.map((m) => m.rating));
   if (maxRating <= 5) {

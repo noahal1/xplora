@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { DBMovie } from "../../types";
+import type { MediaDetail } from "../../types";
 import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
 import { ProgressiveImage } from "../ProgressiveImage";
@@ -7,7 +7,7 @@ import { Film, Sparkles } from "lucide-react";
 
 interface DetailModalProps {
   open: boolean;
-  movie: DBMovie | null;
+  movie: MediaDetail | null;
   onClose: () => void;
 }
 

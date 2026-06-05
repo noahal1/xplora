@@ -20,4 +20,9 @@ Thumbs.db
 .cache/
 design
 .claude
-static/
+
+# Ignore poster image files but keep the directory
+backend/static/posters/*.jpg
+backend/static/posters/*.png
+backend/static/posters/*.webp
+!backend/static/posters/.gitkeep

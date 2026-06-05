@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { Movie, Recommendation, ChatMessage } from "../types";
+import type { MediaItem, Recommendation, ChatMessage } from "../types";
 import * as api from "../api";
 import { exportJSON, exportScreenshot } from "../utils/export";
 import { useToast } from "../context/ToastContext";
 import { SkeletonCard } from "./Skeleton";
+import { Modal } from "./Modal";
 import {
   Sparkles, Send, Percent, MessageSquare, Film,
   Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star,
@@ -27,7 +28,7 @@ export function RecommendTab() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const [movies, setMovies] = useState<MediaItem[]>([]);
   const [loadingMovies, setLoadingMovies] = useState(true);
 
   const [selectedModel, setSelectedModel] = useState("deepseek");
@@ -49,14 +50,15 @@ export function RecommendTab() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
 
   // Load watched movies from DB on mount
   const loadMoviesFromDB = useCallback(async () => {
     setLoadingMovies(true);
     try {
-      const data = await api.listMovies({ page: 0, page_size: 500, status: "watched" });
+      const data = await api.listMedia({ page: 0, page_size: 500, status: "watched" });
       setMovies(
-        data.movies.map((m, i) => ({
+        data.media.map((m, i) => ({
           id: i,
           title: m.title,
           rating: m.rating,
@@ -141,9 +143,10 @@ export function RecommendTab() {
       const sp = getStrategyParams();
       if (sp) payload.strategy_params = sp;
 
+      const token = localStorage.getItem("xplore-token");
       const response = await fetch("/api/recommend/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
@@ -201,7 +204,13 @@ export function RecommendTab() {
       }
 
       if (recs.length === 0) showToast(t("recommend.no_results"), "error");
-      else setShowChat(true);
+      else {
+        setShowChat(true);
+        // Fetch poster URLs from TMDB for each recommendation (async, from CDN)
+        resolvePosters(recs).then((withPosters) => {
+          setRecommendations(withPosters);
+        });
+      }
     } catch (err: any) {
       if (err.name === "AbortError") showToast(t("recommend.timeout"), "error");
       else showToast(t("recommend.error", { message: err.message }), "error");
@@ -210,6 +219,23 @@ export function RecommendTab() {
       setIsLoading(false);
     }
   }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
+
+  // Search TMDB for poster URLs after recommendations arrive (CDN-only, no caching)
+  const resolvePosters = useCallback(async (recs: Recommendation[]): Promise<Recommendation[]> => {
+    const results = await Promise.allSettled(
+      recs.map(async (rec) => {
+        try {
+          const data = await api.searchMedia(rec.title, "tmdb");
+          const match = data.results?.[0];
+          if (match?.poster_url) {
+            return { ...rec, poster_url: match.poster_url };
+          }
+        } catch { /* silent — poster not found, keep placeholder */ }
+        return rec;
+      })
+    );
+    return results.map((r, i) => (r.status === "fulfilled" ? r.value : recs[i]));
+  }, []);
 
   const sendFollowUp = useCallback(async () => {
     const input = chatInputRef.current;
@@ -226,9 +252,10 @@ export function RecommendTab() {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
+      const token = localStorage.getItem("xplore-token");
       const response = await fetch("/api/recommend/followup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           movies: followUpMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
           previous_recommendations: recommendations,
@@ -603,20 +630,28 @@ export function RecommendTab() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex gap-3 flex-1 min-w-0">
-                    {/* Poster placeholder — matches design */}
+                    {/* Poster — loaded from TMDB CDN, no local caching — click for details */}
                     <div
-                      className="w-10 h-14 rounded shrink-0 flex items-center justify-center overflow-hidden"
+                      className="w-10 h-14 rounded shrink-0 flex items-center justify-center overflow-hidden cursor-pointer ring-1 ring-transparent hover:ring-[var(--seed-primary)] transition-all duration-200"
                       style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}
+                      onClick={() => setDetailRec(rec)} title={t("recommend.view_detail")}
                     >
-                      <svg width="40" height="56" viewBox="0 0 40 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="40" height="56" fill="transparent" />
-                        <rect x="3" y="3" width="34" height="50" rx="2" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
-                        <path d="M20 22L25 28H15L20 22Z" fill="rgba(255,255,255,0.08)" />
-                        <circle cx="17" cy="19" r="2.5" fill="rgba(255,255,255,0.06)" />
-                        <rect x="9" y="38" width="22" height="2.5" rx="1.25" fill="rgba(255,255,255,0.05)" />
-                        <rect x="12" y="43" width="16" height="1.5" rx="0.75" fill="rgba(255,255,255,0.03)" />
-                      </svg>
-                      <Film size={12} style={{ color: "var(--fg-dim)", opacity: 0.5, position: "relative", zIndex: 1 }} />
+                      {rec.poster_url ? (
+                        <img src={rec.poster_url} alt={rec.title} className="w-full h-full object-cover" loading="lazy"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      ) : (
+                        <>
+                          <svg width="40" height="56" viewBox="0 0 40 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="40" height="56" fill="transparent" />
+                            <rect x="3" y="3" width="34" height="50" rx="2" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
+                            <path d="M20 22L25 28H15L20 22Z" fill="rgba(255,255,255,0.08)" />
+                            <circle cx="17" cy="19" r="2.5" fill="rgba(255,255,255,0.06)" />
+                            <rect x="9" y="38" width="22" height="2.5" rx="1.25" fill="rgba(255,255,255,0.05)" />
+                            <rect x="12" y="43" width="16" height="1.5" rx="0.75" fill="rgba(255,255,255,0.03)" />
+                          </svg>
+                          <Film size={12} style={{ color: "var(--fg-dim)", opacity: 0.5, position: "relative", zIndex: 1 }} />
+                        </>
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -678,6 +713,70 @@ export function RecommendTab() {
           )}
         </section>
       )}
+
+      {/* === Recommendation Detail Modal === */}
+      <Modal open={detailRec !== null} onClose={() => setDetailRec(null)}
+        title={
+          <div className="flex items-center gap-2">
+            <span className="truncate">{detailRec?.title || ""}</span>
+            {detailRec?.media_type === "tv" && (
+              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+            )}
+          </div>
+        }
+        description={detailRec?.year ? `${detailRec.year}${detailRec?.genre ? ` · ${detailRec.genre}` : ""}` : detailRec?.genre || ""}
+      >
+        {detailRec && (
+          <div className="space-y-5">
+            {/* Poster + Quick info */}
+            <div className="flex gap-5">
+              <div className="w-[130px] h-[186px] shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center shadow-md"
+                style={{ border: "1px solid var(--border-subtle)" }}>
+                {detailRec.poster_url ? (
+                  <img src={detailRec.poster_url} alt={detailRec.title} className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                ) : (
+                  <Film size={36} className="text-muted-foreground/30" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base font-[590] mb-1" style={{ color: "var(--seed-fg)" }}>
+                    {detailRec.title}
+                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {detailRec.year && <span className="text-sm text-muted-foreground tabular-nums">{detailRec.year}</span>}
+                    {detailRec.genre && <Badge variant="secondary" className="text-[11px]">{detailRec.genre}</Badge>}
+                  </div>
+                </div>
+                {/* Confidence */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${Math.round(detailRec.confidence * 100)}%`,
+                        background: detailRec.confidence >= 0.8
+                          ? "var(--seed-primary)"
+                          : detailRec.confidence >= 0.5
+                            ? "#f59e0b"
+                            : "var(--fg-dim)",
+                      }} />
+                  </div>
+                  <span className="text-xs font-[590] tabular-nums shrink-0" style={{ color: "var(--seed-primary)" }}>
+                    {Math.round(detailRec.confidence * 100)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div>
+              <p className="text-xs text-muted-foreground font-medium mb-1.5 uppercase tracking-wider">{t("recommend.reason_label")}</p>
+              <p className="text-sm leading-relaxed">{detailRec.reason}</p>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* === Chat Area — aligns with design === */}
       {showChat && (

@@ -85,7 +85,7 @@ app.add_middleware(
 
 
 from routers.auth import router as auth_router
-from routers.movies import router as movies_router
+from routers.media import router as media_router
 from routers.recommend import router as recommend_router
 from routers.sessions import router as sessions_router
 from routers.admin import router as admin_router
@@ -93,7 +93,7 @@ from routers.user_data import router as user_data_router
 from routers.logs import router as logs_router
 
 app.include_router(auth_router)
-app.include_router(movies_router)
+app.include_router(media_router)
 app.include_router(recommend_router)
 app.include_router(sessions_router)
 app.include_router(admin_router)

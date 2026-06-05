@@ -1,6 +1,6 @@
-/** Movie database API client with auth support */
+/** Media database API client with auth support */
 
-import type { MovieImport, WishlistItem, DBMovie, DBSession, DBSessionDetail, Recommendation, MovieSearchResult, MovieDetail } from "../types";
+import type { MediaImport, WishlistItem, MediaDetail, DBSession, DBSessionDetail, Recommendation, MediaSearchResult, ExternalDetail } from "../types";
 
 const API_BASE = "/api";
 
@@ -25,23 +25,23 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-/** Replace all watched movies */
-export async function replaceMovies(movies: MovieImport[]): Promise<void> {
-  await fetchJSON(`${API_BASE}/movies/replace`, {
+/** Replace all watched media items */
+export async function replaceMedia(items: MediaImport[]): Promise<void> {
+  await fetchJSON(`${API_BASE}/media/replace`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ movies }),
+    body: JSON.stringify({ movies: items }),
   });
 }
 
-/** Lightweight endpoint: get just movie titles for duplicate detection */
-export async function listMovieTitles(): Promise<string[]> {
-  const data = await fetchJSON<{ titles: string[] }>(`${API_BASE}/movies/titles`, { headers: getAuthHeaders() });
+/** Lightweight endpoint: get just media titles for duplicate detection */
+export async function listMediaTitles(): Promise<string[]> {
+  const data = await fetchJSON<{ titles: string[] }>(`${API_BASE}/media/titles`, { headers: getAuthHeaders() });
   return data.titles;
 }
 
-/** List movies with search & pagination & optional status filter */
-export async function listMovies(params: {
+/** List media items with search & pagination & optional status filter */
+export async function listMedia(params: {
   search?: string;
   page?: number;
   page_size?: number;
@@ -52,7 +52,7 @@ export async function listMovies(params: {
   rating_max?: number;
   has_error?: boolean;
   media_type?: string;
-}): Promise<{ movies: DBMovie[]; total: number }> {
+}): Promise<{ media: MediaDetail[]; total: number }> {
   const qs = new URLSearchParams();
   if (params.search) qs.set("search", params.search);
   if (params.page !== undefined) qs.set("page", String(params.page));
@@ -64,27 +64,27 @@ export async function listMovies(params: {
   if (params.rating_max !== undefined) qs.set("rating_max", String(params.rating_max));
   if (params.has_error) qs.set("has_error", "true");
   if (params.media_type) qs.set("media_type", params.media_type);
-  return fetchJSON(`${API_BASE}/movies?${qs.toString()}`, { headers: getAuthHeaders() });
+  return fetchJSON(`${API_BASE}/media?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
-/** Update a single movie */
-export async function updateMovie(
+/** Update a single media item */
+export async function updateMedia(
   id: number,
   data: { title: string; rating: number; year?: number | null; genre?: string | null; created_at?: string }
-): Promise<DBMovie> {
-  return fetchJSON(`${API_BASE}/movies/${id}`, {
+): Promise<MediaDetail> {
+  return fetchJSON(`${API_BASE}/media/${id}`, {
     method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
 }
 
-/** Mark a wishlist movie as watched */
-export async function markMovieAsWatched(
+/** Mark a wishlist item as watched */
+export async function markMediaAsWatched(
   id: number,
   rating: number
-): Promise<DBMovie> {
-  return fetchJSON(`${API_BASE}/movies/${id}/mark-watched`, {
+): Promise<MediaDetail> {
+  return fetchJSON(`${API_BASE}/media/${id}/mark-watched`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ rating }),
@@ -100,10 +100,10 @@ export async function replaceWishlist(items: WishlistItem[]): Promise<void> {
   });
 }
 
-/** Add a single movie to wishlist */
+/** Add a single item to wishlist */
 export async function addToWishlist(
   item: WishlistItem
-): Promise<DBMovie> {
+): Promise<MediaDetail> {
   return fetchJSON(`${API_BASE}/wishlist`, {
     method: "POST",
     headers: getAuthHeaders(),
@@ -125,25 +125,25 @@ export async function clearWishlist(): Promise<void> {
   }
 }
 
-/** Enrich a movie's metadata by scraping TMDB */
-export async function enrichMovie(movieId: number): Promise<DBMovie> {
-  return fetchJSON(`${API_BASE}/movies/${movieId}/enrich`, {
+/** Enrich a media item's metadata by scraping TMDB */
+export async function enrichMedia(mediaId: number): Promise<MediaDetail> {
+  return fetchJSON(`${API_BASE}/media/${mediaId}/enrich`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
 }
 
-/** Launch background metadata enrichment for all movies without posters */
-export async function enrichAllMovies(): Promise<{ enqueued: number }> {
-  return fetchJSON(`${API_BASE}/movies/enrich-all`, {
+/** Launch background metadata enrichment for all items without posters */
+export async function enrichAllMedia(): Promise<{ enqueued: number }> {
+  return fetchJSON(`${API_BASE}/media/enrich-all`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
 }
 
-/** Download and cache posters for movies that already have TMDB CDN URLs */
+/** Download and cache posters for items that already have TMDB CDN URLs */
 export async function cachePosters(): Promise<{ enqueued: number }> {
-  return fetchJSON(`${API_BASE}/movies/cache-posters`, {
+  return fetchJSON(`${API_BASE}/media/cache-posters`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
@@ -157,12 +157,12 @@ export async function getEnrichStatus(): Promise<{
   processed: number;
   pending: number;
 }> {
-  return fetchJSON(`${API_BASE}/movies/enrich-status`, { headers: getAuthHeaders() });
+  return fetchJSON(`${API_BASE}/media/enrich-status`, { headers: getAuthHeaders() });
 }
 
-/** Delete a single movie */
-export async function deleteMovie(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/movies/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+/** Delete a single media item */
+export async function deleteMedia(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/media/${id}`, { method: "DELETE", headers: getAuthHeaders() });
   if (res.status === 401) {
     localStorage.removeItem("xplore-token");
     window.location.href = "/login";
@@ -174,18 +174,18 @@ export async function deleteMovie(id: number): Promise<void> {
   }
 }
 
-/** Batch delete movies by IDs */
-export async function batchDeleteMovies(ids: number[]): Promise<{ count: number }> {
-  return fetchJSON(`${API_BASE}/movies/batch-delete`, {
+/** Batch delete media items by IDs */
+export async function batchDeleteMedia(ids: number[]): Promise<{ count: number }> {
+  return fetchJSON(`${API_BASE}/media/batch-delete`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ ids }),
   });
 }
 
-/** Delete all movies */
-export async function deleteAllMovies(): Promise<{ count: number }> {
-  return fetchJSON(`${API_BASE}/movies`, { method: "DELETE", headers: getAuthHeaders() });
+/** Delete all media items */
+export async function deleteAllMedia(): Promise<{ count: number }> {
+  return fetchJSON(`${API_BASE}/media`, { method: "DELETE", headers: getAuthHeaders() });
 }
 
 /** List sessions */
@@ -247,36 +247,36 @@ export async function exportAllData(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-/** Manually rematch a movie to a specific search result */
-export async function rematchMovie(
-  movieId: number,
+/** Manually rematch a media item to a specific search result */
+export async function rematchMedia(
+  mediaId: number,
   source: string,
   sourceId: string,
   mediaType: string = "movie"
-): Promise<DBMovie> {
-  return fetchJSON(`${API_BASE}/movies/${movieId}/rematch`, {
+): Promise<MediaDetail> {
+  return fetchJSON(`${API_BASE}/media/${mediaId}/rematch`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ source, source_id: sourceId, media_type: mediaType }),
   });
 }
 
-/** Search movies via external sources (TMDB / OMDb) */
-export async function searchMovies(
+/** Search movies/TV via external sources (TMDB / OMDb) */
+export async function searchMedia(
   q: string,
   source: string = "auto"
-): Promise<{ results: MovieSearchResult[] }> {
+): Promise<{ results: MediaSearchResult[] }> {
   const qs = new URLSearchParams({ q, source });
-  return fetchJSON(`${API_BASE}/movies/search?${qs.toString()}`, { headers: getAuthHeaders() });
+  return fetchJSON(`${API_BASE}/media/search?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
-/** Get full movie details from external source by ID */
-export async function getMovieDetail(
+/** Get full media details from external source by ID */
+export async function getExternalDetail(
   source: string,
   source_id: string
-): Promise<MovieDetail> {
+): Promise<ExternalDetail> {
   const qs = new URLSearchParams({ source, source_id });
-  return fetchJSON(`${API_BASE}/movies/detail?${qs.toString()}`, { headers: getAuthHeaders() });
+  return fetchJSON(`${API_BASE}/media/detail?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
 /** Admin: delete a user */

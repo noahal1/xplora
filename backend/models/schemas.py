@@ -42,38 +42,38 @@ class ChangePasswordRequest(SQLModel):
 
 
 # ============================================
-# Movie / Recommendation Schemas
+# Media / Recommendation Schemas
 # ============================================
 
 
-class MovieRating(SQLModel):
-    """A single movie with its user rating."""
-    title: str = Field(description="Movie title")
+class MediaRating(SQLModel):
+    """A single media item with its user rating."""
+    title: str = Field(description="Media title")
     rating: float = Field(ge=0.0, le=10.0, description="User rating (0-10)")
     year: Optional[int] = Field(None, description="Release year")
-    genre: Optional[str] = Field(None, description="Movie genre(s)")
+    genre: Optional[str] = Field(None, description="Genre(s)")
 
 
 class WishlistItem(SQLModel):
-    """A single movie for the wishlist (no rating)."""
-    title: str = Field(description="Movie title")
+    """A single media item for the wishlist (no rating)."""
+    title: str = Field(description="Media title")
     year: Optional[int] = Field(None, description="Release year")
-    genre: Optional[str] = Field(None, description="Movie genre(s)")
+    genre: Optional[str] = Field(None, description="Genre(s)")
 
 
 class WishlistData(SQLModel):
-    """Input data: list of movies for the wishlist."""
+    """Input data: list of items for the wishlist."""
     movies: list[WishlistItem]
 
 
 class MarkAsWatchedRequest(SQLModel):
-    """Request body for marking a wishlist movie as watched."""
+    """Request body for marking a wishlist item as watched."""
     rating: float = Field(ge=0.0, le=10.0, default=5.0, description="Rating after watching")
 
 
-class MovieData(SQLModel):
-    """Input data: list of movies with user ratings."""
-    movies: list[MovieRating]
+class MediaData(SQLModel):
+    """Input data: list of media items with user ratings."""
+    movies: list[MediaRating]
 
 
 class StrategyParams(SQLModel):
@@ -86,7 +86,7 @@ class StrategyParams(SQLModel):
 
 class RecommendationRequest(SQLModel):
     """Request body for generating recommendations."""
-    movies: list[MovieRating]
+    movies: list[MediaRating]
     model: str = Field(
         default="deepseek",
         description="AI model to use: 'deepseek' or 'openai'",
@@ -103,20 +103,20 @@ class RecommendationRequest(SQLModel):
     )
 
 
-class MovieRecommendation(SQLModel):
-    """A single movie recommendation."""
+class MediaRecommendation(SQLModel):
+    """A single media recommendation."""
     title: str
     year: Optional[int] = None
     genre: Optional[str] = None
-    reason: str = Field(description="Why this movie is recommended")
+    reason: str = Field(description="Why this is recommended")
     confidence: float = Field(
         ge=0.0, le=1.0, description="Confidence score 0-1"
     )
 
 
 class RecommendationResponse(SQLModel):
-    """Response containing movie recommendations."""
-    recommendations: list[MovieRecommendation]
+    """Response containing recommendations."""
+    recommendations: list[MediaRecommendation]
     model_used: str
     source_count: int
 
@@ -129,8 +129,8 @@ class ConversationMessage(SQLModel):
 
 class FollowUpRequest(SQLModel):
     """Request body for follow-up conversation."""
-    movies: list[MovieRating]
-    previous_recommendations: list[MovieRecommendation]
+    movies: list[MediaRating]
+    previous_recommendations: list[MediaRecommendation]
     conversation: list[ConversationMessage] = Field(
         default_factory=list,
         description="Previous follow-up conversation history",

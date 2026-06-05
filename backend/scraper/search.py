@@ -5,7 +5,7 @@ import time
 from typing import Optional
 
 from config_manager import get_api_key as get_config_api_key
-from scraper.match import has_cjk, to_pinyin, find_best_match, strip_season
+from scraper.match import has_cjk, to_pinyin, find_best_match, strip_season, extract_season_number
 
 # Rate limiting — TMDB free tier allows ~50 req/s, but we're conservative
 # to avoid hitting any issues and to be a good API citizen.
@@ -95,18 +95,22 @@ def search_tvmaze(title: str) -> Optional[list[dict]]:
         return None
 
 
-def try_fetch_detail(source: str, source_id: str, title: str, year: Optional[int], media_type: str = "movie") -> Optional[dict]:
+def try_fetch_detail(source: str, source_id: str, title: str, year: Optional[int], media_type: str = "movie", season_number: Optional[int] = None) -> Optional[dict]:
     """Fetch full detail from the given source and return the
     metadata dict, or ``None`` on any error.
+
+    If ``season_number`` is set and source is TMDB TV, also fetches
+    ``/tv/{id}/season/{n}`` and merges season-specific data.
     """
     from movie_search import get_movie_detail
 
     time.sleep(TMDB_REQUEST_DELAY)
     try:
-        detail = get_movie_detail(source, source_id, media_type=media_type)
+        detail = get_movie_detail(source, source_id, media_type=media_type, season_number=season_number)
         logger.info(
-            "Scraped metadata for '%s' (year=%s) → '%s' (%s:%s, type=%s)",
+            "Scraped metadata for '%s' (year=%s) → '%s' (%s:%s, type=%s%s)",
             title, year, detail.get("title"), source, source_id, media_type,
+            f", season={season_number}" if season_number else "",
         )
         return detail
     except RuntimeError as e:
@@ -159,8 +163,12 @@ def _search_scrape(
     variants: list[str],
     source: str,
     media_type: str = "movie",
+    season_number: Optional[int] = None,
 ) -> Optional[dict]:
     """Try a search function with each title variant until one matches.
+
+    If ``season_number`` is set and source is TMDB TV, the detail
+    fetch also gets season-specific data.
 
     Returns the metadata dict on success, ``None`` otherwise.
     """
@@ -170,7 +178,10 @@ def _search_scrape(
             continue
         match = find_best_match(results, variant, year)
         if match and match.get("source_id"):
-            detail = try_fetch_detail(source, match["source_id"], title, year, media_type=media_type)
+            detail = try_fetch_detail(
+                source, match["source_id"], title, year,
+                media_type=media_type, season_number=season_number,
+            )
             if detail:
                 return detail
     return None
@@ -206,9 +217,17 @@ def _try_source(
     variant_pinyins: dict[str, str | None],
     source: str,
     media_type: str = "movie",
+    season_number: Optional[int] = None,
 ) -> Optional[dict]:
-    """Try a search source with variants, then fall back to pinyin."""
-    detail = _search_scrape(search_fn, title, year, variants, source, media_type=media_type)
+    """Try a search source with variants, then fall back to pinyin.
+
+    If ``season_number`` is set and source is TMDB TV, also fetches
+    season-specific data from ``/tv/{id}/season/{n}`` on match.
+    """
+    detail = _search_scrape(
+        search_fn, title, year, variants, source,
+        media_type=media_type, season_number=season_number,
+    )
     if detail:
         return detail
     # Try pinyin for each variant that has CJK
@@ -225,7 +244,10 @@ def _try_source(
         if not match or not match.get("source_id"):
             match = find_best_match(results, p, year)
         if match and match.get("source_id"):
-            detail = try_fetch_detail(source, match["source_id"], title, year, media_type=media_type)
+            detail = try_fetch_detail(
+                source, match["source_id"], title, year,
+                media_type=media_type, season_number=season_number,
+            )
             if detail:
                 return detail
     return None
@@ -253,6 +275,11 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
 
     if not tmdb_key and not omdb_key:
         logger.warning("No TMDB/OMDb API keys configured — will only use TVmaze")
+
+    # Parse season number from title (e.g., "黑袍纠察队 第四季" → 4)
+    season_number = extract_season_number(title)
+    if season_number:
+        logger.info("Detected season %d in title '%s'", season_number, title)
 
     # Build search variants: original title, split parts, season-free parts
     title_variants = _get_search_variants(title)
@@ -286,18 +313,19 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
                 detail.get("runtime"),
             )
 
-    # ── TMDB TV series ────────────────────────────────────────────
+    # ── TMDB TV series (with season detail if detected) ───────────
     if tmdb_key:
         detail = _try_source(
             search_tmdb_tv,
             title, year, title_variants, variant_pinyins, "tmdb",
-            media_type="tv",
+            media_type="tv", season_number=season_number,
         )
         if detail:
             _merge_into(collected, detail, "tmdb")
             logger.info(
-                "TMDB TV result merged for '%s' — media_type=%s",
+                "TMDB TV result merged for '%s' — media_type=%s%s",
                 title, detail.get("media_type"),
+                f", season={season_number}" if season_number else "",
             )
 
     # ── OMDb movie ───────────────────────────────────────────────

@@ -1,6 +1,6 @@
-/** Shared types for the movie recommender */
+/** Shared types for the media recommender */
 
-export interface Movie {
+export interface MediaItem {
   id: number;
   title: string;
   rating: number;
@@ -8,9 +8,13 @@ export interface Movie {
   genre: string | null;
   poster_url?: string | null;
   media_type?: string;
+  tv_series_id?: string | null;
+  season_number?: number | null;
+  episode_count?: number | null;
+  series_poster_url?: string | null;
 }
 
-export interface MovieImport {
+export interface MediaImport {
   title: string;
   rating: number;
   year?: number | null;
@@ -23,7 +27,7 @@ export interface WishlistItem {
   genre?: string | null;
 }
 
-export type MovieStatus = "watched" | "wish";
+export type MediaItemStatus = "watched" | "wish";
 
 export interface Recommendation {
   title: string;
@@ -32,6 +36,7 @@ export interface Recommendation {
   reason: string;
   confidence: number;
   media_type?: string;
+  poster_url?: string | null;
 }
 
 export interface ChatMessage {
@@ -39,13 +44,13 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface DBMovie {
+export interface MediaDetail {
   id: number;
   title: string;
   rating: number;
   year: number | null;
   genre: string | null;
-  status: MovieStatus;
+  status: MediaItemStatus;
   media_type: string;
   poster_url: string | null;
   overview: string | null;
@@ -58,6 +63,10 @@ export interface DBMovie {
   awards: string | null;
   tagline: string | null;
   scrape_error: string | null;
+  tv_series_id: string | null;
+  season_number: number | null;
+  episode_count: number | null;
+  series_poster_url: string | null;
   created_at: string;
 }
 
@@ -77,7 +86,7 @@ export interface DBSessionDetail {
   recommendations: Recommendation[];
 }
 
-export interface MovieSearchResult {
+export interface MediaSearchResult {
   title: string;
   year: number | null;
   genre: string;
@@ -85,9 +94,19 @@ export interface MovieSearchResult {
   source_id: string;
   source: string;
   media_type?: string;
+  /** TMDB TV series ID, populated when searching TV shows */
+  tv_series_id?: string;
+  /** Season number parsed from the search query (e.g. "第四季" → 4) */
+  season_number?: number;
+  /** Season-specific poster from /tv/{id}/season/{n} */
+  season_poster_url?: string;
+  /** Original series-level poster (before season poster overwrite) */
+  series_poster_url?: string;
+  /** Number of episodes in this season */
+  episode_count?: number;
 }
 
-export interface MovieDetail {
+export interface ExternalDetail {
   title: string;
   year: number | null;
   genre: string;

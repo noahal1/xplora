@@ -73,6 +73,7 @@ engine = build_engine(
     pool_timeout=pool_timeout,
     pool_recycle=pool_recycle,
     pool_pre_ping=pool_pre_ping,
+    connect_args={"timeout": 5},
 )
 
 
@@ -80,6 +81,13 @@ def init_db():
     """Create all tables if they don't exist, run migrations, and seed default admin user."""
     # Import all table models so they register with SQLModel.metadata
     import models  # noqa: F401
+
+    # IMPORTANT: Rename old `movies` table BEFORE `create_all`, otherwise
+    # SQLModel will see `media_items` doesn't exist yet and create a new
+    # empty table, leaving all existing data orphaned in the old `movies`
+    # table.
+    from sqlalchemy import inspect as _inspect
+    _rename_table_if_needed(_inspect(engine))
 
     SQLModel.metadata.create_all(engine)
 
@@ -111,14 +119,18 @@ def _run_migrations():
     from sqlalchemy import inspect, text
 
     inspector = inspect(engine)
+
+    # ── Step 1: Rename old `movies` table to `media_items` ──────
+    _rename_table_if_needed(inspector)
+
     try:
-        columns = [c["name"] for c in inspector.get_columns("movies")]
+        columns = [c["name"] for c in inspector.get_columns("media_items")]
     except Exception:
         # Table may not exist yet (fresh DB), skip
         return
 
     # PostgreSQL requires a separate ALTER TABLE per column
-    _add_columns_if_missing("movies", columns, [
+    _add_columns_if_missing("media_items", columns, [
         ("status", "VARCHAR(20) NOT NULL DEFAULT 'watched'"),
         ("notes", "VARCHAR(500)"),
         ("poster_url", "VARCHAR(500)"),
@@ -133,6 +145,10 @@ def _run_migrations():
         ("tagline", "VARCHAR(500)"),
         ("scrape_error", "TEXT"),
         ("media_type", "VARCHAR(10) NOT NULL DEFAULT 'movie'"),
+        ("tv_series_id", "VARCHAR(50)"),
+        ("season_number", "INTEGER"),
+        ("episode_count", "INTEGER"),
+        ("series_poster_url", "VARCHAR(500)"),
     ])
 
     # Operation logs table
@@ -146,6 +162,66 @@ def _run_migrations():
         ("action", "VARCHAR(64) NOT NULL"),
         ("detail", "VARCHAR(500)"),
     ])
+
+
+def _rename_table_if_needed(inspector):
+    """Rename the old `movies` table to `media_items` if it still exists.
+
+    Handles three scenarios:
+    1. Only `movies` exists → simple rename.
+    2. Both `movies` and `media_items` exist, `media_items` empty →
+       drop empty `media_items`, then rename.
+    3. Both exist, `media_items` has data → `movies` is orphaned,
+       drop it (data already in `media_items`).
+
+    PostgreSQL automatically updates all foreign key constraints that
+    reference the renamed table, so no additional ALTER statements are
+    needed for FK columns in `users` / `sessions`.
+    """
+    from sqlalchemy import text
+
+    try:
+        table_names = inspector.get_table_names()
+    except Exception:
+        return
+
+    old_table = "movies"
+    new_table = "media_items"
+
+    has_old = old_table in table_names
+    has_new = new_table in table_names
+
+    if not has_old:
+        return  # Nothing to migrate
+
+    if has_old and not has_new:
+        # Clean rename — no table collision
+        with engine.connect() as conn:
+            conn.execute(text(f"ALTER TABLE {old_table} RENAME TO {new_table}"))
+            conn.commit()
+            print(f"  [Migration] Renamed table '{old_table}' → '{new_table}'")
+        return
+
+    if has_old and has_new:
+        # Both tables exist — check if media_items has data
+        with engine.connect() as conn:
+            row = conn.execute(text(f"SELECT COUNT(*) FROM {new_table}")).scalar()
+            count = row or 0
+
+        if count == 0:
+            # media_items is empty (created by create_all before the
+            # rename migration existed). Drop it and rename movies.
+            with engine.connect() as conn:
+                conn.execute(text(f"DROP TABLE {new_table}"))
+                conn.execute(text(f"ALTER TABLE {old_table} RENAME TO {new_table}"))
+                conn.commit()
+            print(f"  [Migration] Dropped empty '{new_table}', renamed '{old_table}' → '{new_table}' with {count} rows")
+        else:
+            # media_items already has data — movies is orphaned, drop it
+            with engine.connect() as conn:
+                conn.execute(text(f"DROP TABLE {old_table}"))
+                conn.commit()
+            print(f"  [Migration] Dropped orphaned '{old_table}' — data already in '{new_table}' ({count} rows)")
 
 
 def _add_columns_if_missing(table: str, existing_columns: list[str], columns: list[tuple[str, str]]):

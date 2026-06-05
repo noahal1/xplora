@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import type { DBMovie, DBSession, DBSessionDetail } from "../types";
+import type { MediaDetail, DBSession, DBSessionDetail } from "../types";
 import * as api from "../api";
 import { useToast } from "../context/ToastContext";
 import { useHistory } from "../context/HistoryContext";
@@ -20,7 +20,7 @@ export function HistorySidebar() {
 
   const PAGE_SIZE = 30;
 
-  const [movies, setMovies] = useState<DBMovie[]>([]);
+  const [movies, setMovies] = useState<MediaDetail[]>([]);
   const [movieTotal, setMovieTotal] = useState(0);
   const [moviePage, setMoviePage] = useState(0);
   const [sessions, setSessions] = useState<DBSession[]>([]);
@@ -46,11 +46,11 @@ export function HistorySidebar() {
   const loadMovies = useCallback(async (page: number = 0, append: boolean = false) => {
     setLoading(true);
     try {
-      const data = await api.listMovies({ page, page_size: PAGE_SIZE });
+      const data = await api.listMedia({ page, page_size: PAGE_SIZE });
       if (append) {
-        setMovies((prev) => [...prev, ...data.movies]);
+        setMovies((prev) => [...prev, ...data.media]);
       } else {
-        setMovies(data.movies);
+        setMovies(data.media);
       }
       setMovieTotal(data.total);
     } catch {} finally { setLoading(false); }
@@ -105,7 +105,7 @@ export function HistorySidebar() {
     setDeleteTarget(null);
     try {
       if (type === "movie") {
-        await api.deleteMovie(id);
+        await api.deleteMedia(id);
         setMoviePage(0);
         loadMovies();
       } else {

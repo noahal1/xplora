@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { WishlistItem, MovieSearchResult, MovieDetail, SortField, SortDir } from "../../types";
+import type { WishlistItem, MediaSearchResult, ExternalDetail, SortField, SortDir } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { useEnrich } from "../../context/EnrichContext";
@@ -20,6 +20,8 @@ interface WishlistEntry {
   year: number | null;
   genre: string | null;
   media_type?: string;
+  season_number?: number | null;
+  episode_count?: number | null;
 }
 
 const PAGE_SIZE = 30;
@@ -27,7 +29,7 @@ const PAGE_SIZE = 30;
 export function WishlistTab() {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { startPolling, checkStatus } = useEnrich();
+  const { startPolling } = useEnrich();
 
   // ── Wishlist data ──
   const [items, setItems] = useState<WishlistEntry[]>([]);
@@ -43,7 +45,7 @@ export function WishlistTab() {
   // === External search (TMDB / OMDb) ===
   const [externalQuery, setExternalQuery] = useState("");
   const [searchSource, setSearchSource] = useState("auto");
-  const [searchResults, setSearchResults] = useState<MovieSearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<MediaSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searchDone, setSearchDone] = useState(false);
@@ -69,8 +71,8 @@ export function WishlistTab() {
   const [searchSourceFilter, setSearchSourceFilter] = useState<string>("");
 
   // === Movie detail modal ===
-  const [detailMovie, setDetailMovie] = useState<MovieSearchResult | null>(null);
-  const [detailData, setDetailData] = useState<MovieDetail | null>(null);
+  const [detailMovie, setDetailMovie] = useState<MediaSearchResult | null>(null);
+  const [detailData, setDetailData] = useState<ExternalDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
 
@@ -79,7 +81,7 @@ export function WishlistTab() {
   const loadWishlist = useCallback(async (page: number, search: string, sortF: string, sortD: string, mediaType: string) => {
     setLoading(true);
     try {
-      const data = await api.listMovies({
+      const data = await api.listMedia({
         page,
         page_size: PAGE_SIZE,
         status: "wish",
@@ -88,16 +90,13 @@ export function WishlistTab() {
         sort_dir: sortD,
         media_type: (mediaType !== "all" ? mediaType : undefined),
       });
-      setItems(data.movies.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type })));
+      setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, season_number: m.season_number, episode_count: m.episode_count })));
       setTotal(data.total);
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadWishlist(currentPage, filterQuery, sortField, sortDir, mediaTypeFilter); }, [currentPage, filterQuery, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
-
-  // Check for ongoing enrichment on mount
-  useEffect(() => { checkStatus(); }, [checkStatus]);
 
   // Auto-refresh when background enrichment completes
   useEffect(() => {
@@ -147,7 +146,7 @@ export function WishlistTab() {
       setSearchLoading(true);
       setSearchError("");
       try {
-        const data = await api.searchMovies(value.trim(), searchSourceRef.current);
+        const data = await api.searchMedia(value.trim(), searchSourceRef.current);
         setSearchResults(data.results);
         setSearchDone(true);
       } catch (err: any) { setSearchError(err.message); setSearchResults([]); setSearchDone(true); }
@@ -160,13 +159,13 @@ export function WishlistTab() {
     if (externalQuery.trim()) handleSearch(externalQuery);
   }, [externalQuery, handleSearch]);
 
-  const openDetail = useCallback(async (result: MovieSearchResult) => {
+  const openDetail = useCallback(async (result: MediaSearchResult) => {
     setDetailMovie(result);
     setDetailData(null);
     setDetailError("");
     setDetailLoading(true);
     try {
-      const data = await api.getMovieDetail(result.source, result.source_id);
+      const data = await api.getExternalDetail(result.source, result.source_id);
       setDetailData(data);
     } catch (err: any) { setDetailError(err.message); }
     finally { setDetailLoading(false); }
@@ -174,7 +173,7 @@ export function WishlistTab() {
 
   const closeDetail = useCallback(() => { setDetailMovie(null); setDetailData(null); setDetailError(""); }, []);
 
-  const addSearchResultToWishlist = useCallback(async (result: MovieSearchResult) => {
+  const addSearchResultToWishlist = useCallback(async (result: MediaSearchResult) => {
     const key = `${result.source}:${result.source_id}`;
     if (addingIds.has(key)) return;
     setAddingIds((prev) => new Set(prev).add(key));
@@ -235,7 +234,7 @@ export function WishlistTab() {
 
   const deleteItem = useCallback(async (id: number) => {
     try {
-      await api.deleteMovie(id);
+      await api.deleteMedia(id);
       showToast(t("wishlist.delete_success"), "success");
       const willBeEmpty = items.length <= 1;
       if (willBeEmpty && currentPage > 0) setCurrentPage((p) => p - 1);
@@ -245,7 +244,7 @@ export function WishlistTab() {
 
   const confirmMarkAsWatched = useCallback(async (movieId: number, rating: number) => {
     try {
-      await api.markMovieAsWatched(movieId, rating);
+      await api.markMediaAsWatched(movieId, rating);
       setMarkingMovie(null);
       showToast(t("wishlist.marked_as_watched", { title: items.find(m => m.id === movieId)?.title || "", rating: rating.toFixed(1) }), "success");
       const willBeEmpty = items.length <= 1;
@@ -449,6 +448,12 @@ export function WishlistTab() {
                           {m.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{m.year}</span>}
                           {m.genre && <span className="badge text-xs">{m.genre}</span>}
                           {m.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
+                          {m.season_number != null && (
+                            <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
+                              S{m.season_number}
+                              {m.episode_count != null && <span className="ml-0.5 opacity-70">· {m.episode_count}ep</span>}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>

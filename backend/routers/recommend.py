@@ -12,9 +12,9 @@ from crud import save_session as db_save_session
 from models import (
     RecommendationRequest,
     RecommendationResponse,
-    MovieRecommendation,
+    MediaRecommendation,
     FollowUpRequest,
-    MovieRating,
+    MediaRating,
 )
 
 router = APIRouter(prefix="/api/recommend", tags=["recommend"])
@@ -43,7 +43,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
         if event.startswith("event: done"):
             try:
                 rec_models = [
-                    MovieRecommendation(
+                    MediaRecommendation(
                         title=r.get("title", "Unknown"),
                         year=r.get("year"),
                         genre=r.get("genre"),

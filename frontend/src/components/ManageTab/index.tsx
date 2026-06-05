@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { DBMovie, MovieSearchResult } from "../../types";
+import type { MediaDetail, MediaSearchResult } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { useEnrich } from "../../context/EnrichContext";
@@ -35,7 +35,7 @@ export function ManageTab() {
   const { showToast } = useToast();
   const { startPolling } = useEnrich();
 
-  const [movies, setMovies] = useState<DBMovie[]>([]);
+  const [mediaList, setMediaList] = useState<MediaDetail[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -50,9 +50,11 @@ export function ManageTab() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const [editingCell, setEditingCell] = useState<{ movieId: number; field: string } | null>(null);
-  const [genreDialogMovie, setGenreDialogMovie] = useState<DBMovie | null>(null);
+  const [sliderValue, setSliderValue] = useState(7);
+  const [justSavedIds, setJustSavedIds] = useState<Set<number>>(new Set());
+  const [genreDialogMovie, setGenreDialogMovie] = useState<MediaDetail | null>(null);
   const [genreDialogValue, setGenreDialogValue] = useState("");
-  const [markWatchedMovie, setMarkWatchedMovie] = useState<DBMovie | null>(null);
+  const [markWatchedMovie, setMarkWatchedMovie] = useState<MediaDetail | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -64,10 +66,10 @@ export function ManageTab() {
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
   /* ── Metadata detail modal ───────────────────────────────────── */
-  const [detailMovie, setDetailMovie] = useState<DBMovie | null>(null);
+  const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
 
   /* ── Manual search & match modal ─────────────────────────────── */
-  const [rematchMovie, setRematchMovie] = useState<DBMovie | null>(null);
+  const [rematchMovie, setRematchMovie] = useState<MediaDetail | null>(null);
 
   /* ── Enriching IDs ───────────────────────────────────────────── */
   const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
@@ -76,7 +78,7 @@ export function ManageTab() {
     setLoading(true);
     setError("");
     try {
-      const data = await api.listMovies({
+      const data = await api.listMedia({
         search,
         page,
         page_size: MANAGE_PAGE_SIZE,
@@ -86,7 +88,7 @@ export function ManageTab() {
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
       });
-      setMovies(data.movies);
+      setMediaList(data.media);
       setTotal(data.total);
     } catch (err: any) {
       setError(err.message);
@@ -94,6 +96,26 @@ export function ManageTab() {
       setLoading(false);
     }
   }, [search, page, statusFilter, mediaTypeFilter, errorFilter, sort]);
+
+  // Quiet refresh — fetches data without showing loading skeleton (for post-edit refresh)
+  const refreshData = useCallback(async () => {
+    setError("");
+    try {
+      const data = await api.listMedia({
+        search,
+        page,
+        page_size: MANAGE_PAGE_SIZE,
+        status: statusFilter || undefined,
+        sort_field: sort.field,
+        sort_dir: sort.dir,
+        has_error: errorFilter || undefined,
+        media_type: mediaTypeFilter || undefined,
+      });
+      setMediaList(data.media);
+      setTotal(data.total);
+    } catch (err: any) {
+      setError(err.message);
+    }    }, [search, page, statusFilter, mediaTypeFilter, errorFilter, sort]);
 
   useEffect(() => { loadMovies(); }, [loadMovies]);
 
@@ -120,23 +142,23 @@ export function ManageTab() {
   }, []);
 
   useEffect(() => {
-    if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && selected.size < movies.length;
-  }, [selected, movies.length]);
+    if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && selected.size < mediaList.length;
+  }, [selected, mediaList.length]);
 
   const toggleSelection = useCallback((id: number) => {
     setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   }, []);
 
   const toggleSelectAll = useCallback(() => {
-    if (movies.length === 0) return;
-    const allSelected = movies.every((m) => selected.has(m.id));
+    if (mediaList.length === 0) return;
+    const allSelected = mediaList.every((m) => selected.has(m.id));
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allSelected) movies.forEach((m) => next.delete(m.id));
-      else movies.forEach((m) => next.add(m.id));
+      if (allSelected) mediaList.forEach((m) => next.delete(m.id));
+      else mediaList.forEach((m) => next.add(m.id));
       return next;
     });
-  }, [movies, selected]);
+  }, [mediaList, selected]);
 
   /* ── Delete handlers with modal confirmation ─────────────────── */
   const confirmDelete = useCallback((movieId: number, title: string) => setDeleteConfirm({ type: "single", movieId, title }), []);
@@ -149,41 +171,46 @@ export function ManageTab() {
     setDeleteConfirm(null);
     try {
       if (action.type === "single") {
-        await api.deleteMovie(action.movieId);
+        await api.deleteMedia(action.movieId);
         showToast(t("manage.deleted"), "success");
         setSelected((prev) => { const next = new Set(prev); next.delete(action.movieId); return next; });
       } else if (action.type === "selected") {
         const ids = Array.from(selected);
-        const result = await api.batchDeleteMovies(ids);
+        const result = await api.batchDeleteMedia(ids);
         setSelected(new Set());
         showToast(t("manage.deleted_count", { count: result.count }), "success");
       } else if (action.type === "all") {
-        await api.deleteAllMovies();
+        await api.deleteAllMedia();
         showToast(t("manage.cleared", { count: action.count }), "success");
         setSelected(new Set());
         setPage(0);
       }
-      loadMovies();
+      refreshData();
     } catch (err: any) {
       showToast(t("manage.delete_failed", { message: err.message }), "error");
     }
-  }, [deleteConfirm, selected, loadMovies, showToast, t]);
+  }, [deleteConfirm, selected, refreshData, showToast, t]);
 
   /* ── Inline editing ──────────────────────────────────────────── */
   const startInlineEdit = useCallback((movieId: number, field: string) => {
     if (field === "genre") {
-      const movie = movies.find((m) => m.id === movieId);
-      if (movie) { setGenreDialogMovie(movie); setGenreDialogValue(movie.genre || ""); }
+      const item = mediaList.find((m) => m.id === movieId);
+      if (item) { setGenreDialogMovie(item); setGenreDialogValue(item.genre || ""); }
       return;
     }
     setEditingCell({ movieId, field });
-    setTimeout(() => editInputRef.current?.focus(), 50);
-  }, [movies]);
+    if (field === "rating") {
+      const item = mediaList.find((m) => m.id === movieId);
+      if (item) setSliderValue(item.rating);
+    } else {
+      setTimeout(() => editInputRef.current?.focus(), 50);
+    }
+  }, [mediaList]);
 
   const cancelInlineEdit = useCallback(() => { setEditingCell(null); }, []);
 
   const saveInlineEdit = useCallback(async (movieId: number, field: string, value: string) => {
-    const movie = movies.find((m) => m.id === movieId);
+    const movie = mediaList.find((m) => m.id === movieId);
     if (!movie) return;
     let newValue: any = value.trim();
     let updatedFields: Record<string, any> = {};
@@ -193,34 +220,30 @@ export function ManageTab() {
       case "year": newValue = value ? parseInt(value) : null; if (value && (isNaN(newValue) || newValue < 1888 || newValue > 2030)) return; updatedFields.year = newValue; break;
       case "created_at": newValue = value || null; updatedFields.created_at = newValue; break;
     }
-    const currentVal = movie[field as keyof DBMovie];
+    const currentVal = movie[field as keyof MediaDetail];
     if (updatedFields[field] === currentVal || (currentVal == null && updatedFields[field] == null)) { cancelInlineEdit(); return; }
     try {
-      await api.updateMovie(movieId, {
+      const updated = await api.updateMedia(movieId, {
         title: updatedFields.title ?? movie.title,
         rating: updatedFields.rating ?? movie.rating,
         year: updatedFields.year !== undefined ? updatedFields.year : movie.year,
         genre: movie.genre || "",
         created_at: updatedFields.created_at !== undefined ? updatedFields.created_at : movie.created_at,
       } as any);
+      // Update local state immediately
+      setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
+      // Show saved confirmation animation for rating edits
+      if (field === "rating") {
+        setJustSavedIds((prev) => new Set(prev).add(movieId));
+        setTimeout(() => {
+          setJustSavedIds((prev) => { const next = new Set(prev); next.delete(movieId); return next; });
+        }, 1500);
+      }
       showToast(t("manage.updated"), "success");
       cancelInlineEdit();
-      loadMovies();
+      refreshData();
     } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); cancelInlineEdit(); }
-  }, [movies, loadMovies, showToast, cancelInlineEdit, t]);
-
-  const saveGenreDialog = useCallback(async () => {
-    const movie = genreDialogMovie;
-    if (!movie) return;
-    const newGenre = genreDialogValue.trim() || "";
-    if (newGenre === (movie.genre || "")) { setGenreDialogMovie(null); return; }
-    try {
-      await api.updateMovie(movie.id, { title: movie.title, rating: movie.rating, year: movie.year, genre: newGenre || null } as any);
-      showToast(t("manage.genre_updated"), "success");
-      setGenreDialogMovie(null);
-      loadMovies();
-    } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); }
-  }, [genreDialogMovie, genreDialogValue, loadMovies, showToast, t]);
+  }, [mediaList, refreshData, showToast, cancelInlineEdit, t]);
 
   /* ── Enrich operations ───────────────────────────────────────── */
   const openSearchDialog = useCallback(() => { setSearchDialogOpen(true); }, []);
@@ -228,12 +251,14 @@ export function ManageTab() {
   const handleEnrich = useCallback(async (movieId: number) => {
     setEnrichingIds(prev => new Set(prev).add(movieId));
     try {
-      await api.enrichMovie(movieId);
+      const updated = await api.enrichMedia(movieId);
+      // Update poster/metadata immediately
+      setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
       showToast(t("manage.enrich_success"), "success");
-      loadMovies();
+      refreshData();
     } catch (err: any) { showToast(t("manage.enrich_failed", { message: err.message }), "error"); }
     finally { setEnrichingIds(prev => { const next = new Set(prev); next.delete(movieId); return next; }); }
-  }, [loadMovies, showToast, t]);
+  }, [refreshData, showToast, t]);
 
   /* ── Batch enrich + cache ───────────────────────────────────── */
   const [batchLoading, setBatchLoading] = useState(false);
@@ -241,7 +266,7 @@ export function ManageTab() {
   const handleBatchAll = useCallback(async () => {
     setBatchLoading(true);
     try {
-      const enrichResult = await api.enrichAllMovies();
+      const enrichResult = await api.enrichAllMedia();
       let totalEnqueued = enrichResult.enqueued;
       const cacheResult = await api.cachePosters();
       totalEnqueued += cacheResult.enqueued;
@@ -254,8 +279,8 @@ export function ManageTab() {
   }, [showToast, startPolling, t]);
 
   const handleExportMovies = useCallback(() => {
-    if (movies.length === 0) return;
-    const data = JSON.stringify({ movies, exported_at: new Date().toISOString(), total }, null, 2);
+    if (mediaList.length === 0) return;
+    const data = JSON.stringify({ movies: mediaList, exported_at: new Date().toISOString(), total }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -265,7 +290,7 @@ export function ManageTab() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [movies, total]);
+  }, [mediaList, total]);
 
   /* ── Pagination helpers ──────────────────────────────────────── */
   const totalPages = Math.ceil(total / MANAGE_PAGE_SIZE);
@@ -276,13 +301,39 @@ export function ManageTab() {
     </span>
   );
 
-  const renderEditableCell = (movie: DBMovie, field: string, display: React.ReactNode) => {
+  const renderEditableCell = (movie: MediaDetail, field: string, display: React.ReactNode) => {
     const isEditing = editingCell?.movieId === movie.id && editingCell?.field === field;
     if (isEditing) {
+      if (field === "rating") {
+        const save = () => { saveInlineEdit(movie.id, "rating", sliderValue.toFixed(1)); };
+        return (
+          <td className="px-3 py-2 border-b border-border">
+            <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <input type="range" min={0} max={10} step={0.5} value={sliderValue}
+                onChange={(e) => { setSliderValue(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+                onMouseUp={save} onTouchEnd={save}
+                onBlur={() => { if (editingCell?.movieId === movie.id) save(); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") cancelInlineEdit(); }}
+                className="w-20 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
+                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+                  max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6
+                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
+                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
+                  [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
+                  active:[&::-webkit-slider-thumb]:scale-125
+                  max-sm:h-2"
+                autoFocus
+              />
+              <span className="text-amber font-medium text-xs min-w-[24px] text-center count-badge" key={sliderValue}>
+                {sliderValue.toFixed(1)}
+              </span>
+            </span>
+          </td>
+        );
+      }
       let value = "", inputType = "text", widthClass = "";
       switch (field) {
         case "title": value = movie.title; widthClass = "w-full min-w-[120px]"; break;
-        case "rating": inputType = "number"; widthClass = "w-[72px]"; value = movie.rating.toFixed(1); break;
         case "year": inputType = "number"; widthClass = "w-[72px]"; value = movie.year != null ? movie.year.toString() : ""; break;
         case "created_at": inputType = "date"; widthClass = "w-[110px]"; value = movie.created_at ? movie.created_at.slice(0, 10) : ""; break;
       }
@@ -411,7 +462,7 @@ export function ManageTab() {
       )}
 
       {/* ── Empty ──────────────────────────────────────────────── */}
-      {!loading && !error && movies.length === 0 && (
+      {!loading && !error && mediaList.length === 0 && (
         <div className="empty-state">
           <Film size={40} className="mb-3 opacity-40" />
           <p className="text-sm font-medium">{search ? t("manage.no_matching", { query: search }) : t("manage.no_movies")}</p>
@@ -421,7 +472,7 @@ export function ManageTab() {
       )}
 
       {/* ── Table ───────────────────────────────────────────────── */}
-      {!loading && !error && movies.length > 0 && (
+      {!loading && !error && mediaList.length > 0 && (
         <>
           <div className="overflow-x-auto border border-border rounded-xl">
             <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
@@ -429,12 +480,12 @@ export function ManageTab() {
                 <tr className="sticky top-0 z-10">
                   <th className="w-10 text-center px-3 py-2.5 font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">
                     <input type="checkbox" ref={selectAllRef} className="w-4 h-4 accent-primary cursor-pointer"
-                      checked={movies.length > 0 && movies.every((m) => selected.has(m.id))} onChange={toggleSelectAll} />
+                      checked={mediaList.length > 0 && mediaList.every((m) => selected.has(m.id))} onChange={toggleSelectAll} />
                   </th>
                   <th className="w-[52px] px-1 py-2.5 text-center font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_poster")}</th>
                   <th className="w-14 px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_status")}</th>
                   {(["title", "rating", "year", "genre", "created_at"] as const).map((field) => {
-                    const widths: Record<string, number | undefined> = { title: 200, rating: 72, year: 60, genre: undefined, created_at: 100 };
+                    const widths: Record<string, number | undefined> = { title: 200, rating: 140, year: 72, genre: undefined, created_at: 100 };
                     return (
                       <th key={field} className="px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none cursor-pointer hover:text-foreground transition-colors"
                         style={widths[field] ? { width: widths[field] } : undefined} onClick={() => handleSort(field)}>
@@ -447,7 +498,7 @@ export function ManageTab() {
                 </tr>
               </thead>
               <tbody>
-                {movies.map((m) => (
+                {mediaList.map((m) => (
                   <tr key={m.id} className={`transition-colors ${selected.has(m.id) ? "bg-primary/[0.04]" : "hover:bg-accent/20"}`}>
                     <td className="px-3 py-2 border-b border-border text-center">
                       <input type="checkbox" className="w-4 h-4 accent-primary cursor-pointer" checked={selected.has(m.id)} onChange={() => toggleSelection(m.id)} />
@@ -491,12 +542,18 @@ export function ManageTab() {
                         {m.media_type === "tv" && (
                           <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
                         )}
+                        {m.season_number != null && (
+                          <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
+                            S{m.season_number}
+                            {m.episode_count != null && <span className="ml-0.5 opacity-70">· {m.episode_count}ep</span>}
+                          </Badge>
+                        )}
                       </div>
                     )}
                     {renderEditableCell(m, "rating", (
-                      <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap">
-                        <Star size={12} fill="var(--seed-primary)" style={{ color: "var(--seed-primary)" }} />
-                        <span style={{ color: "var(--fg-secondary)" }}>{m.rating.toFixed(1)}</span>
+                      <span className={`inline-flex items-center gap-1 font-medium whitespace-nowrap ${justSavedIds.has(m.id) ? 'saved-confirm' : ''}`} style={{ color: justSavedIds.has(m.id) ? 'var(--success)' : 'var(--fg-secondary)' }}>
+                        <Star size={12} fill="currentColor" />
+                        {justSavedIds.has(m.id) ? '✓ ' : ''}{m.rating.toFixed(1)}
                       </span>
                     ))}
                     {renderEditableCell(m, "year", <span className="text-muted-foreground">{m.year || "—"}</span>)}
@@ -562,13 +619,13 @@ export function ManageTab() {
       </Modal>
 
       {/* ── TMDB Search & Import Dialog ─────────────────────────── */}
-      <SearchImportModal open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)} onImportComplete={() => { setSearchDialogOpen(false); loadMovies(); }} />
+      <SearchImportModal open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)} onImportComplete={() => { setSearchDialogOpen(false); refreshData(); }} />
 
       {/* ── Metadata Detail Modal ───────────────────────────────── */}
       <DetailModal open={detailMovie !== null} movie={detailMovie} onClose={() => setDetailMovie(null)} />
 
       {/* ── Manual Search & Match Modal ─────────────────────────── */}
-      <RematchModal open={rematchMovie !== null} movie={rematchMovie} onClose={() => setRematchMovie(null)} onSuccess={() => { setRematchMovie(null); loadMovies(); }} />
+      <RematchModal open={rematchMovie !== null} movie={rematchMovie} onClose={() => setRematchMovie(null)} onSuccess={() => { setRematchMovie(null); refreshData(); }} />
 
       {/* ── Mark as Watched Modal ──────────────────────────────── */}
       <MarkWatchedModal open={markWatchedMovie !== null} movie={markWatchedMovie}
@@ -576,10 +633,12 @@ export function ManageTab() {
         onConfirm={async (movieId, rating) => {
           const rounded = Math.round(rating * 10) / 10;
           try {
-            await api.markMovieAsWatched(movieId, rounded);
-            showToast(t("wishlist.marked_as_watched", { title: movies.find(m => m.id === movieId)?.title || "", rating: rounded }), "success");
+            await api.markMediaAsWatched(movieId, rounded);
+            // Update local state immediately
+            setMediaList((prev) => prev.map((m) => m.id === movieId ? { ...m, status: "watched", rating: rounded } : m));
+            showToast(t("wishlist.marked_as_watched", { title: mediaList.find(m => m.id === movieId)?.title || "", rating: rounded }), "success");
             setMarkWatchedMovie(null);
-            loadMovies();
+            refreshData();
           } catch (err: any) { showToast(t("wishlist.mark_failed", { message: err.message }), "error"); }
         }}
       />
@@ -588,14 +647,16 @@ export function ManageTab() {
       <GenreEditModal open={genreDialogMovie !== null} movie={genreDialogMovie}
         onClose={() => setGenreDialogMovie(null)}
         onSave={async (movieId, genre) => {
-          const movie = movies.find(m => m.id === movieId);
+          const movie = mediaList.find(m => m.id === movieId);
           if (!movie) return;
           if (genre === (movie.genre || "")) { setGenreDialogMovie(null); return; }
           try {
-            await api.updateMovie(movieId, { title: movie.title, rating: movie.rating, year: movie.year, genre: genre || null } as any);
+            await api.updateMedia(movieId, { title: movie.title, rating: movie.rating, year: movie.year, genre: genre || null } as any);
+            // Update local state immediately
+            setMediaList((prev) => prev.map((m) => m.id === movieId ? { ...m, genre: genre || null } : m));
             showToast(t("manage.genre_updated"), "success");
             setGenreDialogMovie(null);
-            loadMovies();
+            refreshData();
           } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); }
         }}
       />

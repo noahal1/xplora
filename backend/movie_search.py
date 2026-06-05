@@ -6,7 +6,7 @@ from typing import Optional
 
 from config_manager import get_api_key as get_config_api_key
 from http_client import make_client
-from scraper.match import strip_season
+from scraper.match import strip_season, extract_season_number
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,22 @@ TVMAZE_BASE = "https://api.tvmaze.com"
 
 class MovieSearchResult:
     """Normalized search result from either TMDB or OMDb."""
-    def __init__(self, title: str, year: Optional[int], genre: str, poster_url: Optional[str], source_id: str, source: str, original_title: Optional[str] = None, media_type: str = "movie"):
+    def __init__(
+        self,
+        title: str,
+        year: Optional[int],
+        genre: str,
+        poster_url: Optional[str],
+        source_id: str,
+        source: str,
+        original_title: Optional[str] = None,
+        media_type: str = "movie",
+        tv_series_id: Optional[str] = None,
+        season_number: Optional[int] = None,
+        season_poster_url: Optional[str] = None,
+        episode_count: Optional[int] = None,
+        series_poster_url: Optional[str] = None,
+    ):
         self.title = title
         self.year = year
         self.genre = genre
@@ -28,6 +43,11 @@ class MovieSearchResult:
         self.source = source
         self.original_title = original_title
         self.media_type = media_type
+        self.tv_series_id = tv_series_id
+        self.season_number = season_number
+        self.season_poster_url = season_poster_url
+        self.episode_count = episode_count
+        self.series_poster_url = series_poster_url
 
     def to_dict(self) -> dict:
         d = {
@@ -41,6 +61,16 @@ class MovieSearchResult:
         }
         if self.original_title:
             d["original_title"] = self.original_title
+        if self.tv_series_id:
+            d["tv_series_id"] = self.tv_series_id
+        if self.season_number is not None:
+            d["season_number"] = self.season_number
+        if self.season_poster_url:
+            d["season_poster_url"] = self.season_poster_url
+        if self.episode_count is not None:
+            d["episode_count"] = self.episode_count
+        if self.series_poster_url:
+            d["series_poster_url"] = self.series_poster_url
         return d
 
 
@@ -168,6 +198,7 @@ def search_tmdb_tv(query: str, api_key: str, language: str = "zh-CN") -> list[Mo
             source="tmdb",
             original_title=original_name,
             media_type="tv",
+            tv_series_id=str(item.get("id", "")),
         ))
     return results
 
@@ -299,6 +330,11 @@ def _strip_html(text: str) -> str:
 def search_movies(query: str, source: str = "tmdb", dual_language: bool = False) -> list[dict]:
     """Unified search entry point. Returns list of dicts ready for JSON serialization.
 
+    When the query contains a season marker (e.g., ``"第四季"`` / ``"Season 4"``),
+    the season info is parsed and TV search results are enriched with
+    season-specific data (season poster, episode count) via the TMDB
+    ``/tv/{id}/season/{n}`` endpoint.
+
     Args:
         query: Search query string.
         source: ``"tmdb"``, ``"omdb"``, ``"tvmaze"``, or ``"auto"``.
@@ -306,12 +342,15 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False)
             Chinese and English then merge results (better for
             background scraping match rates).
     """
-    query = query.strip()
-    if not query:
+    original_query = query.strip()
+    if not original_query:
         return []
 
-    # Strip season info (e.g., "黑袍纠察队 第四季" → "黑袍纠察队")
-    query = strip_season(query)
+    # Parse season number BEFORE stripping (e.g., "黑袍纠察队 第四季" → 4)
+    season_number = extract_season_number(original_query)
+
+    # Strip season info for clean search
+    query = strip_season(original_query)
     if not query:
         return []
 
@@ -358,7 +397,44 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False)
             seen.add(key)
             deduped.append(r)
 
+    # If season_number is known, enrich TV results with season-specific data
+    if season_number is not None and tmdb_key:
+        _enrich_tv_with_season_data(deduped, season_number, tmdb_key)
+
     return [r.to_dict() for r in deduped]
+
+
+def _enrich_tv_with_season_data(results: list[MovieSearchResult], season_number: int, tmdb_key: str):
+    """Enrich top TV search results with season-specific metadata.
+
+    For each TMDB TV result, fetches ``/tv/{id}/season/{n}`` and
+    fills in the season poster, episode count, and season number.
+    Limited to the top 2 results to avoid excessive API calls.
+
+    Note: ``season_number`` is always set on TV results (even if the
+    season detail fetch fails — e.g. the season hasn't aired yet) so
+    the frontend can still display ``S2`` to indicate the matched season.
+    """
+    enriched = 0
+    for r in results:
+        if enriched >= 2:
+            break
+        if r.source == "tmdb" and r.media_type == "tv" and r.source_id:
+            # Always set season_number so the frontend shows the badge
+            r.season_number = season_number
+            try:
+                season_data = _get_tmdb_tv_season_detail(r.source_id, season_number, tmdb_key)
+                if season_data.get("season_poster_url"):
+                    # Save the original series poster before overwriting
+                    r.series_poster_url = r.poster_url
+                    r.season_poster_url = season_data["season_poster_url"]
+                    r.poster_url = season_data["season_poster_url"]
+                r.episode_count = season_data.get("season_episode_count")
+                enriched += 1
+            except RuntimeError:
+                # Season not found on TMDB (e.g., not yet released) —
+                # series poster stays, season_number is already set above
+                pass
 
 
 def _merge_results(new_results: list[MovieSearchResult], target: list[MovieSearchResult]):
@@ -462,13 +538,15 @@ def _search_auto(
     _search_tvmaze_variants(search_queries, results)
 
 
-def get_movie_detail(source: str, source_id: str, media_type: str = "movie") -> dict:
+def get_movie_detail(source: str, source_id: str, media_type: str = "movie", season_number: Optional[int] = None) -> dict:
     """Fetch full details from the specified source by ID.
 
     Args:
         source: ``"tmdb"``, ``"omdb"``, or ``"tvmaze"``.
         source_id: The ID in the source system.
         media_type: ``"movie"`` or ``"tv"`` (only used for TMDB).
+        season_number: If set and source is TMDB TV, also fetch
+            season-specific metadata from ``/tv/{id}/season/{n}``.
     """
     tmdb_key = get_config_api_key("tmdb")
     omdb_key = get_config_api_key("omdb")
@@ -477,7 +555,7 @@ def get_movie_detail(source: str, source_id: str, media_type: str = "movie") -> 
         if not tmdb_key:
             raise RuntimeError("TMDB API Key 未配置，请在设置页面中配置")
         if media_type == "tv":
-            return _get_tmdb_tv_detail(source_id, tmdb_key)
+            return _get_tmdb_tv_detail(source_id, tmdb_key, season_number=season_number)
         return _get_tmdb_detail(source_id, tmdb_key)
     elif source == "omdb":
         if not omdb_key:
@@ -595,8 +673,50 @@ def _get_omdb_detail(imdb_id: str, api_key: str) -> dict:
 # ============================================
 
 
-def _get_tmdb_tv_detail(tv_id: str, api_key: str) -> dict:
-    """Fetch full TV series details from TMDB by ID."""
+
+def _get_tmdb_tv_season_detail(tv_id: str, season_number: int, api_key: str) -> dict:
+    """Fetch season-specific metadata from TMDB.
+
+    ``GET /tv/{tv_id}/season/{season_number}``
+
+    Returns season poster, episode count, air date, and episode list.
+    """
+    url = f"{TMDB_BASE}/tv/{tv_id}/season/{season_number}"
+    params = {"api_key": api_key, "language": "zh-CN"}
+    try:
+        with make_client(timeout=5) as client:
+            resp = client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        raise RuntimeError(f"TMDB TV season detail fetch failed: {e}")
+
+    poster = data.get("poster_path")
+    episodes = data.get("episodes", [])
+
+    return {
+        "season_poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
+        "season_episode_count": len(episodes),
+        "season_air_date": data.get("air_date", ""),
+        "season_number": season_number,
+        "episodes": [
+            {
+                "episode_number": ep.get("episode_number"),
+                "name": ep.get("name"),
+                "air_date": ep.get("air_date"),
+            }
+            for ep in episodes[:20]
+        ],
+    }
+
+
+def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] = None) -> dict:
+    """Fetch full TV series details from TMDB by ID.
+
+    If ``season_number`` is provided, also fetches ``/tv/{id}/season/{n}``
+    and merges season-specific data (season poster replaces series poster,
+    episode count, air date) into the result.
+    """
     url = f"{TMDB_BASE}/tv/{tv_id}"
     params = {"api_key": api_key, "language": "zh-CN"}
     try:
@@ -615,7 +735,7 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str) -> dict:
     seasons = data.get("number_of_seasons", 0)
     episodes = data.get("number_of_episodes", 0)
 
-    return {
+    result = {
         "title": data.get("name", ""),
         "year": year,
         "genre": " / ".join(genres),
@@ -630,9 +750,29 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str) -> dict:
         "source": "tmdb",
         "source_id": tv_id,
         "media_type": "tv",
+        "tv_series_id": tv_id,
+        "series_poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
         "seasons": seasons,
         "episodes": episodes,
     }
+
+    # If season_number is known, merge season-specific data
+    if season_number is not None:
+        try:
+            season_data = _get_tmdb_tv_season_detail(tv_id, season_number, api_key)
+            # Season poster is more accurate than series poster for a specific season
+            if season_data.get("season_poster_url"):
+                result["poster_url"] = season_data["season_poster_url"]
+            result["season_number"] = season_number
+            result["season_episode_count"] = season_data.get("season_episode_count")
+            result["season_air_date"] = season_data.get("season_air_date", "")
+        except RuntimeError as e:
+            logger.warning(
+                "TMDB season detail fetch failed for TV ID %s season %s: %s",
+                tv_id, season_number, e,
+            )
+
+    return result
 
 
 # ============================================

@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 # Regex patterns for season markers in titles
+# Chinese numeral mapping
+_CN_NUM_MAP: dict[str, int] = {
+    "零": 0, "〇": 0,
+    "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+    "百": 100, "千": 1000,
+}
+
 _CN_SEASON_RE = re.compile(
     r"第["
     r"一二三四五六七八九十零〇百千"
@@ -23,6 +31,69 @@ _EN_SEASON_RE = re.compile(
     r"(?:\s+Season\s+|\s+S\s*)\d+\s*",
     re.IGNORECASE,
 )
+
+
+def _parse_chinese_number(s: str) -> int:
+    """Parse Chinese numeral string to integer.
+
+    ``"一"`` → ``1``, ``"十"`` → ``10``,
+    ``"十一"`` → ``11``, ``"二十"`` → ``20``,
+    ``"二十一"`` → ``21``.
+    """
+    if len(s) == 1:
+        return _CN_NUM_MAP.get(s, 0)
+
+    # Compound numbers with 十
+    if "十" in s:
+        parts = s.split("十")
+        left = parts[0]
+        right = parts[1] if len(parts) > 1 else ""
+        val_left = _CN_NUM_MAP.get(left, 0) if left else 1  # bare 十 → left=1
+        val_right = _CN_NUM_MAP.get(right, 0) if right else 0
+        return val_left * 10 + val_right
+
+    # Try parsing as combination of multipliers
+    total = 0
+    acc = 0
+    for ch in s:
+        n = _CN_NUM_MAP.get(ch, 0)
+        if n >= 10:
+            acc = max(acc, 1) * n
+            total += acc
+            acc = 0
+        else:
+            acc = n
+    total += acc
+    return total or 0
+
+
+def extract_season_number(title: str) -> int | None:
+    """Extract season number from a title with season marker.
+
+    ``"黑袍纠察队 第四季"`` → ``4``  (Chinese numeral)
+    ``"The Boys Season 4"`` → ``4``
+    ``"The Boys S4"`` → ``4``
+    ``"千与千寻"`` → ``None``
+    ``"权力的游戏 第一季"`` → ``1``
+    """
+    # Chinese: 第X季
+    m = _CN_SEASON_RE.search(title)
+    if m:
+        raw = m.group()  # e.g. "第四季"
+        num_str = raw[1:-1]  # strip 第 / 季
+        if num_str.isdigit():
+            return int(num_str)
+        return _parse_chinese_number(num_str)
+
+    # English: Season X or SX
+    m = _EN_SEASON_RE.search(title)
+    if m:
+        raw = m.group().strip()
+        d = re.search(r"\d+", raw)
+        if d:
+            return int(d.group())
+
+    return None
 
 
 def strip_season(title: str) -> str:

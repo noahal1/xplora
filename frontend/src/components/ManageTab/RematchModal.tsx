@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { DBMovie, MovieSearchResult } from "../../types";
+import type { MediaDetail, MediaSearchResult } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { Badge } from "../ui/badge";
@@ -9,7 +9,7 @@ import { Search, X, Film, AlertCircle, RefreshCw, Check, Loader2 } from "lucide-
 
 interface RematchModalProps {
   open: boolean;
-  movie: DBMovie | null;
+  movie: MediaDetail | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -18,7 +18,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
   const { t } = useTranslation();
   const { showToast } = useToast();
 
-  const [rematchResults, setRematchResults] = useState<MovieSearchResult[]>([]);
+  const [rematchResults, setRematchResults] = useState<MediaSearchResult[]>([]);
   const [rematchLoading, setRematchLoading] = useState(false);
   const [rematchQuery, setRematchQuery] = useState("");
   const [rematchFocusedIdx, setRematchFocusedIdx] = useState(-1);
@@ -32,7 +32,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
     setRematchLoading(true);
     setRematchError("");
     try {
-      const data = await api.searchMovies(q, "auto");
+      const data = await api.searchMedia(q, "auto");
       setRematchResults(data.results);
       setRematchFocusedIdx(data.results.length > 0 ? 0 : -1);
     } catch {
@@ -48,12 +48,12 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
     rematchSearchTimeout.current = setTimeout(() => handleRematchSearch(value), 400);
   }, [handleRematchSearch]);
 
-  const handleSelectRematch = useCallback(async (result: MovieSearchResult) => {
+  const handleSelectRematch = useCallback(async (result: MediaSearchResult) => {
     if (!movie) return;
     // Close modal immediately for snappy UX
     onClose();
     try {
-      await api.rematchMovie(movie.id, result.source, result.source_id, result.media_type);
+      await api.rematchMedia(movie.id, result.source, result.source_id, result.media_type);
       showToast(t("manage.rematch_success", { title: result.title }), "success");
       onSuccess();
     } catch (err: any) {
@@ -224,11 +224,20 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                       onClick={() => handleSelectRematch(result)}
                       onMouseEnter={() => setRematchFocusedIdx(idx)}
                     >
-                      <div className="w-11 h-[60px] rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm"
+                      <div className="w-11 h-[60px] rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm relative group"
                         style={{ border: "1px solid var(--border-subtle)" }}>
                         {result.poster_url ? (
-                          <img src={result.poster_url} alt={result.title} className="w-full h-full object-cover" loading="lazy"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          <>
+                            <img src={result.poster_url} alt={result.title} className="w-full h-full object-cover" loading="lazy"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            {result.series_poster_url && result.series_poster_url !== result.poster_url && (
+                              <div className="absolute bottom-0.5 right-0.5 w-[22px] h-[30px] rounded-[3px] overflow-hidden shadow-md ring-1 ring-border/50 bg-muted opacity-70 group-hover:opacity-100 group-hover:scale-[2] group-hover:z-20 group-hover:shadow-xl transition-all duration-200 origin-bottom-right"
+                                title="Series poster (zoom on hover)">
+                                <img src={result.series_poster_url} alt="" className="w-full h-full object-cover"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                              </div>
+                            )}
+                          </>
                         ) : <Film size={16} className="text-muted-foreground/30" />}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -243,6 +252,12 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           {result.year && <span className="text-xs text-muted-foreground tabular-nums">{result.year}</span>}
                           {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground truncate max-w-[120px]">{result.genre}</span>}
+                          {result.season_number != null && (
+                            <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
+                              S{result.season_number}
+                              {result.episode_count != null && <span className="ml-0.5 opacity-70">· {result.episode_count}ep</span>}
+                            </Badge>
+                          )}
                           {result.overview && <span className="text-[10px] text-muted-foreground/50 truncate max-w-[200px] hidden sm:inline">{result.overview.slice(0, 80)}{result.overview.length > 80 ? "…" : ""}</span>}
                         </div>
                       </div>
