@@ -219,7 +219,16 @@ async def enrich_media_metadata_endpoint(
             detail=f"在 TMDB 中未找到「{media_item.title}」的匹配结果，请先手动编辑标题再试",
         )
 
-    match = results[0]
+    # For items without a season_number, prefer movie search results to avoid
+    # incorrectly tagging a movie as TV (e.g. "Interstellar" matching a TV
+    # special/documentary on TMDB). TV results are only valid when the item
+    # was explicitly imported as a TV series with a season marker.
+    if media_item.season_number:
+        match = results[0]
+    else:
+        movie_results = [r for r in results if r.get("media_type") != "tv"]
+        match = movie_results[0] if movie_results else results[0]
+
     source_id = match.get("source_id", "")
     if not source_id:
         raise HTTPException(status_code=502, detail="TMDB 搜索结果缺少 source_id")
@@ -236,6 +245,14 @@ async def enrich_media_metadata_endpoint(
             status_code=502,
             detail=f"获取 TMDB 详情失败：{str(e)}。搜索已成功但获取详情失败，可能是 TMDB 限流或网络问题。",
         )
+
+    # Explicitly set media_type on the detail dict so that
+    # enrich_media_metadata overwrites any previously incorrect value
+    # in the database (e.g. a movie incorrectly tagged as "tv" from an
+    # earlier scrape where a TV special matched the same title).
+    # Movie detail (_get_tmdb_detail) doesn't include "media_type",
+    # so without this the old DB value would persist.
+    detail["media_type"] = media_type
 
     # Localize the poster image
     poster_cached = False
@@ -454,6 +471,10 @@ async def rematch_media(
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
+    # Explicitly set media_type so enrich_media_metadata overwrites
+    # any previously incorrect value in the database
+    detail["media_type"] = media_type
+
     # Download and cache poster locally
     poster_cached = False
     if detail.get("poster_url"):
@@ -576,6 +597,45 @@ async def add_to_wishlist(
         "genre": r.genre,
         "status": r.status,
     }
+
+
+@router.post("/wishlist/import")
+async def import_wishlist(
+    request: WishlistData,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Append items to the wishlist (no clearing of existing items).
+
+    Unlike ``POST /wishlist/replace``, this endpoint does **not** delete
+    existing wishlist items first — it only inserts the new ones. This
+    is the correct endpoint for JSON import, merging import files with
+    existing data without discarding items on other pages.
+
+    Metadata enrichment runs asynchronously in the background.
+    """
+    items = []
+    for m in request.movies:
+        if not m.title or not m.title.strip():
+            continue
+        items.append(
+            WishlistItem(
+                title=m.title.strip(),
+                year=m.year,
+                genre=m.genre,
+            )
+        )
+    if not items:
+        return {"status": "saved", "count": 0}
+
+    records = save_wishlist_items(items, current_user["id"])
+
+    media_ids = [r.id for r in records]
+    if media_ids:
+        background_tasks.add_task(async_background_enrich_movies, current_user["id"], media_ids)
+
+    log_operation(current_user["id"], current_user["username"], "import_wishlist", f"导入想看列表: {len(records)} 条")
+    return {"status": "saved", "count": len(records)}
 
 
 @router.delete("/wishlist")

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { WishlistItem, MediaSearchResult, ExternalDetail, SortField, SortDir } from "../../types";
 import * as api from "../../api";
@@ -36,6 +36,7 @@ export function WishlistTab() {
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [filterQuery, setFilterQuery] = useState("");
+  const [filterInput, setFilterInput] = useState("");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -50,6 +51,7 @@ export function WishlistTab() {
   const [searchError, setSearchError] = useState("");
   const [searchDone, setSearchDone] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const filterTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
@@ -78,7 +80,7 @@ export function WishlistTab() {
 
   // ── Load wishlist from API ──
 
-  const loadWishlist = useCallback(async (page: number, search: string, sortF: string, sortD: string, mediaType: string) => {
+  const loadWishlist = useCallback(async (page: number, search: string, sortF: string, sortD: string, mediaType: string, signal?: AbortSignal) => {
     setLoading(true);
     try {
       const data = await api.listMedia({
@@ -89,14 +91,34 @@ export function WishlistTab() {
         sort_field: sortF,
         sort_dir: sortD,
         media_type: (mediaType !== "all" ? mediaType : undefined),
+        signal,
       });
+      if (signal?.aborted) return;
       setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, season_number: m.season_number, episode_count: m.episode_count })));
       setTotal(data.total);
-    } catch { /* silent */ }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+    }
+    finally {
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
+    }
   }, []);
 
-  useEffect(() => { loadWishlist(currentPage, filterQuery, sortField, sortDir, mediaTypeFilter); }, [currentPage, filterQuery, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadWishlist(currentPage, filterQuery, sortField, sortDir, mediaTypeFilter, controller.signal);
+    return () => controller.abort();
+  }, [currentPage, filterQuery, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
+
+  // Clear debounce timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+    };
+  }, []);
 
   // Auto-refresh when background enrichment completes
   useEffect(() => {
@@ -107,23 +129,25 @@ export function WishlistTab() {
 
   const refreshWishlist = useCallback(() => { setCurrentPage(0); setFilterQuery(""); setReloadTrigger((n) => n + 1); }, []);
 
-  // ── Search results sort ──
+  // ── Search results sort (memoised to avoid re-filter/sort on every render) ──
 
-  const sortedResults = [...searchResults]
-    .filter((r) => !searchSourceFilter || r.source === searchSourceFilter)
-    .sort((a, b) => {
-      let va: any, vb: any;
-      if (searchSortField === "year") {
-        va = a.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
-        vb = b.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
-      } else {
-        va = (a.title || "").toLowerCase();
-        vb = (b.title || "").toLowerCase();
-      }
-      if (va < vb) return searchSortDir === "asc" ? -1 : 1;
-      if (va > vb) return searchSortDir === "asc" ? 1 : -1;
-      return 0;
-    });
+  const sortedResults = useMemo(() => {
+    return [...searchResults]
+      .filter((r) => !searchSourceFilter || r.source === searchSourceFilter)
+      .sort((a, b) => {
+        let va: any, vb: any;
+        if (searchSortField === "year") {
+          va = a.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
+          vb = b.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
+        } else {
+          va = (a.title || "").toLowerCase();
+          vb = (b.title || "").toLowerCase();
+        }
+        if (va < vb) return searchSortDir === "asc" ? -1 : 1;
+        if (va > vb) return searchSortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+  }, [searchResults, searchSourceFilter, searchSortField, searchSortDir]);
 
   const toggleSearchSort = useCallback((field: "year" | "title") => {
     setSearchSortField((prev) => {
@@ -209,7 +233,7 @@ export function WishlistTab() {
   // JSON import
   // ================================
 
-  const handleImportJSON = useCallback(() => {
+  const handleImportJSON = useCallback(async () => {
     if (!jsonText.trim()) { showToast(t("wishlist.json_empty"), "error"); return; }
     try {
       const raw = JSON.parse(jsonText);
@@ -219,14 +243,18 @@ export function WishlistTab() {
         .map((item: any) => ({ title: (item.title || item.name || "").trim(), year: item.year ?? null, genre: item.genre ?? null }))
         .filter((m) => m.title);
       if (parsedItems.length === 0) { showToast(t("wishlist.json_invalid"), "error"); return; }
-      const existing = new Set(items.map((i) => i.title.toLowerCase()));
-      const newItems = parsedItems.filter((m) => !existing.has(m.title.toLowerCase()));
+      // Fetch ALL existing titles for dedup (not just current page)
+      const existingTitles = await api.listMediaTitles();
+      const existingSet = new Set(existingTitles.map((t) => t.toLowerCase()));
+      const newItems = parsedItems.filter((m) => !existingSet.has(m.title.toLowerCase()));
       if (newItems.length === 0) { showToast(t("wishlist.json_all_exist"), "info"); return; }
-      api.replaceWishlist([...items.map((i) => ({ title: i.title, year: i.year, genre: i.genre })), ...newItems])
-        .then(() => { showToast(t("wishlist.json_imported", { count: newItems.length }), "success"); startPolling(); refreshWishlist(); }).catch(() => {});
+      await api.importWishlist(newItems);
+      showToast(t("wishlist.json_imported", { count: newItems.length }), "success");
+      startPolling();
+      refreshWishlist();
       setJsonText("");
     } catch (err: any) { showToast(t("wishlist.json_parse_failed", { message: err.message }), "error"); }
-  }, [jsonText, items, showToast, refreshWishlist, t, startPolling]);
+  }, [jsonText, showToast, refreshWishlist, t, startPolling]);
 
   // ================================
   // Wishlist operations
@@ -392,9 +420,9 @@ export function WishlistTab() {
             <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: total })}</span>
           </div>
           <div className="relative flex-1 mb-2">
-            <input type="text" id="wishlist-filter" placeholder={t("wishlist.filter_placeholder")} value={filterQuery} onChange={(e) => { setFilterQuery(e.target.value); setCurrentPage(0); }}
+            <input type="text" id="wishlist-filter" placeholder={t("wishlist.filter_placeholder")} value={filterInput} onChange={(e) => { const value = e.target.value; setFilterInput(value); if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current); filterTimeoutRef.current = setTimeout(() => { setFilterQuery(value); setCurrentPage(0); }, 300); }}
               className="input-field pl-3 pr-8 py-2 h-auto text-sm" />              {filterQuery && <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => { setFilterQuery(""); setMediaTypeFilter("all"); setCurrentPage(0); }}>
+              onClick={() => { if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current); setFilterInput(""); setFilterQuery(""); setMediaTypeFilter("all"); setCurrentPage(0); }}>
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
             </button>}
           </div>

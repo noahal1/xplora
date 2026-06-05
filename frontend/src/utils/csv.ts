@@ -42,6 +42,46 @@ function parseCSVLine(line: string, delimiter: string): string[] {
   return fields;
 }
 
+/** Parse a rating string into a 0-10 scale number.
+ *
+ * Handles common formats:
+ *   "9/10"   → 9.0
+ *   "8.5/10" → 8.5
+ *   "3/5"    → 6.0  (normalized to /10)
+ *   "85%"    → 8.5
+ *   "7.5"    → 7.5
+ *   "10"     → 10.0
+ *   ""       → 0.0
+ */
+function parseRating(raw: string): number {
+  const s = raw.trim();
+  if (!s) return 0;
+
+  // "x / y" or "x/y" fraction format (e.g. "9/10", "3/5", "8.5/10")
+  const fractionMatch = s.match(/^([\d.]+)\s*\/\s*([\d.]+)$/);
+  if (fractionMatch) {
+    const num = parseFloat(fractionMatch[1]);
+    const den = parseFloat(fractionMatch[2]);
+    if (den > 0 && !isNaN(num) && !isNaN(den)) {
+      return Math.max(0, Math.min(10, (num / den) * 10));
+    }
+  }
+
+  // "85%" percentage format
+  const pctMatch = s.match(/^([\d.]+)\s*%$/);
+  if (pctMatch) {
+    const val = parseFloat(pctMatch[1]);
+    if (!isNaN(val)) {
+      return Math.max(0, Math.min(10, (val / 100) * 10));
+    }
+  }
+
+  // Plain number — strip everything non-numeric except dot
+  const cleaned = s.replace(/[^\d.]/g, "");
+  const val = parseFloat(cleaned);
+  return isNaN(val) ? 0 : Math.max(0, Math.min(10, val));
+}
+
 /** Parse CSV text into movie objects */
 export function parseCSV(text: string): RawMovie[] {
   // Strip BOM
@@ -112,8 +152,7 @@ export function parseCSV(text: string): RawMovie[] {
     const title = (fields[titleIdx] || "").trim();
     if (!title) continue;
 
-    let rating = parseFloat((fields[ratingIdx] || "").replace(/[^\d.]/g, ""));
-    rating = isNaN(rating) ? 0 : Math.max(0, Math.min(10, rating));
+    let rating = parseRating(fields[ratingIdx] || "");
 
     let year: number | null = null;
     if (yearIdx !== -1 && fields[yearIdx]) {

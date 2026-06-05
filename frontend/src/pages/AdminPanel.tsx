@@ -56,7 +56,10 @@ export function AdminPanel() {
   };
 
   useEffect(() => {
-    if (activeTab === "logs") loadLogs(0);
+    if (activeTab === "logs") {
+      setLogsPage(0);
+      loadLogs(0);
+    }
   }, [activeTab]);
 
   const actionLabels: Record<string, string> = {

@@ -1,5 +1,6 @@
 """Search helper functions for metadata scraping."""
 
+import concurrent.futures
 import logging
 import time
 from typing import Optional
@@ -15,7 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 def search_tmdb(title: str) -> Optional[list[dict]]:
-    """Search TMDB movies (dual-language) and return raw results list.
+    """Search TMDB movies only (dual-language) and return raw results list.
+
+    Uses ``search_tmdb_dual`` directly (movie-only endpoint) rather than
+    ``search_movies`` which goes through ``_search_tmdb_variants`` and
+    redundantly searches TV series too. The separate ``search_tmdb_tv``
+    call in ``scrape_movie_metadata`` handles TV exclusively.
 
     Returns ``None`` if TMDB API key is not configured or the
     search request fails.
@@ -25,10 +31,11 @@ def search_tmdb(title: str) -> Optional[list[dict]]:
         logger.debug("TMDB key not configured — skipping TMDB search")
         return None
 
-    from movie_search import search_movies
+    from movie_search import search_tmdb_dual
 
     try:
-        return search_movies(title, "tmdb", dual_language=True)
+        results = search_tmdb_dual(title, tmdb_key)
+        return [r.to_dict() for r in results]
     except RuntimeError as e:
         logger.warning("TMDB search failed for '%s': %s", title, e)
         return None
@@ -199,7 +206,7 @@ def _merge_into(collected: dict, new: dict, source: str):
     - TVmaze: also fills ``imdb_id`` / ``country`` if not already set
     """
     for key, value in new.items():
-        if value is None or key in ("source", "source_id"):
+        if value is None or key in ("source", "source_id", "media_type"):
             continue
         if key not in collected:
             collected[key] = value
@@ -294,91 +301,119 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
     for v in title_variants:
         variant_pinyins[v] = to_pinyin(v) if has_cjk(v) else None
 
-    # Collect results from all available sources, then merge
+    # ── Parallel search across all sources ─────────────────────────
+    # All source searches (TMDB movie/TV, OMDb movie/series, TVmaze)
+    # are independent — they make HTTP requests to different APIs.
+    # Running them concurrently (with connection reuse) massively
+    # reduces wall-clock time vs. the original serial loop.
+    from concurrent.futures import ThreadPoolExecutor
+
+    tmdb_movie_found = False
+    tmdb_tv_found = False
     collected: dict = {}
 
-    # ── TMDB movie ────────────────────────────────────────────────
-    if tmdb_key:
-        detail = _try_source(
-            search_tmdb,
-            title, year, title_variants, variant_pinyins, "tmdb",
-        )
-        if detail:
-            _merge_into(collected, detail, "tmdb")
-            logger.info(
-                "TMDB movie result merged for '%s': poster=%s, overview=%s, runtime=%s",
-                title,
-                detail.get("poster_url") is not None,
-                detail.get("overview") is not None,
-                detail.get("runtime"),
-            )
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures: dict[str, concurrent.futures.Future] = {}
 
-    # ── TMDB TV series (with season detail if detected) ───────────
-    if tmdb_key:
-        detail = _try_source(
-            search_tmdb_tv,
-            title, year, title_variants, variant_pinyins, "tmdb",
-            media_type="tv", season_number=season_number,
-        )
-        if detail:
-            _merge_into(collected, detail, "tmdb")
-            logger.info(
-                "TMDB TV result merged for '%s' — media_type=%s%s",
-                title, detail.get("media_type"),
-                f", season={season_number}" if season_number else "",
+        if tmdb_key:
+            futures["tmdb_movie"] = pool.submit(
+                _try_source, search_tmdb,
+                title, year, title_variants, variant_pinyins, "tmdb",
             )
-
-    # ── OMDb movie ───────────────────────────────────────────────
-    if omdb_key:
-        detail = _try_source(
-            lambda t: search_omdb(t, media_type="movie"),
-            title, year, title_variants, variant_pinyins, "omdb",
-        )
-        if detail:
-            _merge_into(collected, detail, "omdb")
-            logger.info(
-                "OMDb movie result merged for '%s' — director=%s, actors=%s",
-                title,
-                detail.get("director") is not None,
-                detail.get("actors") is not None,
+        if tmdb_key:
+            futures["tmdb_tv"] = pool.submit(
+                _try_source, search_tmdb_tv,
+                title, year, title_variants, variant_pinyins, "tmdb",
+                "tv", season_number,
             )
-
-    # ── OMDb series ──────────────────────────────────────────────
-    if omdb_key:
-        detail = _try_source(
-            lambda t: search_omdb(t, media_type="series"),
-            title, year, title_variants, variant_pinyins, "omdb",
-        )
-        if detail:
-            _merge_into(collected, detail, "omdb")
-            logger.info(
-                "OMDb series result merged for '%s' — awards=%s, country=%s",
-                title,
-                detail.get("awards") is not None,
-                detail.get("country"),
+        if omdb_key:
+            futures["omdb_movie"] = pool.submit(
+                _try_source, lambda t: search_omdb(t, media_type="movie"),
+                title, year, title_variants, variant_pinyins, "omdb",
             )
-
-    # ── TVmaze (free, no API key required) ────────────────────────
-    logger.info("Trying TVmaze for '%s'", title)
-    detail = _try_source(
-        search_tvmaze,
-        title, year, title_variants, variant_pinyins, "tvmaze",
-    )
-    if detail:
-        _merge_into(collected, detail, "tvmaze")
-        logger.info(
-            "TVmaze result merged for '%s' — network=%s, status=%s",
-            title,
-            detail.get("network"),
-            detail.get("status"),
+        if omdb_key:
+            futures["omdb_series"] = pool.submit(
+                _try_source, lambda t: search_omdb(t, media_type="series"),
+                title, year, title_variants, variant_pinyins, "omdb",
+            )
+        futures["tvmaze"] = pool.submit(
+            _try_source, search_tvmaze,
+            title, year, title_variants, variant_pinyins, "tvmaze",
         )
+
+        # Collect results in merge-priority order:
+        # TMDB first (base fields), then OMDb (overwrites specific),
+        # then TVmaze (fills gaps)
+        for name in ("tmdb_movie", "tmdb_tv", "omdb_movie", "omdb_series", "tvmaze"):
+            fut = futures.get(name)
+            if not fut:
+                continue
+            try:
+                detail = fut.result()
+            except Exception as exc:
+                logger.warning("Parallel %s search failed for '%s': %s", name, title, exc)
+                continue
+            if not detail:
+                continue
+
+            if name == "tmdb_movie":
+                tmdb_movie_found = True
+                _merge_into(collected, detail, "tmdb")
+                logger.info(
+                    "TMDB movie merged for '%s': poster=%s, overview=%s, runtime=%s",
+                    title,
+                    detail.get("poster_url") is not None,
+                    detail.get("overview") is not None,
+                    detail.get("runtime"),
+                )
+            elif name == "tmdb_tv":
+                tmdb_tv_found = True
+                _merge_into(collected, detail, "tmdb")
+                logger.info(
+                    "TMDB TV merged for '%s' — media_type=%s%s",
+                    title, detail.get("media_type"),
+                    f", season={season_number}" if season_number else "",
+                )
+            elif name.startswith("omdb"):
+                _merge_into(collected, detail, "omdb")
+                logger.info(
+                    "OMDb %s merged for '%s'",
+                    "movie" if name == "omdb_movie" else "series",
+                    title,
+                )
+            elif name == "tvmaze":
+                _merge_into(collected, detail, "tvmaze")
+                logger.info(
+                    "TVmaze merged for '%s' — network=%s, status=%s",
+                    title,
+                    detail.get("network"),
+                    detail.get("status"),
+                )
 
     if not collected:
         logger.info("No match found for '%s' (year=%s) in any source", title, year)
         return None
 
+    # ── Determine media_type ──────────────────────────────────────────
+    # media_type is excluded from _merge_into to prevent TV search results
+    # from incorrectly tagging a movie as TV (e.g. Interstellar matching
+    # a TV special/documentary on TMDB). Here we determine it correctly:
+    # - If season_number is set → TV (user explicitly specified a season)
+    # - If TMDB movie match found → movie
+    # - If only TMDB TV match found → TV
+    # - Default → movie
+    if season_number:
+        collected["media_type"] = "tv"
+    elif tmdb_movie_found:
+        collected["media_type"] = "movie"
+    elif tmdb_tv_found:
+        collected["media_type"] = "tv"
+    else:
+        collected.setdefault("media_type", "movie")
+
     logger.info(
-        "Scraping complete for '%s' — merged %d fields from %d sources",
+        "Scraping complete for '%s' — merged %d fields from %d sources, media_type=%s",
         title, len(collected), len({v.get("source") for v in [collected] if v.get("source")}),
+        collected.get("media_type"),
     )
     return collected

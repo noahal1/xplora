@@ -78,7 +78,7 @@ async def export_all_data(_admin: dict = Depends(require_admin)):
             iter([json.dumps(export, ensure_ascii=False, indent=2)]),
             media_type="application/json",
             headers={
-                "Content-Disposition": f'attachment; filename="xplore-backup-{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}.json"',
+                "Content-Disposition": f'attachment; filename="xplora-backup-{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}.json"',
             },
         )
     finally:

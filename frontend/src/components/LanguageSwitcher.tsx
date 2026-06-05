@@ -17,7 +17,7 @@ export function LanguageSwitcher({ compact }: LanguageSwitcherProps) {
 
   const handleChange = (value: string) => {
     i18n.changeLanguage(value);
-    localStorage.setItem("xplore-lang", value);
+    localStorage.setItem("xplora-lang", value);
   };
 
   if (compact) {

@@ -65,7 +65,7 @@ async def export_my_data(
             iter([json.dumps(export, ensure_ascii=False, indent=2)]),
             media_type="application/json",
             headers={
-                "Content-Disposition": f'attachment; filename="xplore-{current_user["username"]}-{datetime.now(timezone.utc).strftime("%Y%m%d")}.json"',
+                "Content-Disposition": f'attachment; filename="xplora-{current_user["username"]}-{datetime.now(timezone.utc).strftime("%Y%m%d")}.json"',
             },
         )
     finally:

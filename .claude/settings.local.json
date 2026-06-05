@@ -16,7 +16,14 @@
       "Bash(npx tsc *)",
       "Bash(python -m py_compile crud.py routers/movies.py)",
       "Bash(node -e \"['zh-CN','en-US'].forEach\\(f=>{JSON.parse\\(require\\('fs'\\).readFileSync\\('src/i18n/locales/'+f+'.json','utf8'\\)\\);console.log\\(f+' ok'\\)}\\)\")",
-      "Bash(python -m py_compile routers/movies.py)"
+      "Bash(python -m py_compile routers/movies.py)",
+      "Bash(pnpm add *)",
+      "Bash(python -c \"import pypinyin; print\\('pypinyin OK'\\)\")",
+      "Bash(find . -name \"config.json\" -not -path \"*/node_modules/*\")",
+      "Bash(find . -name \".env*\" -not -path \"*/node_modules/*\")",
+      "Bash(grep -o \"TMDB_API_KEY=.\\\\{0,6\\\\}\" .env)",
+      "Bash(grep -o \"OMDB_API_KEY=.\\\\{0,6\\\\}\" .env)",
+      "Bash(python diag_search.py \"大佬 / Brother\" 2000)"
     ]
   }
 }

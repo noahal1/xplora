@@ -5,14 +5,15 @@ import re
 from typing import Optional
 
 from config_manager import get_api_key as get_config_api_key
-from http_client import make_client
+from httpx import Timeout
+from http_client import get_shared_client
 from scraper.match import strip_season, extract_season_number
 
 logger = logging.getLogger(__name__)
 
 
-TMDB_BASE = "https://api.themoviedb.org/3"
-TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w185"
+TMDB_BASE = "https://api.tmdb.org/3"
+TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w342"
 OMDB_BASE = "https://www.omdbapi.com"
 TVMAZE_BASE = "https://api.tvmaze.com"
 
@@ -79,15 +80,15 @@ def search_tmdb(query: str, api_key: str, language: str = "zh-CN") -> list[Movie
     url = f"{TMDB_BASE}/search/movie"
     params = {"api_key": api_key, "query": query, "language": language}
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"TMDB search failed: {e}")
 
     results: list[MovieSearchResult] = []
-    for item in data.get("results", [])[:10]:
+    for item in data.get("results", []):
         title = item.get("title") or ""
         if not title:
             continue
@@ -163,10 +164,10 @@ def search_tmdb_tv(query: str, api_key: str, language: str = "zh-CN") -> list[Mo
     params = {"api_key": api_key, "query": query, "language": language}
 
     def _do_request() -> dict:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            return resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        return resp.json()
 
     try:
         data = _do_request()
@@ -179,7 +180,7 @@ def search_tmdb_tv(query: str, api_key: str, language: str = "zh-CN") -> list[Mo
             raise RuntimeError(f"TMDB TV search failed: {e}")
 
     results: list[MovieSearchResult] = []
-    for item in data.get("results", [])[:10]:
+    for item in data.get("results", []):
         name = item.get("name") or ""
         if not name:
             continue
@@ -241,10 +242,10 @@ def search_omdb(query: str, api_key: str, media_type: str = "movie") -> list[Mov
     url = OMDB_BASE
     params = {"apikey": api_key, "s": query, "type": media_type}
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"OMDb search failed: {e}")
 
@@ -252,7 +253,7 @@ def search_omdb(query: str, api_key: str, media_type: str = "movie") -> list[Mov
         return []
 
     results: list[MovieSearchResult] = []
-    for item in data.get("Search", [])[:10]:
+    for item in data.get("Search", []):
         title = item.get("Title", "")
         if not title:
             continue
@@ -285,15 +286,15 @@ def search_tvmaze(query: str) -> list[MovieSearchResult]:
     url = f"{TVMAZE_BASE}/search/shows"
     params = {"q": query}
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"TVmaze search failed: {e}")
 
     results: list[MovieSearchResult] = []
-    for item in data[:15]:
+    for item in data:
         show = item.get("show", {})
         name = show.get("name") or ""
         if not name:
@@ -572,10 +573,10 @@ def _get_tmdb_detail(movie_id: str, api_key: str) -> dict:
     url = f"{TMDB_BASE}/movie/{movie_id}"
     params = {"api_key": api_key, "language": "zh-CN"}
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"TMDB detail fetch failed: {e}")
 
@@ -598,6 +599,7 @@ def _get_tmdb_detail(movie_id: str, api_key: str) -> dict:
         "original_language": data.get("original_language", ""),
         "source": "tmdb",
         "source_id": movie_id,
+        "tmdb_id": movie_id,
     }
 
 
@@ -606,10 +608,10 @@ def _get_omdb_detail(imdb_id: str, api_key: str) -> dict:
     url = OMDB_BASE
     params = {"apikey": api_key, "i": imdb_id, "plot": "full"}
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"OMDb detail fetch failed: {e}")
 
@@ -644,14 +646,32 @@ def _get_omdb_detail(imdb_id: str, api_key: str) -> dict:
         except ValueError:
             pass
 
+    # Parse OMDb numeric values: imdbRating is "8.5" string, imdbVotes is "1,234,567"
+    # with commas — convert to proper types for correct frontend sorting.
+    imdb_rating = data.get("imdbRating")
+    rating: float | None = None
+    if imdb_rating and imdb_rating != "N/A":
+        try:
+            rating = float(imdb_rating)
+        except ValueError:
+            pass
+
+    imdb_votes = data.get("imdbVotes", "")
+    vote_count: int | None = None
+    if imdb_votes and imdb_votes != "N/A":
+        try:
+            vote_count = int(imdb_votes.replace(",", ""))
+        except ValueError:
+            pass
+
     return {
         "title": data.get("Title", ""),
         "year": year,
         "genre": data.get("Genre", ""),
         "poster_url": poster_url,
         "overview": data.get("Plot", ""),
-        "rating": data.get("imdbRating"),
-        "vote_count": data.get("imdbVotes", ""),
+        "rating": rating,
+        "vote_count": vote_count,
         "runtime": runtime,
         "tagline": "",
         "homepage": "",
@@ -684,10 +704,10 @@ def _get_tmdb_tv_season_detail(tv_id: str, season_number: int, api_key: str) -> 
     url = f"{TMDB_BASE}/tv/{tv_id}/season/{season_number}"
     params = {"api_key": api_key, "language": "zh-CN"}
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"TMDB TV season detail fetch failed: {e}")
 
@@ -720,10 +740,10 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
     url = f"{TMDB_BASE}/tv/{tv_id}"
     params = {"api_key": api_key, "language": "zh-CN"}
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"TMDB TV detail fetch failed: {e}")
 
@@ -749,6 +769,7 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
         "original_language": data.get("original_language", ""),
         "source": "tmdb",
         "source_id": tv_id,
+        "tmdb_id": tv_id,
         "media_type": "tv",
         "tv_series_id": tv_id,
         "series_poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
@@ -789,10 +810,10 @@ def _get_tvmaze_detail(show_id: str) -> dict:
     """
     url = f"{TVMAZE_BASE}/shows/{show_id}"
     try:
-        with make_client(timeout=5) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_shared_client()
+        resp = client.get(url, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         raise RuntimeError(f"TVmaze detail fetch failed: {e}")
 

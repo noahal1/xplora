@@ -244,11 +244,11 @@ def find_best_match(results: list[dict], title: str, year: Optional[int]) -> Opt
     Priority:
     1. Original title fuzzy match + year match
     2. Localized title fuzzy match + year match
-    3. Year match (any title)
+    3. Year match + weak title overlap
     4. Original title fuzzy match (no year)
     5. Localized title fuzzy match (no year)
-    6. Word-overlap >= 70% (any result, no year)
-    7. First result (fallback)
+    6. Word-overlap >= 50% (lenient fallback)
+    7. ``None`` — no confident match (avoids attaching wrong metadata)
     """
     if not results:
         return None

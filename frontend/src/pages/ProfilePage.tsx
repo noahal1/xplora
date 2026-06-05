@@ -69,7 +69,7 @@ export function ProfilePage() {
   const handleSaveKeys = async () => {
     setSavingKeys(true);
     try {
-      const token = localStorage.getItem("xplore-token");
+      const token = localStorage.getItem("xplora-token");
       const res = await fetch("/api/admin/config", {
         method: "PUT",
         headers: {
@@ -164,7 +164,7 @@ export function ProfilePage() {
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
-      const token = localStorage.getItem("xplore-token");
+      const token = localStorage.getItem("xplora-token");
       const res = await fetch("/api/user/export", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -176,7 +176,7 @@ export function ProfilePage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `xplore-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `xplora-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -206,7 +206,7 @@ export function ProfilePage() {
     setImportResult("");
     setImportSuccess(false);
     try {
-      const token = localStorage.getItem("xplore-token");
+      const token = localStorage.getItem("xplora-token");
       const formData = new FormData();
       formData.append("file", file);
 

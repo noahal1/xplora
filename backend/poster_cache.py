@@ -17,7 +17,8 @@ import hashlib
 import logging
 import os
 
-from http_client import make_client
+from httpx import Timeout
+from http_client import get_shared_client
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +51,90 @@ def get_poster_dir() -> str:
 def _generate_filename(poster_url: str, tmdb_id: str | None = None) -> str:
     """Generate a deterministic filename for a poster image.
 
-    Uses the TMDB ID when available (preferred), otherwise falls back
-    to an MD5 hash of the poster URL.
+    Uses the TMDB ID when available (preferred) combined with an 8-char
+    MD5 hash of the poster URL. The URL hash disambiguates between:
+    - Different seasons of the same TV series (different poster URLs)
+    - Movies and TV shows that happen to share the same numeric TMDB ID
+      (TMDB movie/TV IDs are independent namespaces)
+
+    Without the hash, ``tmdb_550.jpg`` could be overwritten by S2→S3 of
+    the same show, or by a movie that happens to have ID 550.
+
+    Falls back to a full MD5 hash of the poster URL if no TMDB ID is
+    available.
     """
     if tmdb_id:
-        return f"tmdb_{tmdb_id}.jpg"
+        url_hash = hashlib.md5(poster_url.encode()).hexdigest()[:8]
+        return f"tmdb_{tmdb_id}_{url_hash}.jpg"
     # Hash the URL to get a stable filename
     url_hash = hashlib.md5(poster_url.encode()).hexdigest()
     return f"url_{url_hash}.jpg"
+
+
+_MIN_IMAGE_SIZE = 1024  # 1 KB — real poster images are always larger
+
+# Magic bytes for common image formats
+_IMAGE_MAGIC: list[tuple[bytes, str]] = [
+    (b"\xff\xd8\xff", "JPEG"),
+    (b"\x89PNG\r\n\x1a\n", "PNG"),
+    (b"GIF87a", "GIF"),
+    (b"GIF89a", "GIF"),
+]
+
+
+def _is_webp(head: bytes) -> bool:
+    """Check if the first 12 bytes match WebP (RIFF + 4-byte size + WEBP)."""
+    return len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+
+
+def _validate_image_content(
+    content: bytes,
+    content_type: str | None,
+    url: str,
+) -> bool:
+    """Validate downloaded content is a real image.
+
+    Checks:
+    1. ``Content-Type`` header starts with ``image/``
+    2. Content size > minimum threshold (1 KB)
+    3. Magic bytes match a known image format (JPEG, PNG, GIF, WebP)
+
+    Returns ``True`` if valid, ``False`` otherwise (with a warning log).
+    """
+    # Check Content-Type
+    if content_type is None:
+        logger.info(
+            "Poster %s has no Content-Type header (%d bytes) — checking magic bytes only",
+            url, len(content),
+        )
+    elif not content_type.startswith("image/"):
+        logger.warning(
+            "Poster %s has non-image Content-Type '%s' (%d bytes) — rejecting",
+            url, content_type, len(content),
+        )
+        return False
+
+    # Check minimum size
+    if len(content) < _MIN_IMAGE_SIZE:
+        logger.warning(
+            "Poster %s too small: %d bytes (min %d) — rejecting",
+            url, len(content), _MIN_IMAGE_SIZE,
+        )
+        return False
+
+    # Check magic bytes — only check up to 12 bytes (covers all formats)
+    head = content[:12]
+    for magic, fmt in _IMAGE_MAGIC:
+        if head[:len(magic)] == magic:
+            return True
+    if _is_webp(head):
+        return True
+
+    logger.warning(
+        "Poster %s unknown format — expected one of JPEG/PNG/GIF/WebP (first 16 bytes: %s, %d bytes) — rejecting",
+        url, content[:16].hex(), len(content),
+    )
+    return False
 
 
 def download_and_cache_poster(
@@ -66,13 +143,18 @@ def download_and_cache_poster(
 ) -> str | None:
     """Download a poster image from TMDB CDN and save it locally.
 
+    Validates the response is a real image (checks ``Content-Type``,
+    minimum size, and magic bytes) before writing to disk, preventing
+    corrupted/hijacked payloads (e.g., firewall HTML pages) from being
+    permanently cached.
+
     Args:
         poster_url: The full TMDB CDN URL (e.g. ``https://image.tmdb.org/...``).
         tmdb_id: Optional TMDB movie ID for a human-readable filename.
 
     Returns:
-        The local URL path (e.g. ``/static/posters/tmdb_550.jpg``) on
-        success, or ``None`` if the download failed for any reason.
+        The local URL path (e.g. ``/static/posters/tmdb_550_hash.jpg``) on
+        success, or ``None`` if the download or validation failed.
     """
     if not poster_url or not poster_url.startswith("http"):
         return None
@@ -88,16 +170,25 @@ def download_and_cache_poster(
     ensure_poster_dir()
 
     try:
-        with make_client(timeout=_DOWNLOAD_TIMEOUT, follow_redirects=True) as client:
-            resp = client.get(poster_url)
-            resp.raise_for_status()
+        client = get_shared_client()
+        resp = client.get(poster_url, timeout=Timeout(_DOWNLOAD_TIMEOUT, connect=15.0))
+        resp.raise_for_status()
+
+        content = resp.content
+        content_type = resp.headers.get("content-type")
+
+        # Validate the downloaded content is a real image before writing
+        if not _validate_image_content(content, content_type, poster_url):
+            return None
 
         with open(local_path, "wb") as f:
-            f.write(resp.content)
+            f.write(content)
 
         logger.info(
-            "Cached poster: %s -> %s (%.1f KB)",
-            poster_url, filename, len(resp.content) / 1024,
+            "Cached poster: %s -> %s (%s, %.1f KB)",
+            poster_url, filename,
+            content_type or "unknown",
+            len(content) / 1024,
         )
         return f"/static/posters/{filename}"
 

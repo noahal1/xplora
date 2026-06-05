@@ -19,7 +19,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 cls
 echo ========================================
-echo   Xplore Movie Recommender - Backend
+echo   Xplora Movie Recommender - Backend
 echo ========================================
 echo.
 echo   Server: http://localhost:8327

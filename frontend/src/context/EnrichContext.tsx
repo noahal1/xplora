@@ -45,10 +45,16 @@ const MAX_POLL_DURATION = 10 * 60 * 1000; // 10 minutes max — large imports ca
 /**
  * Threshold for detecting a stale / dead enrichment task.
  * If the ``processed`` count doesn't change for this many
- * consecutive polls, we assume the backend tasks were lost
+ * milliseconds, we assume the backend tasks were lost
  * (server restart, etc.) and auto-stop polling.
+ *
+ * Note that a single item can take 20-30+ seconds on slow
+ * networks because each of the 5 parallel sources uses a
+ * 15-second connect timeout. Using wall-clock time rather
+ * than poll counts avoids false positives from variable
+ * poll timing.
  */
-const MAX_STALLED_POLLS = 5; // ~20 seconds without progress
+const STALLED_TIMEOUT_MS = 90_000; // 90 seconds without progress
 
 export function EnrichProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<EnrichProgress | null>(null);
@@ -56,7 +62,7 @@ export function EnrichProvider({ children }: { children: ReactNode }) {
   const pollTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const startTimeRef = useRef<number>(0);
   const lastProcessedRef = useRef<number>(-1);
-  const stalledCountRef = useRef<number>(0);
+  const lastProgressTimeRef = useRef<number>(0);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -86,23 +92,28 @@ export function EnrichProvider({ children }: { children: ReactNode }) {
         // Trigger a page refresh event so components can reload their data
         window.dispatchEvent(new CustomEvent("enrich-done"));
       } else if (Date.now() - startTimeRef.current > MAX_POLL_DURATION) {
-        // Total time budget exhausted — stop polling silently
+        // Total time budget exhausted — stop polling silently and
+        // dispatch enrich-done so the UI refreshes with what we have
+        window.dispatchEvent(new CustomEvent("enrich-done"));
         stopPolling();
         setProgress(null);
       } else {
         // Update the toast with current progress
+        const now = Date.now();
         const didProgress = lastProcessedRef.current >= 0 &&
           data.processed !== lastProcessedRef.current;
 
         if (didProgress) {
-          // Progress was made — reset stall counter
-          stalledCountRef.current = 0;
+          // Progress was made — reset stall timer
+          lastProgressTimeRef.current = now;
           lastProcessedRef.current = data.processed;
         } else if (lastProcessedRef.current >= 0) {
-          // No progress this poll — increment stall counter
-          stalledCountRef.current += 1;
-          if (stalledCountRef.current >= MAX_STALLED_POLLS) {
-            // Stalled too long — assume backend tasks are dead
+          // No progress — check wall-clock time since last change
+          if (now - lastProgressTimeRef.current >= STALLED_TIMEOUT_MS) {
+            // Stalled too long — assume backend tasks are dead.
+            // Dispatch enrich-done so the UI refreshes (the backend
+            // may still finish for items already in-flight).
+            window.dispatchEvent(new CustomEvent("enrich-done"));
             toast.dismiss("enrich-progress");
             stopPolling();
             setProgress(null);
@@ -111,6 +122,7 @@ export function EnrichProvider({ children }: { children: ReactNode }) {
         } else {
           // First poll: set baseline
           lastProcessedRef.current = data.processed;
+          lastProgressTimeRef.current = now;
         }
 
         const pct = data.total > 0
@@ -133,7 +145,7 @@ export function EnrichProvider({ children }: { children: ReactNode }) {
 
     startTimeRef.current = Date.now();
     lastProcessedRef.current = -1;
-    stalledCountRef.current = 0;
+    lastProgressTimeRef.current = 0;
     setIsEnriching(true);
 
     // Initial fetch
@@ -155,14 +167,17 @@ export function EnrichProvider({ children }: { children: ReactNode }) {
     }
   }, [startPolling]);
 
-  // Cleanup on unmount
+  // On mount, check if there's an ongoing enrichment that survived a page refresh.
+  // This reattaches polling to background tasks that were started before the
+  // page reloaded, so the user sees the progress bar and gets the "done" event.
   useEffect(() => {
+    checkStatus();
     return () => {
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
       }
     };
-  }, []);
+  }, [checkStatus]);
 
   return (
     <EnrichContext.Provider

@@ -1,5 +1,4 @@
-/** Export utilities */
-
+import html2canvas from "html2canvas";
 import type { Recommendation } from "../types";
 
 /** Export recommendations as JSON download */
@@ -29,10 +28,6 @@ export function exportJSON(recommendations: Recommendation[], model: string, sou
 
 /** Export recommendations as screenshot PNG */
 export async function exportScreenshot(element: HTMLElement): Promise<void> {
-  if (typeof html2canvas === "undefined") {
-    throw new Error("截图库加载中，请稍后再试");
-  }
-
   const canvas = await html2canvas(element, {
     backgroundColor: "#0a0a0f",
     scale: 2,

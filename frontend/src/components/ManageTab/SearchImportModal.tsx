@@ -109,7 +109,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
   useEffect(() => { return () => { if (searchTmdbTimeout.current) clearTimeout(searchTmdbTimeout.current); }; }, []);
 
   return (
-    <Modal open={open} onClose={() => { onClose(); setSelectedSearchIds(new Set()); }}
+    <Modal open={open} onClose={() => { onClose(); setSearchQuery(""); setSearchResults([]); setSearchLoading(false); setSelectedSearchIds(new Set()); }}
       title={t("manage.search_tmdb")} description={t("manage.search_tmdb_desc")}
     >
       <div className="space-y-4">

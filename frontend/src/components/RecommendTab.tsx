@@ -143,7 +143,7 @@ export function RecommendTab() {
       const sp = getStrategyParams();
       if (sp) payload.strategy_params = sp;
 
-      const token = localStorage.getItem("xplore-token");
+      const token = localStorage.getItem("xplora-token");
       const response = await fetch("/api/recommend/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -220,13 +220,21 @@ export function RecommendTab() {
     }
   }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
 
-  // Search TMDB for poster URLs after recommendations arrive (CDN-only, no caching)
+  // Search TMDB for poster URLs after recommendations arrive (CDN-only, no caching).
+  // Iterates through results to find one whose year matches ``rec.year`` before falling
+  // back to the first result, avoiding wrong posters for same-named movies.
   const resolvePosters = useCallback(async (recs: Recommendation[]): Promise<Recommendation[]> => {
     const results = await Promise.allSettled(
       recs.map(async (rec) => {
         try {
           const data = await api.searchMedia(rec.title, "tmdb");
-          const match = data.results?.[0];
+          const matches = data.results ?? [];
+          // Prefer a result whose year matches the recommendation (if available)
+          const yearMatch = rec.year
+            ? matches.find((m) => m.year === rec.year && m.poster_url)
+            : undefined;
+          const fallback = matches.find((m) => m.poster_url);
+          const match = yearMatch ?? fallback ?? matches[0];
           if (match?.poster_url) {
             return { ...rec, poster_url: match.poster_url };
           }
@@ -252,7 +260,7 @@ export function RecommendTab() {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const token = localStorage.getItem("xplore-token");
+      const token = localStorage.getItem("xplora-token");
       const response = await fetch("/api/recommend/followup", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

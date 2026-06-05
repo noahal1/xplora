@@ -1,18 +1,18 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: xplore-db
+    container_name: xplora-db
     environment:
-      POSTGRES_USER: xplore
-      POSTGRES_PASSWORD: xplore_pg_pass
-      POSTGRES_DB: xplore
+      POSTGRES_USER: xplora
+      POSTGRES_PASSWORD: xplora_pg_pass
+      POSTGRES_DB: xplora
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U xplore"]
+      test: ["CMD-SHELL", "pg_isready -U xplora"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -27,7 +27,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://xplore:xplore_pg_pass@db:5432/xplore
+      - DATABASE_URL=postgresql://xplora:xplora_pg_pass@db:5432/xplora
       # --- API Keys (optional, uncomment and fill in as needed) ---
       # - DEEPSEEK_API_KEY=sk-your-deepseek-key
       # - OPENAI_API_KEY=sk-your-openai-key

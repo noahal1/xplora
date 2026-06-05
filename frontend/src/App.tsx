@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -9,17 +9,19 @@ import Aurora from "./components/Aurora";
 import { Header } from "./components/Header";
 import { TabNav } from "./components/TabNav";
 import FadeContent from "./components/FadeContent";
-import { WatchedTab } from "./components/WatchedTab";
-import { WishlistTab } from "./components/WishlistTab";
-import { RecommendTab } from "./components/RecommendTab";
-import { ManageTab } from "./components/ManageTab";
 import { HistorySidebar } from "./components/HistorySidebar";
 import { EnrichBanner } from "./components/EnrichBanner";
 import { Footer } from "./components/Footer";
-import { LoginPage } from "./pages/LoginPage";
-import { AdminPanel } from "./pages/AdminPanel";
-import { ProfilePage } from "./pages/ProfilePage";
 import "./style.css";
+
+// Lazy-loaded route-level chunks (pages & tabs)
+const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const AdminPanel = lazy(() => import("./pages/AdminPanel").then((m) => ({ default: m.AdminPanel })));
+const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const WatchedTab = lazy(() => import("./components/WatchedTab").then((m) => ({ default: m.WatchedTab })));
+const WishlistTab = lazy(() => import("./components/WishlistTab").then((m) => ({ default: m.WishlistTab })));
+const RecommendTab = lazy(() => import("./components/RecommendTab").then((m) => ({ default: m.RecommendTab })));
+const ManageTab = lazy(() => import("./components/ManageTab").then((m) => ({ default: m.ManageTab })));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,7 +47,13 @@ function AnimatedRoutes({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-4 sm:gap-6 py-4 sm:py-6">
       <FadeContent key={location.pathname} duration={600} threshold={0} blur>
-        {children}
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+          </div>
+        }>
+          {children}
+        </Suspense>
       </FadeContent>
     </div>
   );
@@ -87,33 +95,39 @@ function MainApp() {
 export default function App() {
   return (
     <ToastProvider>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <AdminPanel />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <MainApp />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-page">
+          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+        </div>
+      }>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminPanel />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <MainApp />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </Suspense>
       <Toaster position="bottom-center" richColors closeButton />
     </ToastProvider>
   );

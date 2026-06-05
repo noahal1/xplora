@@ -5,7 +5,7 @@ import type { MediaImport, WishlistItem, MediaDetail, DBSession, DBSessionDetail
 const API_BASE = "/api";
 
 function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem("xplore-token");
+  const token = localStorage.getItem("xplora-token");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
@@ -15,7 +15,7 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
   if (!res.ok) {
     if (res.status === 401) {
-      localStorage.removeItem("xplore-token");
+      localStorage.removeItem("xplora-token");
       window.location.href = "/login";
       throw new Error("登录已过期，请重新登录");
     }
@@ -52,6 +52,7 @@ export async function listMedia(params: {
   rating_max?: number;
   has_error?: boolean;
   media_type?: string;
+  signal?: AbortSignal;
 }): Promise<{ media: MediaDetail[]; total: number }> {
   const qs = new URLSearchParams();
   if (params.search) qs.set("search", params.search);
@@ -64,7 +65,7 @@ export async function listMedia(params: {
   if (params.rating_max !== undefined) qs.set("rating_max", String(params.rating_max));
   if (params.has_error) qs.set("has_error", "true");
   if (params.media_type) qs.set("media_type", params.media_type);
-  return fetchJSON(`${API_BASE}/media?${qs.toString()}`, { headers: getAuthHeaders() });
+  return fetchJSON(`${API_BASE}/media?${qs.toString()}`, { headers: getAuthHeaders(), signal: params.signal });
 }
 
 /** Update a single media item */
@@ -100,6 +101,15 @@ export async function replaceWishlist(items: WishlistItem[]): Promise<void> {
   });
 }
 
+/** Append items to the wishlist (no clearing of existing items) */
+export async function importWishlist(items: WishlistItem[]): Promise<void> {
+  await fetchJSON(`${API_BASE}/wishlist/import`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ movies: items }),
+  });
+}
+
 /** Add a single item to wishlist */
 export async function addToWishlist(
   item: WishlistItem
@@ -115,7 +125,7 @@ export async function addToWishlist(
 export async function clearWishlist(): Promise<void> {
   const res = await fetch(`${API_BASE}/wishlist`, { method: "DELETE", headers: getAuthHeaders() });
   if (res.status === 401) {
-    localStorage.removeItem("xplore-token");
+    localStorage.removeItem("xplora-token");
     window.location.href = "/login";
     throw new Error("登录已过期");
   }
@@ -164,7 +174,7 @@ export async function getEnrichStatus(): Promise<{
 export async function deleteMedia(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/media/${id}`, { method: "DELETE", headers: getAuthHeaders() });
   if (res.status === 401) {
-    localStorage.removeItem("xplore-token");
+    localStorage.removeItem("xplora-token");
     window.location.href = "/login";
     throw new Error("登录已过期");
   }
@@ -208,7 +218,7 @@ export async function getSessionDetail(id: number): Promise<DBSessionDetail> {
 export async function deleteSession(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/sessions/${id}`, { method: "DELETE", headers: getAuthHeaders() });
   if (res.status === 401) {
-    localStorage.removeItem("xplore-token");
+    localStorage.removeItem("xplora-token");
     window.location.href = "/login";
     throw new Error("登录已过期");
   }
@@ -220,12 +230,12 @@ export async function deleteSession(id: number): Promise<void> {
 
 /** Export all data as downloadable JSON (admin only) */
 export async function exportAllData(): Promise<void> {
-  const token = localStorage.getItem("xplore-token");
+  const token = localStorage.getItem("xplora-token");
   const res = await fetch(`${API_BASE}/admin/export`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 401) {
-    localStorage.removeItem("xplore-token");
+    localStorage.removeItem("xplora-token");
     window.location.href = "/login";
     throw new Error("登录已过期");
   }
@@ -240,7 +250,7 @@ export async function exportAllData(): Promise<void> {
   a.href = url;
   const disposition = res.headers.get("Content-Disposition") || "";
   const match = disposition.match(/filename="?([^";]+)"?/);
-  a.download = match ? match[1] : `xplore-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = match ? match[1] : `xplora-backup-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -286,7 +296,7 @@ export async function adminDeleteUser(userId: number): Promise<void> {
     headers: getAuthHeaders(),
   });
   if (res.status === 401) {
-    localStorage.removeItem("xplore-token");
+    localStorage.removeItem("xplora-token");
     window.location.href = "/login";
     throw new Error("登录已过期");
   }
@@ -336,7 +346,7 @@ export async function changePassword(oldPassword: string, newPassword: string): 
     body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
   });
   if (res.status === 401) {
-    localStorage.removeItem("xplore-token");
+    localStorage.removeItem("xplora-token");
     window.location.href = "/login";
     throw new Error("登录已过期");
   }

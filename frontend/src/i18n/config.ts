@@ -3,7 +3,7 @@ import { initReactI18next } from "react-i18next";
 import zhCN from "./locales/zh-CN.json";
 import enUS from "./locales/en-US.json";
 
-const savedLang = typeof window !== "undefined" ? localStorage.getItem("xplore-lang") : null;
+const savedLang = typeof window !== "undefined" ? localStorage.getItem("xplora-lang") : null;
 
 i18n.use(initReactI18next).init({
   resources: {

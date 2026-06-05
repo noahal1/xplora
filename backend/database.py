@@ -1,7 +1,7 @@
 """Database setup using SQLModel engine and session factory.
 
 PostgreSQL only — set the DATABASE_URL environment variable, e.g.:
-    postgresql://user:password@localhost:5432/xplore
+    postgresql://user:password@localhost:5432/xplora
 
 Connection pool settings (configurable via env vars):
   DB_POOL_SIZE       — base pool connections (default: 10)
@@ -47,14 +47,14 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 if not DATABASE_URL:
     raise RuntimeError(
-        "DATABASE_URL is not set. Xplore requires a PostgreSQL connection string, e.g.\n"
-        "  DATABASE_URL=postgresql://user:password@localhost:5432/xplore"
+        "DATABASE_URL is not set. Xplora requires a PostgreSQL connection string, e.g.\n"
+        "  DATABASE_URL=postgresql://user:password@localhost:5432/xplora"
     )
 
 if not DATABASE_URL.startswith("postgresql"):
     raise RuntimeError(
         "DATABASE_URL must be a PostgreSQL connection string, e.g.\n"
-        "  DATABASE_URL=postgresql://user:password@localhost:5432/xplore"
+        "  DATABASE_URL=postgresql://user:password@localhost:5432/xplora"
     )
 
 # ---- Engine (PostgreSQL connection pool) ----

@@ -13,16 +13,16 @@ import sys
 
 from config_manager import get_api_key as get_config_api_key
 from database import get_session
-from http_client import make_client
+from httpx import Timeout
+from http_client import get_shared_client
 from models import MediaItemRecord
+from movie_search import TMDB_IMAGE_BASE
 from poster_cache import download_and_cache_poster, ensure_poster_dir
 from sqlmodel import select
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
-
-TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w185"
-TMDB_BASE = "https://api.themoviedb.org/3"
+TMDB_BASE = "https://api.tmdb.org/3"
 
 
 def _fetch_poster_url(tmdb_id: str, media_type: str) -> str | None:
@@ -39,13 +39,13 @@ def _fetch_poster_url(tmdb_id: str, media_type: str) -> str | None:
     params = {"api_key": api_key, "language": "zh-CN"}
 
     try:
-        with make_client(timeout=10) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            poster_path = data.get("poster_path")
-            if poster_path:
-                return f"{TMDB_IMAGE_BASE}{poster_path}"
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(10.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
+        poster_path = data.get("poster_path")
+        if poster_path:
+            return f"{TMDB_IMAGE_BASE}{poster_path}"
     except Exception as e:
         logger.warning("Failed to fetch TMDB %s ID %s: %s", endpoint, tmdb_id, e)
 
@@ -88,7 +88,15 @@ def recache_missing_posters() -> tuple[int, int, int]:
         logger.info("Missing: %s (media_id=%d, title=%s)", filename, r.id, r.title)
 
         # Fetch the poster URL from TMDB using stored tmdb_id
-        tmdb_id = r.tmdb_id or filename.replace("tmdb_", "").replace(".jpg", "")
+        # Filename formats:
+        #   Old: "tmdb_550.jpg"
+        #   New: "tmdb_550_abc12345.jpg"  (with URL hash suffix)
+        # Extract the TMDB ID (second part between underscores)
+        if r.tmdb_id:
+            tmdb_id = r.tmdb_id
+        else:
+            parts = filename.replace(".jpg", "").split("_")
+            tmdb_id = parts[1] if len(parts) >= 2 else parts[0]
         media_type = getattr(r, "media_type", "movie") or "movie"
         cdn_url = _fetch_poster_url(tmdb_id, media_type)
 

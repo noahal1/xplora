@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaItem, MediaImport, SortField, SortDir } from "../types";
 import { parseCSV, parseMovieData } from "../utils/csv";
@@ -12,6 +12,9 @@ import { ProgressiveImage } from "./ProgressiveImage";
 import { Upload, List, LayoutGrid } from "lucide-react";
 import { Badge } from "./ui/badge";
 
+const SLIDER_RANGE_CLASS = "w-14 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
+const SLIDER_RANGE_CLASS_LIST = "w-20 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
+
 const PAGE_SIZE = 30;
 
 export function WatchedTab() {
@@ -20,11 +23,13 @@ export function WatchedTab() {
   const { startPolling } = useEnrich();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [ratingFilter, setRatingFilter] = useState("all");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("created_at");
@@ -37,20 +42,19 @@ export function WatchedTab() {
   const [showSampleModal, setShowSampleModal] = useState(false);
   const [jsonText, setJsonText] = useState("");
 
-  const [editingRating, setEditingRating] = useState<number | null>(null);
-  const [sliderValue, setSliderValue] = useState(0);
-  const [justSavedIds, setJustSavedIds] = useState<Set<number>>(new Set());
+  // Rating editing is localised inside MovieGridCard / MovieListItem to avoid
+  // re-rendering all 30 rows on every slider drag (sliderValue changes on each onChange).
   const [importOpen, setImportOpen] = useState(false);
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
   const [batchRatingValue, setBatchRatingValue] = useState(7);
   const dragCounterRef = useRef(0);
   const [viewMode, setViewMode] = useState<"list" | "grid">(
-    () => (localStorage.getItem("xplore-watched-view") as "list" | "grid") || "list"
+    () => (localStorage.getItem("xplora-watched-view") as "list" | "grid") || "list"
   );
 
   // ── Load data from API ──
 
-  const loadMovies = useCallback(async (page: number, search: string, sortF: string, sortD: string, rating: string, mediaType: string) => {
+  const loadMovies = useCallback(async (page: number, search: string, sortF: string, sortD: string, rating: string, mediaType: string, signal?: AbortSignal) => {
     setLoading(true);
     let ratingMin: number | undefined;
     let ratingMax: number | undefined;
@@ -70,7 +74,9 @@ export function WatchedTab() {
         rating_min: ratingMin,
         rating_max: ratingMax,
         media_type: (mediaType !== "all" ? mediaType : undefined),
+        signal,
       });
+      if (signal?.aborted) return;
       setMedia(
         data.media.map((m) => ({
           id: m.id,
@@ -87,15 +93,19 @@ export function WatchedTab() {
         }))
       );
       setTotal(data.total);
-    } catch {
-      // silent
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter);
+    const controller = new AbortController();
+    loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, controller.signal);
+    return () => controller.abort();
   }, [currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, reloadTrigger, loadMovies]);
 
   // Auto-refresh when background enrichment completes
@@ -114,8 +124,13 @@ export function WatchedTab() {
     }
   }, [selectedIds, media]);
 
+  // Clear debounce timeout on unmount
   useEffect(() => {
-    localStorage.setItem("xplore-watched-view", viewMode);
+    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("xplora-watched-view", viewMode);
   }, [viewMode]);
 
   // ── Import helpers ──
@@ -128,6 +143,7 @@ export function WatchedTab() {
         // Start polling for background metadata enrichment
         startPolling();
         setCurrentPage(0);
+        setSearchInput("");
         setSearchQuery("");
         setRatingFilter("all");
         setSelectedIds(new Set());
@@ -311,26 +327,10 @@ export function WatchedTab() {
     [media.length, currentPage, reloadCurrentPage, showToast, t]
   );
 
-  const startRatingEdit = useCallback(
-    (id: number) => {
-      const movie = media.find((m) => m.id === id);
-      setSliderValue(movie ? movie.rating : 7);
-      setEditingRating(id);
-    },
-    [media]
-  );
-
-  const saveRatingEdit = useCallback(
-    async (id: number, newRating: number) => {
-      const val = Math.round(Math.max(0, Math.min(10, newRating)) * 10) / 10;
-      // Update local state immediately — no full reload needed
-      setEditingRating(null);
+  const handleSaveRating = useCallback(
+    async (id: number, rating: number) => {
+      const val = Math.round(Math.max(0, Math.min(10, rating)) * 10) / 10;
       setMedia((prev) => prev.map((m) => m.id === id ? { ...m, rating: val } : m));
-      // Show saved confirmation animation
-      setJustSavedIds((prev) => new Set(prev).add(id));
-      setTimeout(() => {
-        setJustSavedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
-      }, 1500);
       try {
         const movie = media.find((m) => m.id === id);
         if (!movie) return;
@@ -344,7 +344,7 @@ export function WatchedTab() {
         showToast(t("watched.save_rating_failed", { message: err.message }), "error");
       }
     },
-    [media]
+    [media, showToast, t]
   );
 
   // ── Filtering & pagination ──
@@ -529,10 +529,15 @@ export function WatchedTab() {
               <input
                 type="text"
                 placeholder={t("watched.search_placeholder")}
-                value={searchQuery}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(0);
+                  const value = e.target.value;
+                  setSearchInput(value);
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                  searchTimeoutRef.current = setTimeout(() => {
+                    setSearchQuery(value);
+                    setCurrentPage(0);
+                  }, 300);
                 }}
                 className="input-field pl-3 pr-8 py-2 h-auto text-sm"
               />
@@ -540,6 +545,8 @@ export function WatchedTab() {
                 <button
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => {
+                    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                    setSearchInput("");
                     setSearchQuery("");
                     setCurrentPage(0);
                   }}
@@ -682,187 +689,27 @@ export function WatchedTab() {
               ) : viewMode === "grid" ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                   {media.map((m) => (
-                    <div
+                    <MovieGridCard
                       key={m.id}
-                      className={`card card-lift group relative overflow-hidden ${
-                        selectedIds.has(m.id) ? "card-glow" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer"
-                        checked={selectedIds.has(m.id)}
-                        onChange={() => toggleSelection(m.id)}
-                      />
-                      <button
-                        className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 rounded-md bg-background/80 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
-                        onClick={() => removeMovie(m.id)}
-                        title={t("watched.remove")}
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 6 6 18" />
-                          <path d="m6 6 12 12" />
-                        </svg>
-                      </button>
-                      <div className="aspect-[2/3] bg-muted overflow-hidden">
-                        {m.poster_url ? (
-                          <ProgressiveImage src={m.poster_url} alt={m.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-3xl opacity-40">🎬</div>
-                        )}
-                      </div>
-                      <div className="p-2.5">
-                        <div className="truncate font-medium text-sm" title={m.title}>
-                          {m.title}
-                        </div>
-                        <div className="flex items-center justify-between gap-1 mt-1">
-                          <span className="flex items-center gap-1.5">
-                            <span className="shrink-0 text-xs text-muted-foreground">{m.year ?? ""}</span>
-                            {m.media_type === "tv" && (
-                              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
-                            )}
-                            {m.season_number != null && (
-                              <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
-                                S{m.season_number}
-                                {m.episode_count != null && <span className="ml-0.5 opacity-70">· {m.episode_count}ep</span>}
-                              </Badge>
-                            )}
-                          </span>
-                          {editingRating === m.id ? (
-                            <span
-                              className="inline-flex items-center gap-1.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <input
-                                type="range"
-                                min={0}
-                                max={10}
-                                step={0.5}
-                                value={sliderValue}
-                                onChange={(e) => { setSliderValue(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
-                                onMouseUp={() => saveRatingEdit(m.id, sliderValue)}
-                                onTouchEnd={() => saveRatingEdit(m.id, sliderValue)}
-                                onBlur={() => saveRatingEdit(m.id, sliderValue)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Escape") setEditingRating(null);
-                                  if (e.key === "Enter") saveRatingEdit(m.id, sliderValue);
-                                }}
-                                className="w-14 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
-                                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                                  max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6
-                                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
-                                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
-                                  [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
-                                  active:[&::-webkit-slider-thumb]:scale-125
-                                  max-sm:h-2"
-                                autoFocus
-                              />
-                              <span className="text-amber font-medium text-xs min-w-[24px] text-center count-badge" key={sliderValue}>
-                                {sliderValue.toFixed(1)}
-                              </span>
-                            </span>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center gap-1 text-xs cursor-pointer border-b border-dashed ${justSavedIds.has(m.id) ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
-                              onClick={() => startRatingEdit(m.id)}
-                              title={t("watched.click_to_edit")}
-                            >
-                              <span className="text-amber">★</span>
-                              {justSavedIds.has(m.id) && <span className="text-green text-[10px]">✓</span>}
-                              <span>{m.rating.toFixed(1)}</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                      movie={m}
+                      isSelected={selectedIds.has(m.id)}
+                      onToggle={toggleSelection}
+                      onRemove={removeMovie}
+                      onSaveRating={handleSaveRating}
+                    />
                   ))}
                 </div>
               ) : (
                 <div className="space-y-1.5">
                   {media.map((m) => (
-                    <div
+                    <MovieListItem
                       key={m.id}
-                      className={`card card-lift p-3 flex items-center gap-2.5 text-sm transition-all ${
-                        selectedIds.has(m.id) ? "border-primary/20" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="shrink-0 w-4 h-4 accent-primary"
-                        checked={selectedIds.has(m.id)}
-                        onChange={() => toggleSelection(m.id)}
-                      />
-                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        <span className="truncate max-w-[180px] font-medium" title={m.title}>
-                          {m.title}
-                        </span>
-                        {m.media_type === "tv" && (
-                          <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
-                        )}
-                        {m.season_number != null && (
-                          <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
-                            S{m.season_number}
-                            {m.episode_count != null && <span className="ml-0.5 opacity-70">· {m.episode_count}ep</span>}
-                          </Badge>
-                        )}
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {editingRating === m.id ? (
-                            <span
-                              className="inline-flex items-center gap-2"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <input
-                                type="range"
-                                min={0}
-                                max={10}
-                                step={0.5}
-                                value={sliderValue}
-                                onChange={(e) => { setSliderValue(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
-                                onMouseUp={() => saveRatingEdit(m.id, sliderValue)}
-                                onTouchEnd={() => saveRatingEdit(m.id, sliderValue)}
-                                onBlur={() => saveRatingEdit(m.id, sliderValue)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Escape") setEditingRating(null);
-                                  if (e.key === "Enter") saveRatingEdit(m.id, sliderValue);
-                                }}
-                                className="w-20 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
-                                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
-                                  max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6
-                                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
-                                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
-                                  [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
-                                  active:[&::-webkit-slider-thumb]:scale-125
-                                  max-sm:h-2"
-                                autoFocus
-                              />
-                              <span className="text-amber font-medium min-w-[28px] text-center count-badge" key={sliderValue}>
-                                {sliderValue.toFixed(1)}
-                              </span>
-                            </span>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center gap-1 cursor-pointer border-b border-dashed ${justSavedIds.has(m.id) ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
-                              onClick={() => startRatingEdit(m.id)}
-                              title={t("watched.click_to_edit")}
-                            >
-                              <span className="text-amber">★</span>
-                              {justSavedIds.has(m.id) && <span className="text-green text-[10px]">✓</span>}
-                              <span>{m.rating.toFixed(1)}</span>
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      <button
-                        className="text-muted-foreground hover:text-destructive transition-colors"
-                        onClick={() => removeMovie(m.id)}
-                        title={t("watched.remove")}
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 6 6 18" />
-                          <path d="m6 6 12 12" />
-                        </svg>
-                      </button>
-                    </div>
+                      movie={m}
+                      isSelected={selectedIds.has(m.id)}
+                      onToggle={toggleSelection}
+                      onRemove={removeMovie}
+                      onSaveRating={handleSaveRating}
+                    />
                   ))}
                 </div>
               )}
@@ -892,6 +739,8 @@ export function WatchedTab() {
                 <button
                   className="btn btn-ghost btn-sm mt-3"
                   onClick={() => {
+                    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+                    setSearchInput("");
                     setSearchQuery("");
                     setRatingFilter("all");
                     setMediaTypeFilter("all");
@@ -995,3 +844,167 @@ export function WatchedTab() {
     </div>
   );
 }
+
+/* ── Memo-ized grid card — local editing state prevents slider-drag
+   from re-rendering all 30 grid items ────────────────────────── */
+const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle, onRemove, onSaveRating }: {
+  movie: MediaItem;
+  isSelected: boolean;
+  onToggle: (id: number) => void;
+  onRemove: (id: number) => void;
+  onSaveRating: (id: number, rating: number) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const [localSlider, setLocalSlider] = useState(movie.rating);
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Reset when movie changes (page navigation)
+  useEffect(() => { setEditing(false); setLocalSlider(movie.rating); setJustSaved(false); }, [movie.id, movie.rating]);
+
+  const handleStartEdit = useCallback(() => {
+    setLocalSlider(movie.rating);
+    setEditing(true);
+  }, [movie.rating]);
+
+  const handleSave = useCallback(() => {
+    setEditing(false);
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 1500);
+    onSaveRating(movie.id, localSlider);
+  }, [movie.id, localSlider, onSaveRating]);
+
+  const handleCancel = useCallback(() => setEditing(false), []);
+
+  return (
+    <div className={`card card-lift group relative overflow-hidden ${isSelected ? "card-glow" : ""}`}>
+      <input type="checkbox" className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer"
+        checked={isSelected} onChange={() => onToggle(movie.id)} />
+      <button className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 rounded-md bg-background/80 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
+        onClick={() => onRemove(movie.id)} title={t("watched.remove")}>
+        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+      </button>
+      <div className="aspect-[2/3] bg-muted overflow-hidden">
+        {movie.poster_url ? (
+          <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-3xl opacity-40">🎬</div>
+        )}
+      </div>
+      <div className="p-2.5">
+        <div className="truncate font-medium text-sm" title={movie.title}>{movie.title}</div>
+        <div className="flex items-center justify-between gap-1 mt-1">
+          <span className="flex items-center gap-1.5">
+            <span className="shrink-0 text-xs text-muted-foreground">{movie.year ?? ""}</span>
+            {movie.media_type === "tv" && (
+              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+            )}
+            {movie.season_number != null && (
+              <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
+                S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
+              </Badge>
+            )}
+          </span>
+          {editing ? (
+            <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <input type="range" min={0} max={10} step={0.5} value={localSlider}
+                onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+                onMouseUp={handleSave} onTouchEnd={handleSave}
+                onBlur={handleSave}
+                onKeyDown={(e) => { if (e.key === "Escape") handleCancel(); if (e.key === "Enter") handleSave(); }}
+                className={SLIDER_RANGE_CLASS} autoFocus />
+              <span className="text-amber font-medium text-xs min-w-[24px] text-center count-badge" key={localSlider}>
+                {localSlider.toFixed(1)}
+              </span>
+            </span>
+          ) : (
+            <span className={`inline-flex items-center gap-1 text-xs cursor-pointer border-b border-dashed ${justSaved ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
+              onClick={handleStartEdit} title={t("watched.click_to_edit")}>
+              <span className="text-amber">★</span>
+              {justSaved && <span className="text-green text-[10px]">✓</span>}
+              <span>{movie.rating.toFixed(1)}</span>
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/* ── Memo-ized list item — local editing state prevents slider-drag
+   from re-rendering all 30 list rows ─────────────────────────── */
+const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle, onRemove, onSaveRating }: {
+  movie: MediaItem;
+  isSelected: boolean;
+  onToggle: (id: number) => void;
+  onRemove: (id: number) => void;
+  onSaveRating: (id: number, rating: number) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const [localSlider, setLocalSlider] = useState(movie.rating);
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => { setEditing(false); setLocalSlider(movie.rating); setJustSaved(false); }, [movie.id, movie.rating]);
+
+  const handleStartEdit = useCallback(() => {
+    setLocalSlider(movie.rating);
+    setEditing(true);
+  }, [movie.rating]);
+
+  const handleSave = useCallback(() => {
+    setEditing(false);
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 1500);
+    onSaveRating(movie.id, localSlider);
+  }, [movie.id, localSlider, onSaveRating]);
+
+  const handleCancel = useCallback(() => setEditing(false), []);
+
+  return (
+    <div className={`card card-lift p-3 flex items-center gap-2.5 text-sm transition-all ${isSelected ? "border-primary/20" : ""}`}>
+      <input type="checkbox" className="shrink-0 w-4 h-4 accent-primary"
+        checked={isSelected} onChange={() => onToggle(movie.id)} />
+      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+        <span className="truncate max-w-[180px] font-medium" title={movie.title}>{movie.title}</span>
+        {movie.media_type === "tv" && (
+          <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+        )}
+        {movie.season_number != null && (
+          <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
+            S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
+          </Badge>
+        )}
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {editing ? (
+            <span className="inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <input type="range" min={0} max={10} step={0.5} value={localSlider}
+                onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+                onMouseUp={handleSave} onTouchEnd={handleSave}
+                onBlur={handleSave}
+                onKeyDown={(e) => { if (e.key === "Escape") handleCancel(); if (e.key === "Enter") handleSave(); }}
+                className={SLIDER_RANGE_CLASS_LIST} autoFocus />
+              <span className="text-amber font-medium min-w-[28px] text-center count-badge" key={localSlider}>
+                {localSlider.toFixed(1)}
+              </span>
+            </span>
+          ) : (
+            <span className={`inline-flex items-center gap-1 cursor-pointer border-b border-dashed ${justSaved ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
+              onClick={handleStartEdit} title={t("watched.click_to_edit")}>
+              <span className="text-amber">★</span>
+              {justSaved && <span className="text-green text-[10px]">✓</span>}
+              <span>{movie.rating.toFixed(1)}</span>
+            </span>
+          )}
+        </span>
+      </div>
+      <button className="text-muted-foreground hover:text-destructive transition-colors"
+        onClick={() => onRemove(movie.id)} title={t("watched.remove")}>
+        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+      </button>
+    </div>
+  );
+});
+

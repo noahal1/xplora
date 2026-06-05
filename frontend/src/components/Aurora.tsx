@@ -122,6 +122,10 @@ export default function Aurora(props: AuroraProps) {
 
   const ctnDom = useRef<HTMLDivElement>(null);
   const isVisibleRef = useRef(true);
+  // Cache parsed Color values by hex string so the animation loop doesn't
+  // call new Color(hex) on every frame (Color parsing is ~1μs, but over
+  // thousands of frames and 3 color stops it adds up).
+  const colorCacheRef = useRef<Map<string, [number, number, number]>>(new Map());
 
   // Pause render when element is off-screen (uses ref to avoid WebGL teardown)
   useEffect(() => {
@@ -199,10 +203,19 @@ export default function Aurora(props: AuroraProps) {
         program.uniforms.uAmplitude.value = propsRef.current.amplitude ?? 1.0;
         program.uniforms.uBlend.value = propsRef.current.blend ?? blend;
         const stops = propsRef.current.colorStops ?? colorStops;
-        program.uniforms.uColorStops.value = stops.map((hex: string) => {
-          const c = new Color(hex);
-          return [c.r, c.g, c.b];
-        });
+        const cache = colorCacheRef.current;
+        let needsNew = false;
+        for (const hex of stops) {
+          if (!cache.has(hex)) { needsNew = true; break; }
+        }
+        if (needsNew) {
+          cache.clear();
+          for (const hex of stops) {
+            const c = new Color(hex);
+            cache.set(hex, [c.r, c.g, c.b]);
+          }
+        }
+        program.uniforms.uColorStops.value = stops.map((hex: string) => cache.get(hex)!);
         renderer.render({ scene: mesh });
       }
     };

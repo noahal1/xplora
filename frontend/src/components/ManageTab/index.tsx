@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail, MediaSearchResult } from "../../types";
 import * as api from "../../api";
@@ -74,8 +74,8 @@ export function ManageTab() {
   /* ── Enriching IDs ───────────────────────────────────────────── */
   const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
 
-  const loadMovies = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (signal?: AbortSignal, quiet?: boolean) => {
+    if (!quiet) setLoading(true);
     setError("");
     try {
       const data = await api.listMedia({
@@ -87,44 +87,38 @@ export function ManageTab() {
         sort_dir: sort.dir,
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
+        signal,
       });
+      if (signal?.aborted) return;
       setMediaList(data.media);
       setTotal(data.total);
     } catch (err: any) {
+      if (err?.name === 'AbortError') return;
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted && !quiet) {
+        setLoading(false);
+      }
     }
   }, [search, page, statusFilter, mediaTypeFilter, errorFilter, sort]);
 
-  // Quiet refresh — fetches data without showing loading skeleton (for post-edit refresh)
-  const refreshData = useCallback(async () => {
-    setError("");
-    try {
-      const data = await api.listMedia({
-        search,
-        page,
-        page_size: MANAGE_PAGE_SIZE,
-        status: statusFilter || undefined,
-        sort_field: sort.field,
-        sort_dir: sort.dir,
-        has_error: errorFilter || undefined,
-        media_type: mediaTypeFilter || undefined,
-      });
-      setMediaList(data.media);
-      setTotal(data.total);
-    } catch (err: any) {
-      setError(err.message);
-    }    }, [search, page, statusFilter, mediaTypeFilter, errorFilter, sort]);
+  // Clear debounce timeout on unmount
+  useEffect(() => {
+    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+  }, []);
 
-  useEffect(() => { loadMovies(); }, [loadMovies]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
+  }, [fetchData]);
 
   // Auto-refresh when background enrichment completes
   useEffect(() => {
-    const handler = () => { loadMovies(); };
+    const handler = () => { fetchData(); };
     window.addEventListener("enrich-done", handler);
     return () => window.removeEventListener("enrich-done", handler);
-  }, [loadMovies]);
+  }, [fetchData]);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchInput(value);
@@ -185,11 +179,11 @@ export function ManageTab() {
         setSelected(new Set());
         setPage(0);
       }
-      refreshData();
+      fetchData(undefined, true);
     } catch (err: any) {
       showToast(t("manage.delete_failed", { message: err.message }), "error");
     }
-  }, [deleteConfirm, selected, refreshData, showToast, t]);
+  }, [deleteConfirm, selected, fetchData, showToast, t]);
 
   /* ── Inline editing ──────────────────────────────────────────── */
   const startInlineEdit = useCallback((movieId: number, field: string) => {
@@ -241,9 +235,9 @@ export function ManageTab() {
       }
       showToast(t("manage.updated"), "success");
       cancelInlineEdit();
-      refreshData();
+      fetchData(undefined, true);
     } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); cancelInlineEdit(); }
-  }, [mediaList, refreshData, showToast, cancelInlineEdit, t]);
+  }, [mediaList, fetchData, showToast, cancelInlineEdit, t]);
 
   /* ── Enrich operations ───────────────────────────────────────── */
   const openSearchDialog = useCallback(() => { setSearchDialogOpen(true); }, []);
@@ -255,10 +249,10 @@ export function ManageTab() {
       // Update poster/metadata immediately
       setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
       showToast(t("manage.enrich_success"), "success");
-      refreshData();
+      fetchData(undefined, true);
     } catch (err: any) { showToast(t("manage.enrich_failed", { message: err.message }), "error"); }
     finally { setEnrichingIds(prev => { const next = new Set(prev); next.delete(movieId); return next; }); }
-  }, [refreshData, showToast, t]);
+  }, [fetchData, showToast, t]);
 
   /* ── Batch enrich + cache ───────────────────────────────────── */
   const [batchLoading, setBatchLoading] = useState(false);
@@ -285,7 +279,7 @@ export function ManageTab() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `xplore-movies-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `xplora-movies-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -301,67 +295,7 @@ export function ManageTab() {
     </span>
   );
 
-  const renderEditableCell = (movie: MediaDetail, field: string, display: React.ReactNode) => {
-    const isEditing = editingCell?.movieId === movie.id && editingCell?.field === field;
-    if (isEditing) {
-      if (field === "rating") {
-        const save = () => { saveInlineEdit(movie.id, "rating", sliderValue.toFixed(1)); };
-        return (
-          <td className="px-3 py-2 border-b border-border">
-            <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <input type="range" min={0} max={10} step={0.5} value={sliderValue}
-                onChange={(e) => { setSliderValue(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
-                onMouseUp={save} onTouchEnd={save}
-                onBlur={() => { if (editingCell?.movieId === movie.id) save(); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") cancelInlineEdit(); }}
-                className="w-20 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
-                  [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
-                  max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6
-                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
-                  [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
-                  [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
-                  active:[&::-webkit-slider-thumb]:scale-125
-                  max-sm:h-2"
-                autoFocus
-              />
-              <span className="text-amber font-medium text-xs min-w-[24px] text-center count-badge" key={sliderValue}>
-                {sliderValue.toFixed(1)}
-              </span>
-            </span>
-          </td>
-        );
-      }
-      let value = "", inputType = "text", widthClass = "";
-      switch (field) {
-        case "title": value = movie.title; widthClass = "w-full min-w-[120px]"; break;
-        case "year": inputType = "number"; widthClass = "w-[72px]"; value = movie.year != null ? movie.year.toString() : ""; break;
-        case "created_at": inputType = "date"; widthClass = "w-[110px]"; value = movie.created_at ? movie.created_at.slice(0, 10) : ""; break;
-      }
-      const save = () => { const v = editInputRef.current?.value || ""; saveInlineEdit(movie.id, field, v); };
-      return (
-        <td className="px-3 py-2 border-b border-border">
-          <div className="flex items-center gap-1">
-            <input ref={editInputRef} type={inputType} className={`no-spinner ${widthClass} input-field h-7 text-sm px-1.5 py-0.5`}
-              defaultValue={value}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") cancelInlineEdit(); }}
-              onBlur={() => { if (editingCell?.movieId === movie.id && editingCell?.field === field) save(); }}
-              onClick={(e) => e.stopPropagation()} autoFocus />
-          </div>
-        </td>
-      );
-    }
-    return (
-      <td className="px-3 py-2 border-b border-border cursor-pointer transition-colors hover:bg-accent/30 group"
-        onClick={() => startInlineEdit(movie.id, field)} title={t("common.edit")}>
-        <div className="flex items-center gap-1">
-          {display}
-          <span className="opacity-0 group-hover:opacity-40 transition-opacity">
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-          </span>
-        </div>
-      </td>
-    );
-  };
+  
 
   return (
     <section className="section-card min-h-[300px]">
@@ -373,7 +307,7 @@ export function ManageTab() {
           <span className="badge font-mono text-xs shrink-0">{t("manage.total", { count: total })}</span>
         </h2>
         <div className="flex gap-1.5 items-center flex-wrap w-full sm:w-auto">
-          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={loadMovies} title={t("manage.refresh")}>
+          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={fetchData} title={t("manage.refresh")}>
             <RefreshCw size={13} /><span className="hidden sm:inline">{t("manage.refresh")}</span>
           </button>
           <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={handleExportMovies} title={t("manage.export")}>
@@ -457,7 +391,7 @@ export function ManageTab() {
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center"><X size={20} className="text-destructive" /></div>
           <p className="text-sm font-medium text-destructive">{t("manage.load_failed", { message: error })}</p>
-          <button className="btn btn-ghost btn-xs gap-1.5" onClick={loadMovies}><RefreshCw size={12} />{t("manage.retry")}</button>
+          <button className="btn btn-ghost btn-xs gap-1.5" onClick={fetchData}><RefreshCw size={12} />{t("manage.retry")}</button>
         </div>
       )}
 
@@ -499,96 +433,22 @@ export function ManageTab() {
               </thead>
               <tbody>
                 {mediaList.map((m) => (
-                  <tr key={m.id} className={`transition-colors ${selected.has(m.id) ? "bg-primary/[0.04]" : "hover:bg-accent/20"}`}>
-                    <td className="px-3 py-2 border-b border-border text-center">
-                      <input type="checkbox" className="w-4 h-4 accent-primary cursor-pointer" checked={selected.has(m.id)} onChange={() => toggleSelection(m.id)} />
-                    </td>
-                    <td className="px-1 py-2 border-b border-border text-center">
-                      <div className="relative w-[38px] h-[52px] rounded overflow-hidden bg-muted flex items-center justify-center mx-auto"
-                        style={{ border: "1px solid var(--border-subtle)" }}>
-                        {m.poster_url ? (
-                          <img src={m.poster_url} alt={m.title} className="w-full h-full object-cover" loading="lazy"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                        ) : null}
-                        <Film size={14} className={`text-muted-foreground/30 ${m.poster_url ? "hidden" : ""}`} />
-                        {m.scrape_error && !m.poster_url && (
-                          <div className="absolute bottom-0.5 right-0.5 group">
-                            <AlertCircle size={12} className="text-destructive cursor-help" />
-                            <div className="absolute bottom-full right-0 mb-1.5 w-56 px-2.5 py-1.5 rounded-lg bg-foreground text-background text-[10px] leading-relaxed shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-                              <span className="font-semibold">{t("manage.scrape_error_label")}</span><br />{m.scrape_error}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 border-b border-border">
-                      <div className="flex items-center gap-1.5">
-                        {m.status === "wish" ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-pink px-1.5 py-0.5 rounded-full bg-pink/10 border border-pink/20">
-                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
-                            {t("manage.status_wish")}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-green px-1.5 py-0.5 rounded-full bg-green/10 border border-green/20">
-                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="20 6 9 17 4 12" /></svg>
-                            {t("manage.status_watched")}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    {renderEditableCell(m, "title", 
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-medium truncate">{m.title}</span>
-                        {m.media_type === "tv" && (
-                          <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
-                        )}
-                        {m.season_number != null && (
-                          <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
-                            S{m.season_number}
-                            {m.episode_count != null && <span className="ml-0.5 opacity-70">· {m.episode_count}ep</span>}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                    {renderEditableCell(m, "rating", (
-                      <span className={`inline-flex items-center gap-1 font-medium whitespace-nowrap ${justSavedIds.has(m.id) ? 'saved-confirm' : ''}`} style={{ color: justSavedIds.has(m.id) ? 'var(--success)' : 'var(--fg-secondary)' }}>
-                        <Star size={12} fill="currentColor" />
-                        {justSavedIds.has(m.id) ? '✓ ' : ''}{m.rating.toFixed(1)}
-                      </span>
-                    ))}
-                    {renderEditableCell(m, "year", <span className="text-muted-foreground">{m.year || "—"}</span>)}
-                    {renderEditableCell(m, "genre", <span className="text-muted-foreground truncate block">{m.genre || "—"}</span>)}
-                    {renderEditableCell(m, "created_at", <span className="text-muted-foreground text-xs">{m.created_at ? m.created_at.slice(0, 10) : "—"}</span>)}
-                    <td className="px-1 py-2 border-b border-border text-center whitespace-nowrap">
-                      <div className="inline-flex items-center gap-0.5" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
-                        {m.status === "wish" && (
-                          <button className="text-muted-foreground hover:text-green px-1.5 py-1 rounded transition-colors hover:bg-green/10"
-                            onClick={() => { setMarkWatchedMovie(m); }} title={t("wishlist.mark_as_watched")}>
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          </button>
-                        )}
-                        <button className="text-muted-foreground hover:text-sky px-1.5 py-1 rounded transition-colors hover:bg-sky/10"
-                          onClick={() => setDetailMovie(m)} title={t("manage.detail")}><InfoIcon size={14} /></button>
-                        <button className="text-muted-foreground hover:text-foreground px-1.5 py-1 rounded transition-colors hover:bg-accent"
-                          onClick={() => startInlineEdit(m.id, "title")} title={t("common.edit")}>
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                        </button>
-                        <button className={`px-1.5 py-1 rounded transition-colors ${m.scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
-                          onClick={() => setRematchMovie(m)} title={m.scrape_error ? t("manage.rematch_error_hint") : t("manage.rematch")}>
-                          <Search size={14} />
-                        </button>
-                        <button className={`px-1.5 py-1 rounded transition-colors ${enrichingIds.has(m.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
-                          onClick={() => handleEnrich(m.id)} disabled={enrichingIds.has(m.id)}
-                          title={enrichingIds.has(m.id) ? t("manage.enriching") : t("manage.enrich")}>
-                          {enrichingIds.has(m.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        </button>
-                        <button className="text-muted-foreground hover:text-destructive px-1.5 py-1 rounded transition-colors hover:bg-destructive/10"
-                          onClick={() => confirmDelete(m.id, m.title)} title={t("common.delete")}><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
+                  <ManageTableRow
+                    key={m.id}
+                    movie={m}
+                    isSelected={selected.has(m.id)}
+                    editingCell={editingCell}
+                    sliderValue={sliderValue}
+                    enrichingIds={enrichingIds}
+                    onToggle={toggleSelection}
+                    onConfirmDelete={confirmDelete}
+                    onSetDetailMovie={setDetailMovie}
+                    onSetRematchMovie={setRematchMovie}
+                    onEnrich={handleEnrich}
+                    onSetMarkWatchedMovie={setMarkWatchedMovie}
+                    onStartInlineEdit={startInlineEdit}
+                    onSaveInlineEdit={saveInlineEdit}
+                  />
                 ))}
               </tbody>
             </table>
@@ -619,13 +479,13 @@ export function ManageTab() {
       </Modal>
 
       {/* ── TMDB Search & Import Dialog ─────────────────────────── */}
-      <SearchImportModal open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)} onImportComplete={() => { setSearchDialogOpen(false); refreshData(); }} />
+      <SearchImportModal open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)}      onImportComplete={() => { setSearchDialogOpen(false); fetchData(undefined, true); }} />
 
       {/* ── Metadata Detail Modal ───────────────────────────────── */}
       <DetailModal open={detailMovie !== null} movie={detailMovie} onClose={() => setDetailMovie(null)} />
 
       {/* ── Manual Search & Match Modal ─────────────────────────── */}
-      <RematchModal open={rematchMovie !== null} movie={rematchMovie} onClose={() => setRematchMovie(null)} onSuccess={() => { setRematchMovie(null); refreshData(); }} />
+      <RematchModal open={rematchMovie !== null} movie={rematchMovie} onClose={() => setRematchMovie(null)}      onSuccess={() => { setRematchMovie(null); fetchData(undefined, true); }} />
 
       {/* ── Mark as Watched Modal ──────────────────────────────── */}
       <MarkWatchedModal open={markWatchedMovie !== null} movie={markWatchedMovie}
@@ -638,7 +498,7 @@ export function ManageTab() {
             setMediaList((prev) => prev.map((m) => m.id === movieId ? { ...m, status: "watched", rating: rounded } : m));
             showToast(t("wishlist.marked_as_watched", { title: mediaList.find(m => m.id === movieId)?.title || "", rating: rounded }), "success");
             setMarkWatchedMovie(null);
-            refreshData();
+            fetchData(undefined, true);
           } catch (err: any) { showToast(t("wishlist.mark_failed", { message: err.message }), "error"); }
         }}
       />
@@ -656,15 +516,277 @@ export function ManageTab() {
             setMediaList((prev) => prev.map((m) => m.id === movieId ? { ...m, genre: genre || null } : m));
             showToast(t("manage.genre_updated"), "success");
             setGenreDialogMovie(null);
-            refreshData();
+            fetchData(undefined, true);
           } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); }
         }}
       />
     </section>
   );
 }
+const ManageTableRow = memo(function ManageTableRow({ 
+  movie, 
+  isSelected, 
+  editingCell, 
+  sliderValue, 
+  enrichingIds,
+  onToggle, 
+  onConfirmDelete, 
+  onSetDetailMovie, 
+  onSetRematchMovie, 
+  onEnrich, 
+  onSetMarkWatchedMovie, 
+  onStartInlineEdit, 
+  onSaveInlineEdit 
+}: {
+  movie: MediaDetail;
+  isSelected: boolean;
+  editingCell: { movieId: number; field: string } | null;
+  sliderValue: number;
+  enrichingIds: Set<number>;
+  onConfirmDelete: (movieId: number, title: string) => void;
+  onSetDetailMovie: (movie: MediaDetail) => void;
+  onSetRematchMovie: (movie: MediaDetail) => void;
+  onEnrich: (id: number) => Promise<void>;
+  onSetMarkWatchedMovie: (movie: MediaDetail) => void;
+  onStartInlineEdit: (movieId: number, field: string) => void;
+  onSaveInlineEdit: (movieId: number, field: string, value: string) => Promise<void>;
+}, (prev, next) => {
+  const id = prev.movie.id;
+  if (prev.movie.title !== next.movie.title) return false;
+  if (prev.movie.rating !== next.movie.rating) return false;
+  if (prev.movie.year !== next.movie.year) return false;
+  if (prev.movie.genre !== next.movie.genre) return false;
+  if (prev.movie.status !== next.movie.status) return false;
+  if (prev.movie.poster_url !== next.movie.poster_url) return false;
+  if (prev.movie.scrape_error !== next.movie.scrape_error) return false;
+  if (prev.movie.media_type !== next.movie.media_type) return false;
+  if (prev.movie.season_number !== next.movie.season_number) return false;
+  if (prev.movie.episode_count !== next.movie.episode_count) return false;
+  if (prev.movie.created_at !== next.movie.created_at) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+
+  const prevEditing = prev.editingCell?.movieId === id && prev.editingCell?.field === "rating";
+  const nextEditing = next.editingCell?.movieId === id && next.editingCell?.field === "rating";
+  if (prevEditing !== nextEditing) return false;
+  // Only slider changes for THIS row trigger re-render
+  if (nextEditing && prev.sliderValue !== next.sliderValue) return false;
+
+  if (prev.enrichingIds.has(id) !== next.enrichingIds.has(id)) return false;
+  if (prev.editingCell?.movieId === id && prev.editingCell?.field !== next.editingCell?.field) return false;
+
+  return true;
+}) {
+  const { t } = useTranslation();
+  const isEditingRating = editingCell?.movieId === movie.id && editingCell?.field === "rating";
+
+  return (
+    <tr className={`transition-colors ${isSelected ? "bg-primary/[0.04]" : "hover:bg-accent/20"}`}>
+      <td className="px-3 py-2 border-b border-border text-center">
+        <input type="checkbox" className="w-4 h-4 accent-primary cursor-pointer"
+          checked={isSelected} onChange={() => onToggle(movie.id)} />
+      </td>
+      <td className="px-1 py-2 border-b border-border text-center">
+        <div className="relative w-[38px] h-[52px] rounded overflow-hidden bg-muted flex items-center justify-center mx-auto"
+          style={{ border: "1px solid var(--border-subtle)" }}>
+          {movie.poster_url ? (
+            <img src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" loading="lazy"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          ) : null}
+          <Film size={14} className={`text-muted-foreground/30 ${movie.poster_url ? "hidden" : ""}`} />
+          {movie.scrape_error && !movie.poster_url && (
+            <div className="absolute bottom-0.5 right-0.5 group">
+              <AlertCircle size={12} className="text-destructive cursor-help" />
+              <div className="absolute bottom-full right-0 mb-1.5 w-56 px-2.5 py-1.5 rounded-lg bg-foreground text-background text-[10px] leading-relaxed shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                <span className="font-semibold">{t("manage.scrape_error_label")}</span><br />{movie.scrape_error}
+              </div>
+            </div>
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-2 border-b border-border">
+        <div className="flex items-center gap-1.5">
+          {movie.status === "wish" ? (
+            <span className="inline-flex items-center gap-1 text-[11px] text-pink px-1.5 py-0.5 rounded-full bg-pink/10 border border-pink/20">
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+              {t("manage.status_wish")}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] text-green px-1.5 py-0.5 rounded-full bg-green/10 border border-green/20">
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="20 6 9 17 4 12" /></svg>
+              {t("manage.status_watched")}
+            </span>
+          )}
+        </div>
+      </td>
+      <TableEditableCell movie={movie} field="title" editingCell={editingCell} sliderValue={sliderValue}
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="font-medium truncate">{movie.title}</span>
+          {movie.media_type === "tv" && (
+            <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+          )}
+          {movie.season_number != null && (
+            <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
+              S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
+            </Badge>
+          )}
+        </div>
+      </TableEditableCell>
+      <TableEditableCell movie={movie} field="rating" editingCell={editingCell} sliderValue={sliderValue}
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap">
+          <Star size={12} fill="currentColor" />
+          {movie.rating.toFixed(1)}
+        </span>
+      </TableEditableCell>
+      <TableEditableCell movie={movie} field="year" editingCell={editingCell} sliderValue={sliderValue}
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        <span className="text-muted-foreground">{movie.year || "—"}</span>
+      </TableEditableCell>
+      <TableEditableCell movie={movie} field="genre" editingCell={editingCell} sliderValue={sliderValue}
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        <span className="text-muted-foreground truncate block">{movie.genre || "—"}</span>
+      </TableEditableCell>
+      <TableEditableCell movie={movie} field="created_at" editingCell={editingCell} sliderValue={sliderValue}
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        <span className="text-muted-foreground text-xs">{movie.created_at ? movie.created_at.slice(0, 10) : "—"}</span>
+      </TableEditableCell>
+      <td className="px-1 py-2 border-b border-border text-center whitespace-nowrap">
+        <div className="inline-flex items-center gap-0.5" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
+          {movie.status === "wish" && (
+            <button className="text-muted-foreground hover:text-green px-1.5 py-1 rounded transition-colors hover:bg-green/10"
+              onClick={() => onSetMarkWatchedMovie(movie)} title={t("wishlist.mark_as_watched")}>
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </button>
+          )}
+          <button className="text-muted-foreground hover:text-sky px-1.5 py-1 rounded transition-colors hover:bg-sky/10"
+            onClick={() => onSetDetailMovie(movie)} title={t("manage.detail")}><InfoIcon size={14} /></button>
+          <button className="text-muted-foreground hover:text-foreground px-1.5 py-1 rounded transition-colors hover:bg-accent"
+            onClick={() => onStartInlineEdit(movie.id, "title")} title={t("common.edit")}>
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+          </button>
+          <button className={`px-1.5 py-1 rounded transition-colors ${movie.scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
+            onClick={() => onSetRematchMovie(movie)} title={movie.scrape_error ? t("manage.rematch_error_hint") : t("manage.rematch")}>
+            <Search size={14} />
+          </button>
+          <button className={`px-1.5 py-1 rounded transition-colors ${enrichingIds.has(movie.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
+            onClick={() => onEnrich(movie.id)} disabled={enrichingIds.has(movie.id)}
+            title={enrichingIds.has(movie.id) ? t("manage.enriching") : t("manage.enrich")}>
+            {enrichingIds.has(movie.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          </button>
+          <button className="text-muted-foreground hover:text-destructive px-1.5 py-1 rounded transition-colors hover:bg-destructive/10"
+            onClick={() => onConfirmDelete(movie.id, movie.title)} title={t("common.delete")}><Trash2 size={14} /></button>
+        </div>
+      </td>
+    </tr>
+  );
+});
 
 /* ── Inline info icon (no lucide import needed) ───────────────── */
+/* ── Reusable editable table cell component ────────────────────
+
+   Rating slider uses LOCAL state so that onChange (frequent on every drag)
+   does not flow back through the parent and re-render all other rows.
+   The parent's sliderValue prop is only used to INITIALIZE the local state
+   when editing starts for THIS cell. ───────────────────────── */
+const TableEditableCell = memo(function TableEditableCell({ movie, field, editingCell, sliderValue, children, onStartEdit, onSaveEdit }: {
+  movie: MediaDetail;
+  field: string;
+  editingCell: { movieId: number; field: string } | null;
+  sliderValue: number;
+  children: React.ReactNode;
+  onStartEdit: (movieId: number, field: string) => void;
+  onSaveEdit: (movieId: number, field: string, value: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isEditing = editingCell?.movieId === movie.id && editingCell?.field === field;
+
+  // Local slider state — initialised from parent when editing starts.
+  // useState gives the correct value on first-edit (React batches the
+  // parent's setSliderValue + setEditingCell into one render).
+  // useEffect syncs on re-edit of the same row (e.g. cancel → re-edit).
+  const [localSlider, setLocalSlider] = useState(sliderValue);
+  useEffect(() => {
+    if (isEditing) setLocalSlider(sliderValue);
+  }, [isEditing, sliderValue]);
+
+  const handleSave = useCallback(() => {
+    const v = inputRef.current?.value ?? localSlider.toFixed(1);
+    onSaveEdit(movie.id, field, v);
+  }, [movie.id, field, localSlider, onSaveEdit]);
+
+  const handleRangeSave = useCallback(() => {
+    onSaveEdit(movie.id, "rating", localSlider.toFixed(1));
+  }, [movie.id, localSlider, onSaveEdit]);
+
+  if (isEditing) {
+    if (field === "rating") {
+      return (
+        <td className="px-3 py-2 border-b border-border">
+          <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <input type="range" min={0} max={10} step={0.5} value={localSlider}
+              onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+              onMouseUp={handleRangeSave} onTouchEnd={handleRangeSave}
+              onBlur={handleRangeSave}
+              className="w-20 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
+                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+                max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md
+                [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
+                [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
+                active:[&::-webkit-slider-thumb]:scale-125
+                max-sm:h-2"
+              autoFocus />
+            <span className="text-amber font-medium text-xs min-w-[24px] text-center count-badge" key={localSlider}>
+              {localSlider.toFixed(1)}
+            </span>
+          </span>
+        </td>
+      );
+    }
+    let value = "", inputType = "text", widthClass = "";
+    switch (field) {
+      case "title": value = movie.title; widthClass = "w-full min-w-[120px]"; break;
+      case "year": inputType = "number"; widthClass = "w-[72px]"; value = movie.year != null ? movie.year.toString() : ""; break;
+      case "created_at": inputType = "date"; widthClass = "w-[110px]"; value = movie.created_at ? movie.created_at.slice(0, 10) : ""; break;
+    }
+    return (
+      <td className="px-3 py-2 border-b border-border">
+        <div className="flex items-center gap-1">
+          <input ref={inputRef} type={inputType} className={`no-spinner ${widthClass} input-field h-7 text-sm px-1.5 py-0.5`}
+            defaultValue={value}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(); } if (e.key === "Escape") { onStartEdit(-1, ""); /* cancel by editing none */ } }}
+            onBlur={handleSave}
+            onClick={(e) => e.stopPropagation()} autoFocus />
+        </div>
+      </td>
+    );
+  }
+
+  return (
+    <td className="px-3 py-2 border-b border-border cursor-pointer transition-colors hover:bg-accent/30 group"
+      onClick={() => onStartEdit(movie.id, field)} title={t("common.edit")}>
+      <div className="flex items-center gap-1">
+        {children}
+        <span className="opacity-0 group-hover:opacity-40 transition-opacity">
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+        </span>
+      </div>
+    </td>
+  );
+}, (prev, next) => {
+  // Only re-render editing cell when it's this row's cell being edited
+  const thisRow = prev.movie.id;
+  const prevEditing = prev.editingCell?.movieId === thisRow && prev.editingCell?.field === prev.field;
+  const nextEditing = next.editingCell?.movieId === thisRow && next.editingCell?.field === next.field;
+  if (prevEditing !== nextEditing) return false;
+  if (nextEditing && prev.sliderValue !== next.sliderValue) return false;
+  return true;
+});
+
 function InfoIcon({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">

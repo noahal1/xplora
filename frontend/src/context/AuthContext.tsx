@@ -34,13 +34,13 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem("xplore-token")
+    localStorage.getItem("xplora-token")
   );
   const [isLoading, setIsLoading] = useState(true);
 
   // On mount, verify token is still valid
   useEffect(() => {
-    const storedToken = localStorage.getItem("xplore-token");
+    const storedToken = localStorage.getItem("xplora-token");
     if (storedToken) {
       fetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${storedToken}` },
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setToken(storedToken);
         })
         .catch(() => {
-          localStorage.removeItem("xplore-token");
+          localStorage.removeItem("xplora-token");
           setToken(null);
           setUser(null);
         })
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.detail || "登录失败");
     }
     const data = await res.json();
-    localStorage.setItem("xplore-token", data.token);
+    localStorage.setItem("xplora-token", data.token);
     setToken(data.token);
     setUser({ id: 0, username: data.username, is_admin: data.is_admin });
     // Fetch user details to get ID
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("xplore-token");
+    localStorage.removeItem("xplora-token");
     setToken(null);
     setUser(null);
   }, []);

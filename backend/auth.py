@@ -10,7 +10,7 @@ from jose import JWTError, jwt
 from crud import get_user_by_id
 
 # JWT config
-JWT_SECRET = os.getenv("JWT_SECRET", "xplore-dev-secret-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET", "xplora-dev-secret-change-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 

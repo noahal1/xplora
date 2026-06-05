@@ -21,7 +21,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem("xplore-theme");
+    const saved = localStorage.getItem("xplora-theme");
     if (saved === "light" || saved === "dark") return saved;
     if (window.matchMedia?.("(prefers-color-scheme: light)").matches)
       return "light";
@@ -37,7 +37,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       root.classList.add("dark");
       root.classList.remove("light");
     }
-    localStorage.setItem("xplore-theme", theme);
+    localStorage.setItem("xplora-theme", theme);
   }, [theme]);
 
   const toggleTheme = useCallback(
