@@ -102,7 +102,7 @@ async def update_config(
 ):
     """Admin only: update API key configuration.
 
-    Accepts: { "api_keys": { "deepseek": "...", "openai": "...", "tmdb": "...", "omdb": "..." } }
+    Accepts: { "api_keys": { "deepseek": "...", "openai": "...", "tmdb": "..." } }
     Empty string or null clears the key.
     """
     api_keys = request.get("api_keys", {})

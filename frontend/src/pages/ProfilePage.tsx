@@ -23,7 +23,6 @@ const API_KEY_META: Record<string, { label: string; docs: string; placeholder: s
   deepseek: { label: "DeepSeek AI", docs: "https://platform.deepseek.com/", placeholder: "sk-" },
   openai: { label: "OpenAI", docs: "https://platform.openai.com/", placeholder: "sk-proj-" },
   tmdb: { label: "TMDB", docs: "https://www.themoviedb.org/settings/api", placeholder: "" },
-  omdb: { label: "OMDb", docs: "https://www.omdbapi.com/apikey.aspx", placeholder: "" },
 };
 
 export function ProfilePage() {

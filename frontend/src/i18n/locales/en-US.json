@@ -63,6 +63,12 @@
     "update_count": "Updated ratings for {{count}} movies",
     "batch_update_failed": "{{count}} failed to update",
     "save_rating_failed": "Rating save failed: {{message}}",
+    "search_title": "Search & Add Movies",
+    "search_placeholder_external": "Search TMDB / TVmaze...",
+    "add_to_list": "Add",
+    "added": "Added \"{{title}}\"",
+    "add_failed": "Add failed: {{message}}",
+    "search_hint": "Search movies from TMDB or TVmaze and add them to your watched list",
     "view_list": "List",
     "view_grid": "Grid"
   },
@@ -279,6 +285,7 @@
     "rematch_failed": "Match failed: {{message}}",
     "rematch_select": "Select",
     "rematch_current": "✓ Current",
+    "scrape_source": "Scrape source:",
     "genre_filter": "Genre:"
   },
   "history": {

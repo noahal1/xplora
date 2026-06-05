@@ -296,7 +296,7 @@ export function WishlistTab() {
             {t("wishlist.search_movies")}
           </h2>
           <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
-            {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "omdb", label: t("search_source.omdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
+            {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
               <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
                 onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
             ))}

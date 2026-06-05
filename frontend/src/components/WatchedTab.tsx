@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaItem, MediaImport, SortField, SortDir } from "../types";
+import type { MediaItem, MediaImport, MediaSearchResult, SortField, SortDir } from "../types";
 import { parseCSV, parseMovieData } from "../utils/csv";
 import * as api from "../api";
 import { useToast } from "../context/ToastContext";
@@ -9,7 +9,7 @@ import { Separator } from "./ui/separator";
 import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
 import { ProgressiveImage } from "./ProgressiveImage";
-import { Upload, List, LayoutGrid } from "lucide-react";
+import { Upload, List, LayoutGrid, Loader2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 
 const SLIDER_RANGE_CLASS = "w-14 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
@@ -44,6 +44,18 @@ export function WatchedTab() {
 
   // Rating editing is localised inside MovieGridCard / MovieListItem to avoid
   // re-rendering all 30 rows on every slider drag (sliderValue changes on each onChange).
+  // === External search (TMDB / TVmaze) ===
+  const [externalQuery, setExternalQuery] = useState("");
+  const [searchSource, setSearchSource] = useState("auto");
+  const [searchResults, setSearchResults] = useState<MediaSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [searchDone, setSearchDone] = useState(false);
+  const [addingSearchIds, setAddingSearchIds] = useState<Set<string>>(new Set());
+  const externalSearchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchSourceRef = useRef(searchSource);
+  searchSourceRef.current = searchSource;
+
   const [importOpen, setImportOpen] = useState(false);
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
   const [batchRatingValue, setBatchRatingValue] = useState(7);
@@ -124,9 +136,60 @@ export function WatchedTab() {
     }
   }, [selectedIds, media]);
 
+  // ── External search handlers ──
+
+  const handleExternalSearch = useCallback(async (q: string) => {
+    if (!q.trim()) { setSearchResults([]); setSearchError(""); setSearchDone(false); return; }
+    setSearchLoading(true);
+    setSearchError("");
+    try {
+      const data = await api.searchMedia(q.trim(), searchSourceRef.current);
+      setSearchResults(data.results);
+      setSearchDone(true);
+    } catch (err: any) {
+      setSearchError(err.message);
+      setSearchResults([]);
+      setSearchDone(true);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  const handleSearchInputChange = useCallback((value: string) => {
+    setExternalQuery(value);
+    setSearchDone(false);
+    if (externalSearchTimeoutRef.current) clearTimeout(externalSearchTimeoutRef.current);
+    if (!value.trim()) { setSearchResults([]); setSearchError(""); return; }
+    externalSearchTimeoutRef.current = setTimeout(() => handleExternalSearch(value), 350);
+  }, [handleExternalSearch]);
+
+  const changeSearchSource = useCallback((source: string) => {
+    setSearchSource(source);
+    if (externalQuery.trim()) handleExternalSearch(externalQuery);
+  }, [externalQuery, handleExternalSearch]);
+
+  const addSearchResultToWatched = useCallback(async (result: MediaSearchResult) => {
+    const key = `${result.source}:${result.source_id}`;
+    if (addingSearchIds.has(key)) return;
+    setAddingSearchIds((prev) => new Set(prev).add(key));
+    try {
+      await api.addWatchedMedia({ title: result.title, year: result.year, genre: result.genre || null });
+      showToast(t("watched.added", { title: result.title }), "success");
+      startPolling();
+      setReloadTrigger((n) => n + 1);
+    } catch (err: any) {
+      showToast(t("watched.add_failed", { message: err.message }), "error");
+    } finally {
+      setAddingSearchIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
+    }
+  }, [addingSearchIds, showToast, startPolling, t]);
+
   // Clear debounce timeout on unmount
   useEffect(() => {
-    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      if (externalSearchTimeoutRef.current) clearTimeout(externalSearchTimeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -480,6 +543,90 @@ export function WatchedTab() {
                 {t("watched.parse_data")}
               </button>
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* === External Search Section === */}
+      <section className="section-card">
+        <div className="section-header">
+          <h2 className="section-title flex items-center gap-2">
+            <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            {t("watched.search_title")}
+          </h2>
+          <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
+            {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
+              <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative">
+          <input type="text" placeholder={t("watched.search_placeholder_external")}
+            value={externalQuery} onChange={(e) => handleSearchInputChange(e.target.value)}
+            className="input-field w-full h-10 text-sm pl-3 pr-20" />
+          {externalQuery && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {searchLoading && <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />}
+              <button className="text-muted-foreground hover:text-foreground p-0.5"
+                onClick={() => { setExternalQuery(""); setSearchResults([]); setSearchDone(false); setSearchError(""); }}>
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {searchResults.length > 0 && (
+          <div className="mt-3 animate-slide-down space-y-1.5">
+            <p className="text-xs text-muted-foreground mb-2">{t("wishlist.search_results")}</p>
+            {searchResults.map((r, i) => {
+              const key = `${r.source}:${r.source_id}`;
+              const isAdding = addingSearchIds.has(key);
+              return (
+                <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm">
+                  <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
+                    {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <span className="opacity-40">🎬</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium truncate block">{r.title}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
+                      {r.genre && <Badge variant="outline" className="text-[10px]">{r.genre}</Badge>}
+                      {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
+                      <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
+                    </div>
+                  </div>
+                  <button className="btn btn-primary btn-xs shrink-0 gap-1 transition-all" disabled={isAdding}
+                    onClick={(e) => { e.stopPropagation(); addSearchResultToWatched(r); }}>
+                    {isAdding ? (
+                      <><Loader2 size={12} className="animate-spin" />{t("wishlist.adding")}</>
+                    ) : (
+                      <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>{t("watched.add_to_list")}</>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {searchDone && searchResults.length === 0 && externalQuery.trim() && !searchLoading && !searchError && (
+          <div className="mt-4 text-center py-4 text-muted-foreground">
+            <p className="text-sm">{t("wishlist.search_empty", { query: externalQuery })}</p>
+            <p className="text-xs mt-1">{t("wishlist.search_empty_hint")}</p>
+          </div>
+        )}
+        {searchError && <div className="mt-3 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">{searchError}</div>}
+
+        {!externalQuery && !searchLoading && searchResults.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
+            <svg className="w-8 h-8 mb-2 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <p className="text-sm">{t("watched.search_hint")}</p>
           </div>
         )}
       </section>

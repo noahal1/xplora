@@ -71,6 +71,9 @@ export function ManageTab() {
   /* ── Manual search & match modal ─────────────────────────────── */
   const [rematchMovie, setRematchMovie] = useState<MediaDetail | null>(null);
 
+  /* ── Enrich source selector ──────────────────────────────────── */
+  const [enrichSource, setEnrichSource] = useState<string>("tmdb");
+
   /* ── Enriching IDs ───────────────────────────────────────────── */
   const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
 
@@ -245,14 +248,14 @@ export function ManageTab() {
   const handleEnrich = useCallback(async (movieId: number) => {
     setEnrichingIds(prev => new Set(prev).add(movieId));
     try {
-      const updated = await api.enrichMedia(movieId);
+      const updated = await api.enrichMedia(movieId, enrichSource);
       // Update poster/metadata immediately
       setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
       showToast(t("manage.enrich_success"), "success");
       fetchData(undefined, true);
     } catch (err: any) { showToast(t("manage.enrich_failed", { message: err.message }), "error"); }
     finally { setEnrichingIds(prev => { const next = new Set(prev); next.delete(movieId); return next; }); }
-  }, [fetchData, showToast, t]);
+  }, [fetchData, showToast, t, enrichSource]);
 
   /* ── Batch enrich + cache ───────────────────────────────────── */
   const [batchLoading, setBatchLoading] = useState(false);
@@ -380,6 +383,15 @@ export function ManageTab() {
           { field: "year" as SortField, label: t("manage.sort_year") }]).map((s) => (
           <button key={s.field} className={`pill ${sort.field === s.field ? "active" : ""}`}
             onClick={() => handleSort(s.field)}>{s.label} <SortArrow field={s.field} /></button>
+        ))}
+      </div>
+
+      {/* ── Scrape source selector ──────────────────────────────── */}
+      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+        <span className="text-xs text-muted-foreground mr-1">{t("manage.scrape_source")}</span>
+        {[{ value: "tmdb", label: "TMDB" }, { value: "tvmaze", label: "TVmaze" }].map((opt) => (
+          <button key={opt.value} className={`pill ${enrichSource === opt.value ? "active" : ""}`}
+            onClick={() => setEnrichSource(opt.value)}>{opt.label}</button>
         ))}
       </div>
 
@@ -549,32 +561,6 @@ const ManageTableRow = memo(function ManageTableRow({
   onEnrich: (id: number) => Promise<void>;
   onSetMarkWatchedMovie: (movie: MediaDetail) => void;
   onStartInlineEdit: (movieId: number, field: string) => void;
-  onSaveInlineEdit: (movieId: number, field: string, value: string) => Promise<void>;
-}, (prev, next) => {
-  const id = prev.movie.id;
-  if (prev.movie.title !== next.movie.title) return false;
-  if (prev.movie.rating !== next.movie.rating) return false;
-  if (prev.movie.year !== next.movie.year) return false;
-  if (prev.movie.genre !== next.movie.genre) return false;
-  if (prev.movie.status !== next.movie.status) return false;
-  if (prev.movie.poster_url !== next.movie.poster_url) return false;
-  if (prev.movie.scrape_error !== next.movie.scrape_error) return false;
-  if (prev.movie.media_type !== next.movie.media_type) return false;
-  if (prev.movie.season_number !== next.movie.season_number) return false;
-  if (prev.movie.episode_count !== next.movie.episode_count) return false;
-  if (prev.movie.created_at !== next.movie.created_at) return false;
-  if (prev.isSelected !== next.isSelected) return false;
-
-  const prevEditing = prev.editingCell?.movieId === id && prev.editingCell?.field === "rating";
-  const nextEditing = next.editingCell?.movieId === id && next.editingCell?.field === "rating";
-  if (prevEditing !== nextEditing) return false;
-  // Only slider changes for THIS row trigger re-render
-  if (nextEditing && prev.sliderValue !== next.sliderValue) return false;
-
-  if (prev.enrichingIds.has(id) !== next.enrichingIds.has(id)) return false;
-  if (prev.editingCell?.movieId === id && prev.editingCell?.field !== next.editingCell?.field) return false;
-
-  return true;
 }) {
   const { t } = useTranslation();
   const isEditingRating = editingCell?.movieId === movie.id && editingCell?.field === "rating";
@@ -682,6 +668,31 @@ const ManageTableRow = memo(function ManageTableRow({
       </td>
     </tr>
   );
+}, (prev, next) => {
+  const id = prev.movie.id;
+  if (prev.movie.title !== next.movie.title) return false;
+  if (prev.movie.rating !== next.movie.rating) return false;
+  if (prev.movie.year !== next.movie.year) return false;
+  if (prev.movie.genre !== next.movie.genre) return false;
+  if (prev.movie.status !== next.movie.status) return false;
+  if (prev.movie.poster_url !== next.movie.poster_url) return false;
+  if (prev.movie.scrape_error !== next.movie.scrape_error) return false;
+  if (prev.movie.media_type !== next.movie.media_type) return false;
+  if (prev.movie.season_number !== next.movie.season_number) return false;
+  if (prev.movie.episode_count !== next.movie.episode_count) return false;
+  if (prev.movie.created_at !== next.movie.created_at) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+
+  const prevEditing = prev.editingCell?.movieId === id && prev.editingCell?.field === "rating";
+  const nextEditing = next.editingCell?.movieId === id && next.editingCell?.field === "rating";
+  if (prevEditing !== nextEditing) return false;
+  // Only slider changes for THIS row trigger re-render
+  if (nextEditing && prev.sliderValue !== next.sliderValue) return false;
+
+  if (prev.enrichingIds.has(id) !== next.enrichingIds.has(id)) return false;
+  if (prev.editingCell?.movieId === id && prev.editingCell?.field !== next.editingCell?.field) return false;
+
+  return true;
 });
 
 /* ── Inline info icon (no lucide import needed) ───────────────── */

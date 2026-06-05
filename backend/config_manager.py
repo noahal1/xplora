@@ -15,7 +15,6 @@ API_KEY_NAMES: dict[str, str] = {
     "deepseek": "DEEPSEEK_API_KEY",
     "openai": "OPENAI_API_KEY",
     "tmdb": "TMDB_API_KEY",
-    "omdb": "OMDB_API_KEY",
 }
 
 _config_cache: dict | None = None
@@ -105,7 +104,6 @@ def get_key_display_name(key_name: str) -> str:
         "deepseek": "DeepSeek AI",
         "openai": "OpenAI",
         "tmdb": "TMDB",
-        "omdb": "OMDb",
     }
     return labels.get(key_name, key_name)
 
@@ -116,6 +114,5 @@ def get_key_docs_url(key_name: str) -> str:
         "deepseek": "https://platform.deepseek.com/",
         "openai": "https://platform.openai.com/",
         "tmdb": "https://www.themoviedb.org/settings/api",
-        "omdb": "https://www.omdbapi.com/apikey.aspx",
-    }
+}
     return urls.get(key_name, "")

@@ -25,6 +25,17 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+/** Add a single watched media item */
+export async function addWatchedMedia(
+  item: { title: string; year?: number | null; genre?: string | null }
+): Promise<MediaDetail> {
+  return fetchJSON(`${API_BASE}/media`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(item),
+  });
+}
+
 /** Replace all watched media items */
 export async function replaceMedia(items: MediaImport[]): Promise<void> {
   await fetchJSON(`${API_BASE}/media/replace`, {
@@ -135,9 +146,9 @@ export async function clearWishlist(): Promise<void> {
   }
 }
 
-/** Enrich a media item's metadata by scraping TMDB */
-export async function enrichMedia(mediaId: number): Promise<MediaDetail> {
-  return fetchJSON(`${API_BASE}/media/${mediaId}/enrich`, {
+/** Enrich a media item's metadata by scraping TMDB or TVmaze */
+export async function enrichMedia(mediaId: number, source: string = "tmdb"): Promise<MediaDetail> {
+  return fetchJSON(`${API_BASE}/media/${mediaId}/enrich?source=${source}`, {
     method: "POST",
     headers: getAuthHeaders(),
   });

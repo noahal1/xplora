@@ -43,6 +43,55 @@ router = APIRouter(prefix="/api", tags=["media"])
 # ── Media CRUD ──────────────────────────────────────────────────────
 
 
+@router.post("/media")
+async def add_watched_media(
+    request: WishlistItem,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Add a single media item to the watched list.
+
+    Accepts a ``WishlistItem`` (title, year, genre) and creates a
+    new record with ``status="watched"`` and ``rating=0``. Metadata
+    enrichment runs asynchronously in the background, so the response
+    returns immediately with the created record.
+
+    Unlike ``POST /media/replace`` this does **not** clear existing
+    items — it appends to the watched list.
+    """
+    if not request.title or not request.title.strip():
+        raise HTTPException(status_code=400, detail="标题不能为空")
+
+    records = save_media(
+        [MediaRating(
+            title=request.title.strip(),
+            rating=0,
+            year=request.year,
+            genre=request.genre,
+        )],
+        current_user["id"],
+        status="watched",
+    )
+    if not records:
+        raise HTTPException(status_code=400, detail="添加失败")
+    r = records[0]
+
+    # Launch background metadata scraping for this single item
+    background_tasks.add_task(async_background_enrich_movies, current_user["id"], [r.id])
+
+    log_operation(
+        current_user["id"], current_user["username"],
+        "add_watched", f"添加已看: {r.title}",
+    )
+    return {
+        "id": r.id,
+        "title": r.title,
+        "year": r.year,
+        "genre": r.genre,
+        "status": r.status,
+    }
+
+
 @router.post("/media/replace")
 async def replace_media(
     request: MediaData,
@@ -201,22 +250,25 @@ async def update_media_endpoint(
 @router.post("/media/{media_id}/enrich")
 async def enrich_media_metadata_endpoint(
     media_id: int,
+    source: str = Query("tmdb", pattern="^(tmdb|tvmaze)$", description="Search source: tmdb or tvmaze"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Scrape metadata from TMDB for a media item by its title and update the record."""
+    """Scrape metadata from TMDB or TVmaze for a media item by its title and update the record."""
     media_item = get_media_for_user(media_id, current_user["id"])
     if not media_item:
         raise HTTPException(status_code=404, detail="Media item not found")
 
     try:
-        results = search_external_movies(media_item.title, "tmdb")
+        results = search_external_movies(media_item.title, source)
     except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=f"搜索 TMDB 失败：{str(e)}")
+        source_label = "TMDB" if source == "tmdb" else "TVmaze"
+        raise HTTPException(status_code=502, detail=f"搜索 {source_label} 失败：{str(e)}")
 
     if not results:
+        source_label = "TMDB" if source == "tmdb" else "TVmaze"
         raise HTTPException(
             status_code=404,
-            detail=f"在 TMDB 中未找到「{media_item.title}」的匹配结果，请先手动编辑标题再试",
+            detail=f"在 {source_label} 中未找到「{media_item.title}」的匹配结果，请先手动编辑标题再试",
         )
 
     # For items without a season_number, prefer movie search results to avoid
