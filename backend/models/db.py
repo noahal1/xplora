@@ -67,11 +67,6 @@ class MediaItemRecord(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     user: Optional[UserRecord] = Relationship(back_populates="media")
 
-    session_id: Optional[int] = Field(
-        default=None, foreign_key="sessions.id", nullable=True
-    )
-    session: Optional["SessionRecord"] = Relationship(back_populates="media_items")
-
 
 class SessionRecord(SQLModel, table=True):
     """A recommendation session — captures the context of a single AI recommend run."""
@@ -86,10 +81,6 @@ class SessionRecord(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     user: Optional[UserRecord] = Relationship(back_populates="sessions")
 
-    media_items: list[MediaItemRecord] = Relationship(
-        back_populates="session",
-        sa_relationship_kwargs={"cascade": "save-update"},
-    )
     recommendations: list["RecommendationRecord"] = Relationship(
         back_populates="session",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},

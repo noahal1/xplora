@@ -79,10 +79,32 @@ export async function listMedia(params: {
   return fetchJSON(`${API_BASE}/media?${qs.toString()}`, { headers: getAuthHeaders(), signal: params.signal });
 }
 
-/** Update a single media item */
+/** Update a single media item — supports all metadata fields */
 export async function updateMedia(
   id: number,
-  data: { title: string; rating: number; year?: number | null; genre?: string | null; created_at?: string }
+  data: {
+    title: string;
+    rating: number;
+    year?: number | null;
+    genre?: string | null;
+    overview?: string | null;
+    director?: string | null;
+    actors?: string | null;
+    runtime?: number | null;
+    imdb_id?: string | null;
+    tmdb_id?: string | null;
+    country?: string | null;
+    awards?: string | null;
+    tagline?: string | null;
+    poster_url?: string | null;
+    status?: string;
+    media_type?: string;
+    tv_series_id?: string | null;
+    season_number?: number | null;
+    episode_count?: number | null;
+    series_poster_url?: string | null;
+    created_at?: string;
+  }
 ): Promise<MediaDetail> {
   return fetchJSON(`${API_BASE}/media/${id}`, {
     method: "PUT",
@@ -134,16 +156,7 @@ export async function addToWishlist(
 
 /** Clear all wishlist items */
 export async function clearWishlist(): Promise<void> {
-  const res = await fetch(`${API_BASE}/wishlist`, { method: "DELETE", headers: getAuthHeaders() });
-  if (res.status === 401) {
-    localStorage.removeItem("xplora-token");
-    window.location.href = "/login";
-    throw new Error("登录已过期");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "清除失败" }));
-    throw new Error(err.detail);
-  }
+  await fetchJSON(`${API_BASE}/wishlist`, { method: "DELETE", headers: getAuthHeaders() });
 }
 
 /** Enrich a media item's metadata by scraping TMDB or TVmaze */
@@ -183,16 +196,7 @@ export async function getEnrichStatus(): Promise<{
 
 /** Delete a single media item */
 export async function deleteMedia(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/media/${id}`, { method: "DELETE", headers: getAuthHeaders() });
-  if (res.status === 401) {
-    localStorage.removeItem("xplora-token");
-    window.location.href = "/login";
-    throw new Error("登录已过期");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "删除失败" }));
-    throw new Error(err.detail);
-  }
+  await fetchJSON(`${API_BASE}/media/${id}`, { method: "DELETE", headers: getAuthHeaders() });
 }
 
 /** Batch delete media items by IDs */
@@ -227,16 +231,7 @@ export async function getSessionDetail(id: number): Promise<DBSessionDetail> {
 
 /** Delete a session */
 export async function deleteSession(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/sessions/${id}`, { method: "DELETE", headers: getAuthHeaders() });
-  if (res.status === 401) {
-    localStorage.removeItem("xplora-token");
-    window.location.href = "/login";
-    throw new Error("登录已过期");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "删除失败" }));
-    throw new Error(err.detail);
-  }
+  await fetchJSON(`${API_BASE}/sessions/${id}`, { method: "DELETE", headers: getAuthHeaders() });
 }
 
 /** Export all data as downloadable JSON (admin only) */
@@ -302,19 +297,10 @@ export async function getExternalDetail(
 
 /** Admin: delete a user */
 export async function adminDeleteUser(userId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/auth/users/${userId}`, {
+  await fetchJSON(`${API_BASE}/auth/users/${userId}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
-  if (res.status === 401) {
-    localStorage.removeItem("xplora-token");
-    window.location.href = "/login";
-    throw new Error("登录已过期");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "删除失败" }));
-    throw new Error(err.detail);
-  }
 }
 
 /** Admin: reset a user's password */
@@ -345,24 +331,21 @@ export async function listOperationLogs(params: {
 }
 
 /** Get health status */
-export async function getHealth(): Promise<{ status: string; models: Record<string, boolean> }> {
+export async function getHealth(): Promise<{
+  status: string;
+  version: string;
+  database: string;
+  database_status: string;
+  api_keys: Record<string, boolean>;
+}> {
   return fetchJSON(`${API_BASE}/health`);
 }
 
 /** Change current user's password */
 export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/auth/password`, {
+  await fetchJSON(`${API_BASE}/auth/password`, {
     method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
   });
-  if (res.status === 401) {
-    localStorage.removeItem("xplora-token");
-    window.location.href = "/login";
-    throw new Error("登录已过期");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "修改失败" }));
-    throw new Error(err.detail || "修改失败");
-  }
 }

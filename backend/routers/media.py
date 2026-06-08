@@ -135,7 +135,7 @@ async def list_media(
     sort_dir: str = "desc",
     rating_min: Optional[float] = None,
     rating_max: Optional[float] = None,
-    has_error: bool = False,
+    has_error: Optional[bool] = Query(None, description="Filter by scrape error: True=only errors, None=all"),
     media_type: str = "",
     current_user: dict = Depends(get_current_user),
 ):
@@ -152,7 +152,7 @@ async def list_media(
         sort_dir=sort_dir,
         rating_min=rating_min,
         rating_max=rating_max,
-        has_error=has_error or None,
+        has_error=has_error,
         media_type=media_type_filter,
     )
     return {
@@ -276,7 +276,9 @@ async def enrich_media_metadata_endpoint(
     # special/documentary on TMDB). TV results are only valid when the item
     # was explicitly imported as a TV series with a season marker.
     if media_item.season_number:
-        match = results[0]
+        # item is a TV series — prefer TV results, fall back to any result
+        tv_results = [r for r in results if r.get("media_type") == "tv"]
+        match = tv_results[0] if tv_results else results[0]
     else:
         movie_results = [r for r in results if r.get("media_type") != "tv"]
         match = movie_results[0] if movie_results else results[0]

@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 
+const VISIBLE_GENRES = 6;
+
 const STRATEGIES = [
   { id: "taste", icon: Heart },
   { id: "classics", icon: Trophy },
@@ -36,6 +38,7 @@ export function RecommendTab() {
   const [strategy, setStrategy] = useState("taste");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
   const [genreFilter, setGenreFilter] = useState("all");
+  const [showAllGenres, setShowAllGenres] = useState(false);
 
   // Strategy-specific inputs
   const [strategyMood, setStrategyMood] = useState("");
@@ -205,11 +208,10 @@ export function RecommendTab() {
 
       if (recs.length === 0) showToast(t("recommend.no_results"), "error");
       else {
+        // Fetch poster URLs from TMDB for each recommendation, then show chat
+        const withPosters = await resolvePosters(recs);
+        setRecommendations(withPosters);
         setShowChat(true);
-        // Fetch poster URLs from TMDB for each recommendation (async, from CDN)
-        resolvePosters(recs).then((withPosters) => {
-          setRecommendations(withPosters);
-        });
       }
     } catch (err: any) {
       if (err.name === "AbortError") showToast(t("recommend.timeout"), "error");
@@ -460,18 +462,25 @@ export function RecommendTab() {
             {/* ── Genre Filter ─────────────────────────── */}
             {uniqueGenres.length > 0 && (
               <div className="flex items-center gap-1.5 mb-5 overflow-x-auto sm:flex-wrap justify-start sm:justify-center pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-                <span className="text-xs text-muted-foreground mr-1">{t("manage.genre_filter")}</span>
-                <select
-                  value={genreFilter}
-                  onChange={(e) => setGenreFilter(e.target.value)}
-                  className="input-field text-xs py-1.5 px-2.5 w-auto max-w-[160px]"
-                  style={{ appearance: "auto" }}
-                >
-                  <option value="all">{t("manage.media_type_all")}</option>
-                  {uniqueGenres.map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
+                <span className="text-xs text-muted-foreground mr-1 shrink-0">{t("manage.genre_filter")}</span>
+                <button className={`pill ${genreFilter === "all" ? "active" : ""}`}
+                  onClick={() => setGenreFilter("all")}>{t("manage.media_type_all")}</button>
+                {(showAllGenres ? uniqueGenres : uniqueGenres.slice(0, VISIBLE_GENRES)).map((g) => (
+                  <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
+                    onClick={() => setGenreFilter(g)}>{g}</button>
+                ))}
+                {uniqueGenres.length > VISIBLE_GENRES && (
+                  <button
+                    className="pill text-muted-foreground/60 hover:text-foreground gap-0.5"
+                    onClick={() => setShowAllGenres((v) => !v)}
+                  >
+                    {showAllGenres ? (
+                      <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
+                    ) : (
+                      <><span className="text-[10px]">▼</span> +{uniqueGenres.length - VISIBLE_GENRES} {t("manage.genre_more")}</>
+                    )}
+                  </button>
+                )}
               </div>
             )}
 

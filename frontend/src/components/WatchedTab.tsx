@@ -12,8 +12,9 @@ import { ProgressiveImage } from "./ProgressiveImage";
 import { Upload, List, LayoutGrid, Loader2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 
-const SLIDER_RANGE_CLASS = "w-14 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
-const SLIDER_RANGE_CLASS_LIST = "w-20 h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
+const SLIDER_BASE_CLASS = "h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
+const SLIDER_RANGE_CLASS = `${SLIDER_BASE_CLASS} w-14 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3`;
+const SLIDER_RANGE_CLASS_LIST = `${SLIDER_BASE_CLASS} w-20 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5`;
 
 const PAGE_SIZE = 30;
 
@@ -55,6 +56,8 @@ export function WatchedTab() {
   const externalSearchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
+  const mediaRef = useRef(media);
+  mediaRef.current = media;
 
   const [importOpen, setImportOpen] = useState(false);
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
@@ -395,7 +398,7 @@ export function WatchedTab() {
       const val = Math.round(Math.max(0, Math.min(10, rating)) * 10) / 10;
       setMedia((prev) => prev.map((m) => m.id === id ? { ...m, rating: val } : m));
       try {
-        const movie = media.find((m) => m.id === id);
+        const movie = mediaRef.current.find((m) => m.id === id);
         if (!movie) return;
         await api.updateMedia(id, {
           title: movie.title,
@@ -407,7 +410,7 @@ export function WatchedTab() {
         showToast(t("watched.save_rating_failed", { message: err.message }), "error");
       }
     },
-    [media, showToast, t]
+    [showToast, t]
   );
 
   // ── Filtering & pagination ──

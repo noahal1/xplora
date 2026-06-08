@@ -51,7 +51,6 @@ export function ManageTab() {
 
   const [editingCell, setEditingCell] = useState<{ movieId: number; field: string } | null>(null);
   const [sliderValue, setSliderValue] = useState(7);
-  const [justSavedIds, setJustSavedIds] = useState<Set<number>>(new Set());
   const [genreDialogMovie, setGenreDialogMovie] = useState<MediaDetail | null>(null);
   const [genreDialogValue, setGenreDialogValue] = useState("");
   const [markWatchedMovie, setMarkWatchedMovie] = useState<MediaDetail | null>(null);
@@ -229,13 +228,6 @@ export function ManageTab() {
       } as any);
       // Update local state immediately
       setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
-      // Show saved confirmation animation for rating edits
-      if (field === "rating") {
-        setJustSavedIds((prev) => new Set(prev).add(movieId));
-        setTimeout(() => {
-          setJustSavedIds((prev) => { const next = new Set(prev); next.delete(movieId); return next; });
-        }, 1500);
-      }
       showToast(t("manage.updated"), "success");
       cancelInlineEdit();
       fetchData(undefined, true);
@@ -275,19 +267,33 @@ export function ManageTab() {
     finally { setBatchLoading(false); }
   }, [showToast, startPolling, t]);
 
-  const handleExportMovies = useCallback(() => {
-    if (mediaList.length === 0) return;
-    const data = JSON.stringify({ movies: mediaList, exported_at: new Date().toISOString(), total }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `xplora-movies-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [mediaList, total]);
+  const handleExportMovies = useCallback(async () => {
+    try {
+      const allData = await api.listMedia({
+        page: 0,
+        page_size: total || 10000,
+        search: search || undefined,
+        status: statusFilter || undefined,
+        sort_field: sort.field,
+        sort_dir: sort.dir,
+        has_error: errorFilter || undefined,
+        media_type: mediaTypeFilter || undefined,
+      });
+      if (allData.media.length === 0) return;
+      const data = JSON.stringify({ movies: allData.media, exported_at: new Date().toISOString(), total: allData.total }, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `xplora-movies-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      showToast(t("manage.export_failed", { message: err.message }), "error");
+    }
+  }, [total, search, statusFilter, sort, errorFilter, mediaTypeFilter, showToast, t]);
 
   /* ── Pagination helpers ──────────────────────────────────────── */
   const totalPages = Math.ceil(total / MANAGE_PAGE_SIZE);
@@ -460,6 +466,7 @@ export function ManageTab() {
                     onSetMarkWatchedMovie={setMarkWatchedMovie}
                     onStartInlineEdit={startInlineEdit}
                     onSaveInlineEdit={saveInlineEdit}
+                    onCancelEdit={cancelInlineEdit}
                   />
                 ))}
               </tbody>
@@ -494,7 +501,8 @@ export function ManageTab() {
       <SearchImportModal open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)}      onImportComplete={() => { setSearchDialogOpen(false); fetchData(undefined, true); }} />
 
       {/* ── Metadata Detail Modal ───────────────────────────────── */}
-      <DetailModal open={detailMovie !== null} movie={detailMovie} onClose={() => setDetailMovie(null)} />
+      <DetailModal open={detailMovie !== null} movie={detailMovie} onClose={() => setDetailMovie(null)}
+        onSave={() => { fetchData(undefined, true); }} />
 
       {/* ── Manual Search & Match Modal ─────────────────────────── */}
       <RematchModal open={rematchMovie !== null} movie={rematchMovie} onClose={() => setRematchMovie(null)}      onSuccess={() => { setRematchMovie(null); fetchData(undefined, true); }} />
@@ -548,7 +556,8 @@ const ManageTableRow = memo(function ManageTableRow({
   onEnrich, 
   onSetMarkWatchedMovie, 
   onStartInlineEdit, 
-  onSaveInlineEdit 
+  onSaveInlineEdit,
+  onCancelEdit
 }: {
   movie: MediaDetail;
   isSelected: boolean;
@@ -561,6 +570,8 @@ const ManageTableRow = memo(function ManageTableRow({
   onEnrich: (id: number) => Promise<void>;
   onSetMarkWatchedMovie: (movie: MediaDetail) => void;
   onStartInlineEdit: (movieId: number, field: string) => void;
+  onSaveInlineEdit: (movieId: number, field: string, value: string) => Promise<void>;
+  onCancelEdit: () => void;
 }) {
   const { t } = useTranslation();
   const isEditingRating = editingCell?.movieId === movie.id && editingCell?.field === "rating";
@@ -605,7 +616,7 @@ const ManageTableRow = memo(function ManageTableRow({
         </div>
       </td>
       <TableEditableCell movie={movie} field="title" editingCell={editingCell} sliderValue={sliderValue}
-        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="font-medium truncate">{movie.title}</span>
           {movie.media_type === "tv" && (
@@ -619,22 +630,22 @@ const ManageTableRow = memo(function ManageTableRow({
         </div>
       </TableEditableCell>
       <TableEditableCell movie={movie} field="rating" editingCell={editingCell} sliderValue={sliderValue}
-        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
         <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap">
           <Star size={12} fill="currentColor" />
           {movie.rating.toFixed(1)}
         </span>
       </TableEditableCell>
       <TableEditableCell movie={movie} field="year" editingCell={editingCell} sliderValue={sliderValue}
-        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
         <span className="text-muted-foreground">{movie.year || "—"}</span>
       </TableEditableCell>
       <TableEditableCell movie={movie} field="genre" editingCell={editingCell} sliderValue={sliderValue}
-        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
         <span className="text-muted-foreground truncate block">{movie.genre || "—"}</span>
       </TableEditableCell>
       <TableEditableCell movie={movie} field="created_at" editingCell={editingCell} sliderValue={sliderValue}
-        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit}>
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
         <span className="text-muted-foreground text-xs">{movie.created_at ? movie.created_at.slice(0, 10) : "—"}</span>
       </TableEditableCell>
       <td className="px-1 py-2 border-b border-border text-center whitespace-nowrap">
@@ -702,7 +713,7 @@ const ManageTableRow = memo(function ManageTableRow({
    does not flow back through the parent and re-render all other rows.
    The parent's sliderValue prop is only used to INITIALIZE the local state
    when editing starts for THIS cell. ───────────────────────── */
-const TableEditableCell = memo(function TableEditableCell({ movie, field, editingCell, sliderValue, children, onStartEdit, onSaveEdit }: {
+const TableEditableCell = memo(function TableEditableCell({ movie, field, editingCell, sliderValue, children, onStartEdit, onSaveEdit, onCancelEdit }: {
   movie: MediaDetail;
   field: string;
   editingCell: { movieId: number; field: string } | null;
@@ -710,6 +721,7 @@ const TableEditableCell = memo(function TableEditableCell({ movie, field, editin
   children: React.ReactNode;
   onStartEdit: (movieId: number, field: string) => void;
   onSaveEdit: (movieId: number, field: string, value: string) => Promise<void>;
+  onCancelEdit: () => void;
 }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -768,8 +780,7 @@ const TableEditableCell = memo(function TableEditableCell({ movie, field, editin
       <td className="px-3 py-2 border-b border-border">
         <div className="flex items-center gap-1">
           <input ref={inputRef} type={inputType} className={`no-spinner ${widthClass} input-field h-7 text-sm px-1.5 py-0.5`}
-            defaultValue={value}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(); } if (e.key === "Escape") { onStartEdit(-1, ""); /* cancel by editing none */ } }}
+            defaultValue={value}                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(); } if (e.key === "Escape") { onCancelEdit(); } }}
             onBlur={handleSave}
             onClick={(e) => e.stopPropagation()} autoFocus />
         </div>

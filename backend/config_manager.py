@@ -98,21 +98,3 @@ def reload() -> None:
     _config_cache = None
 
 
-def get_key_display_name(key_name: str) -> str:
-    """Get human-readable label for an API key."""
-    labels = {
-        "deepseek": "DeepSeek AI",
-        "openai": "OpenAI",
-        "tmdb": "TMDB",
-    }
-    return labels.get(key_name, key_name)
-
-
-def get_key_docs_url(key_name: str) -> str:
-    """Get documentation URL for where to obtain an API key."""
-    urls = {
-        "deepseek": "https://platform.deepseek.com/",
-        "openai": "https://platform.openai.com/",
-        "tmdb": "https://www.themoviedb.org/settings/api",
-}
-    return urls.get(key_name, "")

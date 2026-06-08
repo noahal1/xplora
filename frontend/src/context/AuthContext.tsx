@@ -77,8 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     localStorage.setItem("xplora-token", data.token);
     setToken(data.token);
-    setUser({ id: 0, username: data.username, is_admin: data.is_admin });
-    // Fetch user details to get ID
+
+    // Fetch user details to get real ID (await in the same function so user
+    // is set before the calling code navigates away from the login page)
     const meRes = await fetch("/api/auth/me", {
       headers: { Authorization: `Bearer ${data.token}` },
     });

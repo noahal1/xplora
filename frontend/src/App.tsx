@@ -36,7 +36,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function AnimatedRoutes({ children }: { children: React.ReactNode }) {
+function MainApp() {
   const location = useLocation();
 
   // Reset scroll to top on every route change for reliable FadeContent entrance
@@ -44,22 +44,6 @@ function AnimatedRoutes({ children }: { children: React.ReactNode }) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [location.pathname]);
 
-  return (
-    <div className="flex flex-col gap-4 sm:gap-6 py-4 sm:py-6">
-      <FadeContent key={location.pathname} duration={600} threshold={0} blur>
-        <Suspense fallback={
-          <div className="flex items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-          </div>
-        }>
-          {children}
-        </Suspense>
-      </FadeContent>
-    </div>
-  );
-}
-
-function MainApp() {
   return (
     <HistoryProvider>
       <EnrichProvider>
@@ -75,15 +59,23 @@ function MainApp() {
           <Header />
           <EnrichBanner />
           <TabNav />
-          <AnimatedRoutes>
-            <Routes>
-              <Route path="/" element={<Navigate to="/watched" replace />} />
-              <Route path="/watched" element={<WatchedTab key="watched" />} />
-              <Route path="/wishlist" element={<WishlistTab key="wishlist" />} />
-              <Route path="/recommend" element={<RecommendTab key="recommend" />} />
-              <Route path="/manage" element={<ManageTab key="manage" />} />
-            </Routes>
-          </AnimatedRoutes>
+          <div className="flex flex-col gap-4 sm:gap-6 py-4 sm:py-6">
+            <FadeContent key={location.pathname} duration={600} threshold={0} blur>
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+                </div>
+              }>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/watched" replace />} />
+                  <Route path="/watched" element={<WatchedTab key="watched" />} />
+                  <Route path="/wishlist" element={<WishlistTab key="wishlist" />} />
+                  <Route path="/recommend" element={<RecommendTab key="recommend" />} />
+                  <Route path="/manage" element={<ManageTab key="manage" />} />
+                </Routes>
+              </Suspense>
+            </FadeContent>
+          </div>
           <HistorySidebar />
           <Footer />
         </div>

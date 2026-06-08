@@ -50,13 +50,6 @@ async def lifespan(app: FastAPI):
         print("  Copy .env.example to .env and add your API keys")
         print()
 
-    # Ensure poster cache directory exists
-    try:
-        poster_dir = ensure_poster_dir()
-        print(f"  Poster cache: {poster_dir}")
-    except Exception as e:
-        print(f"  Poster cache: failed to create directory — {e}")
-
     print("=" * 50)
     yield
     print("Shutting down...")

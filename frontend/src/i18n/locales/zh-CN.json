@@ -292,7 +292,9 @@
     "media_type_all": "全部",
     "media_type_movie": "🎬 电影",
     "media_type_tv": "📺 剧集",
-    "genre_filter": "类型筛选："
+    "genre_filter": "类型筛选：",
+    "genre_more": "更多",
+    "genre_collapse": "收起"
   },
   "history": {
     "trigger": "历史",
@@ -487,6 +489,7 @@
     "tagline": "标语",
     "no_overview": "暂无简介",
     "runtime": "时长",
-    "minutes": "分钟"
+    "minutes": "分钟",
+    "edit_title": "编辑元数据"
   }
 }

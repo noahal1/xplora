@@ -151,6 +151,10 @@ def _run_migrations():
         ("series_poster_url", "VARCHAR(500)"),
     ])
 
+    # ── Step 2: Remove unused `session_id` column from media_items ──
+    if "session_id" in columns:
+        _drop_column_if_exists("media_items", "session_id")
+
     # Operation logs table
     try:
         log_columns = [c["name"] for c in inspector.get_columns("operation_logs")]
@@ -236,6 +240,31 @@ def _add_columns_if_missing(table: str, existing_columns: list[str], columns: li
                 ))
                 conn.commit()
                 print(f"  [Migration] Added '{col_name}' column to {table} table")
+
+
+def _drop_column_if_exists(table: str, column: str):
+    """Drop a column from a table if it exists.
+
+    PostgreSQL requires the FK constraint to be dropped first (by name),
+    then the column can be dropped.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    fks = inspector.get_foreign_keys(table)
+    fk_name = None
+    for fk in fks:
+        if column in fk.get("constrained_columns", []):
+            fk_name = fk.get("name")
+            break
+
+    with engine.connect() as conn:
+        if fk_name:
+            conn.execute(text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {fk_name}"))
+            conn.commit()
+        conn.execute(text(f"ALTER TABLE {table} DROP COLUMN IF EXISTS {column}"))
+        conn.commit()
+        print(f"  [Migration] Dropped '{column}' column from {table} table")
 
 
 def get_session() -> Session:

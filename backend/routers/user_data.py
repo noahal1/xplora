@@ -7,9 +7,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from fastapi.responses import StreamingResponse
 
 from auth import get_current_user
+from crud import log_operation, save_media, save_wishlist_items
 from models import MediaRating, WishlistItem
 from scraper import async_background_enrich_movies
-from crud import log_operation
 
 router = APIRouter(prefix="/api/user", tags=["user-data"])
 
@@ -96,7 +96,6 @@ async def import_my_data(
     if not isinstance(movies, list) or len(movies) == 0:
         raise HTTPException(status_code=400, detail="未找到有效的电影数据")
 
-    from crud import save_media, save_wishlist_items
 
     # Parse and group by status in a single pass (avoids index mismatch
     # when empty-title items are skipped)

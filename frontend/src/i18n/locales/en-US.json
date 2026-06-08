@@ -286,7 +286,9 @@
     "rematch_select": "Select",
     "rematch_current": "✓ Current",
     "scrape_source": "Scrape source:",
-    "genre_filter": "Genre:"
+    "genre_filter": "Genre:",
+    "genre_more": "more",
+    "genre_collapse": "Collapse"
   },
   "history": {
     "trigger": "History",
@@ -472,6 +474,7 @@
     "tagline": "Tagline",
     "no_overview": "No overview available",
     "runtime": "Runtime",
-    "minutes": "min"
+    "minutes": "min",
+    "edit_title": "Edit Metadata"
   }
 }

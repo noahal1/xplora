@@ -34,8 +34,8 @@ def search_tmdb(title: str) -> Optional[list[dict]]:
     from movie_search import search_tmdb_dual
 
     try:
-        results = search_tmdb_dual(title, tmdb_key)
-        return [r.to_dict() for r in results]
+        raw = search_tmdb_dual(title, tmdb_key)
+        return [r.to_dict() for r in raw]
     except RuntimeError as e:
         logger.warning("TMDB search failed for '%s': %s", title, e)
         return None
