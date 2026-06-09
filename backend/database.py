@@ -270,3 +270,23 @@ def _drop_column_if_exists(table: str, column: str):
 def get_session() -> Session:
     """Get a new SQLModel session."""
     return Session(engine)
+
+
+def get_db():
+    """FastAPI dependency that yields a request-scoped SQLModel session.
+
+    Use in route handlers via ``db: Session = Depends(get_db)``.
+    The session is automatically closed when the request finishes.
+
+    Example:
+        .. code-block:: python
+
+            @router.get("/items")
+            async def list_items(db: Session = Depends(get_db)):
+                return db.exec(select(Item)).all()
+    """
+    db = Session(engine)
+    try:
+        yield db
+    finally:
+        db.close()

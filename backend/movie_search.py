@@ -583,12 +583,14 @@ def _get_tmdb_detail(movie_id: str, api_key: str) -> dict:
     release = data.get("release_date", "")
     year = int(release[:4]) if release and len(release) >= 4 else None
     poster = data.get("poster_path")
-    genres = [g["name"] for g in data.get("genres", []) if g.get("name")]
+    # Use genre IDs to map to English names instead of TMDB's localized names
+    genre_ids = [g["id"] for g in data.get("genres", []) if g.get("id")]
+    genres = _map_tmdb_genres(genre_ids)
 
     return {
         "title": data.get("title", ""),
         "year": year,
-        "genre": " / ".join(genres),
+        "genre": genres,
         "poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
         "overview": data.get("overview", ""),
         "rating": data.get("vote_average"),
@@ -750,7 +752,9 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
     first_air = data.get("first_air_date", "")
     year = int(first_air[:4]) if first_air and len(first_air) >= 4 else None
     poster = data.get("poster_path")
-    genres = [g["name"] for g in data.get("genres", []) if g.get("name")]
+    # Use genre IDs to map to English names instead of TMDB's localized names
+    genre_ids = [g["id"] for g in data.get("genres", []) if g.get("id")]
+    genres = _map_tmdb_tv_genres(genre_ids)
     # Number of seasons as a proxy for "runtime" for TV series
     seasons = data.get("number_of_seasons", 0)
     episodes = data.get("number_of_episodes", 0)
@@ -758,7 +762,7 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
     result = {
         "title": data.get("name", ""),
         "year": year,
-        "genre": " / ".join(genres),
+        "genre": genres,
         "poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
         "overview": data.get("overview", ""),
         "rating": data.get("vote_average"),

@@ -10,6 +10,15 @@ from database import get_session
 from models import MediaItemRecord, MediaRating, WishlistItem
 
 
+# ── Helper: resolve session ────────────────────────────────────
+
+def _resolve_db(db: Optional[Session] = None) -> tuple[Session, bool]:
+    """Return a session and whether it needs to be closed."""
+    if db is not None:
+        return db, False
+    return get_session(), True
+
+
 # ── Helper: parse ISO datetime string ──────────────────────────────
 
 
@@ -34,48 +43,51 @@ def _parse_datetime(value: str | None) -> datetime | None:
 # ============================================
 
 
-def delete_all_media_for_user(user_id: int) -> int:
+def delete_all_media_for_user(user_id: int, db: Optional[Session] = None) -> int:
     """Delete all media records for a specific user. Returns count."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        result = db.exec(
+        result = session.exec(
             sa_delete(MediaItemRecord).where(MediaItemRecord.user_id == user_id)
         )
-        db.commit()
+        session.commit()
         return result.rowcount
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def db_delete_media_by_status(user_id: int, status: str) -> int:
+def db_delete_media_by_status(user_id: int, status: str, db: Optional[Session] = None) -> int:
     """Delete all media records for a user with a specific status. Returns count."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        result = db.exec(
+        result = session.exec(
             sa_delete(MediaItemRecord).where(
                 MediaItemRecord.user_id == user_id,
                 MediaItemRecord.status == status,
             )
         )
-        db.commit()
+        session.commit()
         return result.rowcount
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
 def save_media(
     items: list[MediaRating],
     user_id: int,
     status: str = "watched",
+    db: Optional[Session] = None,
 ) -> list[MediaItemRecord]:
     """Persist a list of imported MediaRating objects for a user with the given status."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
         records: list[MediaItemRecord] = []
         now = datetime.now(timezone.utc)
@@ -89,25 +101,27 @@ def save_media(
                 user_id=user_id,
                 created_at=now,
             )
-            db.add(record)
+            session.add(record)
             records.append(record)
-        db.commit()
+        session.commit()
         for r in records:
-            db.refresh(r)
+            session.refresh(r)
         return records
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
 def save_wishlist_items(
     items: list[WishlistItem],
     user_id: int,
+    db: Optional[Session] = None,
 ) -> list[MediaItemRecord]:
     """Persist a list of wishlist items for a user."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
         records: list[MediaItemRecord] = []
         now = datetime.now(timezone.utc)
@@ -121,17 +135,18 @@ def save_wishlist_items(
                 user_id=user_id,
                 created_at=now,
             )
-            db.add(record)
+            session.add(record)
             records.append(record)
-        db.commit()
+        session.commit()
         for r in records:
-            db.refresh(r)
+            session.refresh(r)
         return records
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
 def get_media(
@@ -146,16 +161,21 @@ def get_media(
     rating_max: Optional[float] = None,
     has_error: Optional[bool] = None,
     media_type: Optional[str] = None,
+    genre: Optional[str] = None,
+    db: Optional[Session] = None,
 ) -> tuple[list[MediaItemRecord], int]:
     """List saved media items for a user with optional search, status filter, rating range,
-    scrape_error filter, media_type filter, pagination, and sort."""
-    db = get_session()
+    scrape_error filter, media_type filter, genre filter, pagination, and sort."""
+    session, close_db = _resolve_db(db)
     try:
         query = select(MediaItemRecord).where(MediaItemRecord.user_id == user_id)
         if status:
             query = query.where(MediaItemRecord.status == status)
         if media_type:
             query = query.where(MediaItemRecord.media_type == media_type)
+        if genre:
+            escaped_genre = genre.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            query = query.where(MediaItemRecord.genre.ilike(f"%{escaped_genre}%", escape="\\"))
         if search:
             # Escape SQL LIKE wildcards in user input
             escaped_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -167,7 +187,7 @@ def get_media(
         if has_error:
             query = query.where(MediaItemRecord.scrape_error.isnot(None))
 
-        total = db.scalar(
+        total = session.scalar(
             select(sa_func.count()).select_from(query.subquery())
         ) or 0
 
@@ -183,7 +203,7 @@ def get_media(
         order_fn = order_col.asc if sort_dir == "asc" else order_col.desc
 
         records = list(
-            db.exec(
+            session.exec(
                 query.order_by(order_fn())
                 .offset(page * page_size)
                 .limit(page_size)
@@ -191,43 +211,47 @@ def get_media(
         )
         return records, total
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def get_media_titles(user_id: int) -> list[str]:
+def get_media_titles(user_id: int, db: Optional[Session] = None) -> list[str]:
     """Return just the titles of all media items for a user (lightweight, no pagination)."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        results = db.exec(
+        results = session.exec(
             select(MediaItemRecord.title).where(MediaItemRecord.user_id == user_id)
         ).all()
         return list(results)
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def get_media_for_user(media_id: int, user_id: int) -> Optional[MediaItemRecord]:
+def get_media_for_user(media_id: int, user_id: int, db: Optional[Session] = None) -> Optional[MediaItemRecord]:
     """Get a media item by ID, ensuring it belongs to the user."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        return db.exec(
+        return session.exec(
             select(MediaItemRecord).where(
                 MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
 def mark_media_as_watched(
     media_id: int,
     user_id: int,
     rating: float = 5.0,
+    db: Optional[Session] = None,
 ) -> Optional[MediaItemRecord]:
     """Move a media item from wishlist to watched with a rating."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        record = db.exec(
+        record = session.exec(
             select(MediaItemRecord).where(
                 MediaItemRecord.id == media_id,
                 MediaItemRecord.user_id == user_id,
@@ -238,14 +262,15 @@ def mark_media_as_watched(
             return None
         record.status = "watched"
         record.rating = max(0.0, min(10.0, rating))
-        db.commit()
-        db.refresh(record)
+        session.commit()
+        session.refresh(record)
         return record
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
 def update_media(
@@ -266,16 +291,18 @@ def update_media(
     country: Optional[str] = None,
     awards: Optional[str] = None,
     tagline: Optional[str] = None,
+    media_type: Optional[str] = None,
     tv_series_id: Optional[str] = None,
     season_number: Optional[int] = None,
     episode_count: Optional[int] = None,
     series_poster_url: Optional[str] = None,
     created_at: Optional[str] = None,
+    db: Optional[Session] = None,
 ) -> Optional[MediaItemRecord]:
     """Update a media record. Returns updated record or None if not found."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        record = db.exec(
+        record = session.exec(
             select(MediaItemRecord).where(
                 MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
@@ -292,6 +319,8 @@ def update_media(
             record.genre = genre
         if status is not None:
             record.status = status
+        if media_type is not None:
+            record.media_type = media_type
         # === Metadata fields ===
         if poster_url is not None:
             record.poster_url = poster_url
@@ -326,46 +355,49 @@ def update_media(
             parsed = _parse_datetime(created_at)
             if parsed:
                 record.created_at = parsed
-        db.commit()
-        db.refresh(record)
+        session.commit()
+        session.refresh(record)
         return record
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def batch_delete_media(media_ids: list[int], user_id: int) -> int:
+def batch_delete_media(media_ids: list[int], user_id: int, db: Optional[Session] = None) -> int:
     """Delete multiple media items by IDs (must all belong to user). Returns count."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        result = db.exec(
+        result = session.exec(
             sa_delete(MediaItemRecord).where(
                 MediaItemRecord.id.in_(media_ids),
                 MediaItemRecord.user_id == user_id,
             )
         )
-        db.commit()
+        session.commit()
         return result.rowcount
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
 def enrich_media_metadata(
     media_id: int,
     user_id: int,
     metadata: dict[str, Any],
+    db: Optional[Session] = None,
 ) -> Optional[MediaItemRecord]:
     """Update a media record with scraped metadata fields.
     Only updates fields that are present in the metadata dict.
     """
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        record = db.exec(
+        record = session.exec(
             select(MediaItemRecord).where(
                 MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
@@ -408,59 +440,62 @@ def enrich_media_metadata(
         if metadata.get("media_type") != "tv" and "year" in metadata and metadata["year"] is not None:
             record.year = metadata["year"]
 
-        db.commit()
-        db.refresh(record)
+        session.commit()
+        session.refresh(record)
         return record
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def set_scrape_error(media_id: int, user_id: int, error: str):
+def set_scrape_error(media_id: int, user_id: int, error: str, db: Optional[Session] = None):
     """Record a scrape error message for a media item."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        record = db.exec(
+        record = session.exec(
             select(MediaItemRecord).where(
                 MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if record:
             record.scrape_error = error
-            db.commit()
+            session.commit()
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def clear_scrape_error(media_id: int, user_id: int):
+def clear_scrape_error(media_id: int, user_id: int, db: Optional[Session] = None):
     """Clear the scrape error for a media item (on successful scrape)."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        record = db.exec(
+        record = session.exec(
             select(MediaItemRecord).where(
                 MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if record:
             record.scrape_error = None
-            db.commit()
+            session.commit()
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def get_unenriched_media_ids(user_id: int) -> list[int]:
+def get_unenriched_media_ids(user_id: int, db: Optional[Session] = None) -> list[int]:
     """Return IDs of all media items for a user that don't have poster_url yet."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        records = db.exec(
+        records = session.exec(
             select(MediaItemRecord.id).where(
                 MediaItemRecord.user_id == user_id,
                 MediaItemRecord.poster_url.is_(None),
@@ -468,10 +503,11 @@ def get_unenriched_media_ids(user_id: int) -> list[int]:
         ).all()
         return list(records)
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def get_external_poster_media_ids(user_id: int) -> list[tuple[int, str, str | None]]:
+def get_external_poster_media_ids(user_id: int, db: Optional[Session] = None) -> list[tuple[int, str, str | None]]:
     """Return (id, poster_url, tmdb_id) for media items whose poster_url points
     to an external CDN (i.e. not a local ``/static/`` path).
 
@@ -479,9 +515,9 @@ def get_external_poster_media_ids(user_id: int) -> list[tuple[int, str, str | No
     introduced — they have valid poster URLs from TMDB but the image
     hasn't been downloaded to the local filesystem yet.
     """
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        records = db.exec(
+        records = session.exec(
             select(MediaItemRecord.id, MediaItemRecord.poster_url, MediaItemRecord.tmdb_id).where(
                 MediaItemRecord.user_id == user_id,
                 MediaItemRecord.poster_url.isnot(None),
@@ -494,10 +530,11 @@ def get_external_poster_media_ids(user_id: int) -> list[tuple[int, str, str | No
             if r.poster_url  # safety: should always be truthy here
         ]
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def get_enrich_progress(user_id: int) -> tuple[int, int, int]:
+def get_enrich_progress(user_id: int, db: Optional[Session] = None) -> tuple[int, int, int]:
     """Count total, processed, and failed items for enrichment progress.
 
     "Processed" means the item either has a poster_url (success)
@@ -507,14 +544,14 @@ def get_enrich_progress(user_id: int) -> tuple[int, int, int]:
 
     Returns (total, processed, failed).
     """
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        total = db.scalar(
+        total = session.scalar(
             select(sa_func.count()).select_from(
                 select(MediaItemRecord).where(MediaItemRecord.user_id == user_id).subquery()
             )
         ) or 0
-        processed = db.scalar(
+        processed = session.scalar(
             select(sa_func.count()).select_from(
                 select(MediaItemRecord).where(
                     MediaItemRecord.user_id == user_id,
@@ -522,7 +559,7 @@ def get_enrich_progress(user_id: int) -> tuple[int, int, int]:
                 ).subquery()
             )
         ) or 0
-        failed = db.scalar(
+        failed = session.scalar(
             select(sa_func.count()).select_from(
                 select(MediaItemRecord).where(
                     MediaItemRecord.user_id == user_id,
@@ -533,25 +570,27 @@ def get_enrich_progress(user_id: int) -> tuple[int, int, int]:
         ) or 0
         return total, processed, failed
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def delete_media(media_id: int, user_id: int) -> bool:
+def delete_media(media_id: int, user_id: int, db: Optional[Session] = None) -> bool:
     """Delete a media item by ID (must belong to user)."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        record = db.exec(
+        record = session.exec(
             select(MediaItemRecord).where(
                 MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
             )
         ).first()
         if not record:
             return False
-        db.delete(record)
-        db.commit()
+        session.delete(record)
+        session.commit()
         return True
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()

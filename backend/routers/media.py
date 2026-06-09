@@ -3,8 +3,10 @@
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from sqlmodel import Session
 
 from auth import get_current_user
+from database import get_db
 from helpers import parse_movie_data
 from models import (
     MediaData,
@@ -48,6 +50,7 @@ async def add_watched_media(
     request: WishlistItem,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Add a single media item to the watched list.
 
@@ -71,6 +74,7 @@ async def add_watched_media(
         )],
         current_user["id"],
         status="watched",
+        db=db,
     )
     if not records:
         raise HTTPException(status_code=400, detail="添加失败")
@@ -81,7 +85,7 @@ async def add_watched_media(
 
     log_operation(
         current_user["id"], current_user["username"],
-        "add_watched", f"添加已看: {r.title}",
+        "add_watched", f"添加已看: {r.title}", db=db,
     )
     return {
         "id": r.id,
@@ -97,6 +101,7 @@ async def replace_media(
     request: MediaData,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Replace all watched media items for current user (clear + insert).
 
@@ -104,24 +109,25 @@ async def replace_media(
     in the background after the response is sent.
     """
     movies = parse_movie_data([m.model_dump() for m in request.movies])
-    db_delete_media_by_status(current_user["id"], "watched")
-    records = save_media(movies, current_user["id"], status="watched")
+    db_delete_media_by_status(current_user["id"], "watched", db=db)
+    records = save_media(movies, current_user["id"], status="watched", db=db)
 
     # Launch background metadata scraping
     media_ids = [r.id for r in records]
     if media_ids:
         background_tasks.add_task(async_background_enrich_movies, current_user["id"], media_ids)
 
-    log_operation(current_user["id"], current_user["username"], "replace_watched", f"替换已看列表: {len(records)} 部")
+    log_operation(current_user["id"], current_user["username"], "replace_watched", f"替换已看列表: {len(records)} 部", db=db)
     return {"status": "saved", "count": len(records)}
 
 
 @router.get("/media/titles")
 async def list_media_titles(
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Lightweight endpoint: return just media titles for the current user."""
-    titles = db_get_media_titles(current_user["id"])
+    titles = db_get_media_titles(current_user["id"], db=db)
     return {"titles": titles}
 
 
@@ -137,9 +143,11 @@ async def list_media(
     rating_max: Optional[float] = None,
     has_error: Optional[bool] = Query(None, description="Filter by scrape error: True=only errors, None=all"),
     media_type: str = "",
+    genre: str = "",
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """List saved media items for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv')."""
+    """List saved media items for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv'), genre."""
     status_filter = status if status in ("watched", "wish") else None
     media_type_filter = media_type if media_type in ("movie", "tv") else None
     records, total = db_get_media(
@@ -154,6 +162,8 @@ async def list_media(
         rating_max=rating_max,
         has_error=has_error,
         media_type=media_type_filter,
+        genre=genre or None,
+        db=db,
     )
     return {
         "media": [
@@ -195,6 +205,7 @@ async def update_media_endpoint(
     media_id: int,
     data: dict,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Update a saved media item (must belong to current user)."""
     updated = db_update_media(
@@ -214,15 +225,17 @@ async def update_media_endpoint(
         country=data.get("country"),
         awards=data.get("awards"),
         tagline=data.get("tagline"),
+        media_type=data.get("media_type"),
         tv_series_id=data.get("tv_series_id"),
         season_number=data.get("season_number"),
         episode_count=data.get("episode_count"),
         series_poster_url=data.get("series_poster_url"),
         created_at=data.get("created_at"),
+        db=db,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Media item not found")
-    log_operation(current_user["id"], current_user["username"], "update_media", f"更新条目: {updated.title} (ID: {media_id})")
+    log_operation(current_user["id"], current_user["username"], "update_media", f"更新条目: {updated.title} (ID: {media_id})", db=db)
     return {
         "id": updated.id,
         "title": updated.title,
@@ -230,6 +243,7 @@ async def update_media_endpoint(
         "year": updated.year,
         "genre": updated.genre,
         "status": updated.status,
+        "media_type": updated.media_type,
         "poster_url": updated.poster_url,
         "overview": updated.overview,
         "director": updated.director,
@@ -252,9 +266,10 @@ async def enrich_media_metadata_endpoint(
     media_id: int,
     source: str = Query("tmdb", pattern="^(tmdb|tvmaze)$", description="Search source: tmdb or tvmaze"),
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Scrape metadata from TMDB or TVmaze for a media item by its title and update the record."""
-    media_item = get_media_for_user(media_id, current_user["id"])
+    media_item = get_media_for_user(media_id, current_user["id"], db=db)
     if not media_item:
         raise HTTPException(status_code=404, detail="Media item not found")
 
@@ -319,17 +334,18 @@ async def enrich_media_metadata_endpoint(
             detail["poster_url"] = local_url
             poster_cached = True
 
-    updated = db_enrich_media_metadata(media_id, current_user["id"], detail)
+    updated = db_enrich_media_metadata(media_id, current_user["id"], detail, db=db)
     if not updated:
         raise HTTPException(status_code=404, detail="Media item not found")
 
     # Reconcile scrape_error
     if poster_cached or not detail.get("poster_url"):
-        db_clear_scrape_error(media_id, current_user["id"])
+        db_clear_scrape_error(media_id, current_user["id"], db=db)
     else:
         db_set_scrape_error(
             media_id, current_user["id"],
             "海报图片下载失败，已保留原始 TMDB 地址。可稍后重试「批量刮削」以缓存到本地",
+            db=db,
         )
 
     return {
@@ -362,19 +378,21 @@ async def mark_as_watched(
     media_id: int,
     request: MarkAsWatchedRequest,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Move a wishlist item to watched with a rating."""
     updated = mark_media_as_watched(
         media_id=media_id,
         user_id=current_user["id"],
         rating=request.rating,
+        db=db,
     )
     if not updated:
         raise HTTPException(
             status_code=404,
             detail="Media item not found or already marked as watched",
         )
-    log_operation(current_user["id"], current_user["username"], "mark_watched", f"标记已看: {updated.title}")
+    log_operation(current_user["id"], current_user["username"], "mark_watched", f"标记已看: {updated.title}", db=db)
     return {
         "id": updated.id,
         "title": updated.title,
@@ -389,12 +407,13 @@ async def mark_as_watched(
 async def delete_media_endpoint(
     media_id: int,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Delete a saved media item (must belong to current user)."""
-    deleted = db_delete_media(media_id, current_user["id"])
+    deleted = db_delete_media(media_id, current_user["id"], db=db)
     if not deleted:
         raise HTTPException(status_code=404, detail="Media item not found")
-    log_operation(current_user["id"], current_user["username"], "delete_media", f"删除条目 ID: {media_id}")
+    log_operation(current_user["id"], current_user["username"], "delete_media", f"删除条目 ID: {media_id}", db=db)
     return {"status": "deleted"}
 
 
@@ -402,19 +421,21 @@ async def delete_media_endpoint(
 async def batch_delete_media_endpoint(
     request: dict,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Batch delete media items by IDs."""
     ids = request.get("ids", [])
     if not isinstance(ids, list) or len(ids) == 0:
         raise HTTPException(status_code=400, detail="请提供要删除的条目 ID 列表")
-    count = db_batch_delete_media(ids, current_user["id"])
-    log_operation(current_user["id"], current_user["username"], "batch_delete_media", f"批量删除: {count} 条")
+    count = db_batch_delete_media(ids, current_user["id"], db=db)
+    log_operation(current_user["id"], current_user["username"], "batch_delete_media", f"批量删除: {count} 条", db=db)
     return {"status": "deleted", "count": count}
 
 
 @router.get("/media/enrich-status")
 async def get_enrich_status(
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Get the status of background metadata enrichment for the current user.
 
@@ -422,7 +443,7 @@ async def get_enrich_status(
     a scrape_error set (failure — TMDB couldn't find a match, etc.).
     "Pending" = total - processed, so it reaches 0 even for unmatched films.
     """
-    total, processed, failed = db_get_enrich_progress(current_user["id"])
+    total, processed, failed = db_get_enrich_progress(current_user["id"], db=db)
     return {
         "total": total,
         "enriched": processed - failed,
@@ -436,6 +457,7 @@ async def get_enrich_status(
 async def enrich_all_media(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Launch background metadata scraping for all media items without posters.
 
@@ -443,12 +465,12 @@ async def enrich_all_media(
     yet, then enqueues a background task to scrape their metadata from
     TMDB. Returns immediately — the scraping runs asynchronously.
     """
-    media_ids = db_get_unenriched_media_ids(current_user["id"])
+    media_ids = db_get_unenriched_media_ids(current_user["id"], db=db)
     if not media_ids:
         return {"status": "ok", "enqueued": 0, "message": "All items already have metadata"}
 
     background_tasks.add_task(async_background_enrich_movies, current_user["id"], media_ids)
-    log_operation(current_user["id"], current_user["username"], "enrich_all", f"批量刮削: {len(media_ids)} 条")
+    log_operation(current_user["id"], current_user["username"], "enrich_all", f"批量刮削: {len(media_ids)} 条", db=db)
     return {"status": "ok", "enqueued": len(media_ids)}
 
 
@@ -456,24 +478,26 @@ async def enrich_all_media(
 async def cache_posters(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Download and cache posters for items that already have TMDB CDN URLs but haven't been cached locally yet."""
-    items = db_get_external_poster_media_ids(current_user["id"])
+    items = db_get_external_poster_media_ids(current_user["id"], db=db)
     if not items:
         return {"status": "ok", "enqueued": 0, "message": "All posters already cached locally"}
 
     background_tasks.add_task(async_background_cache_posters, current_user["id"], items)
-    log_operation(current_user["id"], current_user["username"], "cache_posters", f"缓存海报: {len(items)} 条")
+    log_operation(current_user["id"], current_user["username"], "cache_posters", f"缓存海报: {len(items)} 条", db=db)
     return {"status": "ok", "enqueued": len(items)}
 
 
 @router.delete("/media")
 async def delete_all_media_endpoint(
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Delete all saved media items for current user."""
-    count = delete_all_media_for_user(current_user["id"])
-    log_operation(current_user["id"], current_user["username"], "clear_all_media", f"清空所有条目: {count} 条")
+    count = delete_all_media_for_user(current_user["id"], db=db)
+    log_operation(current_user["id"], current_user["username"], "clear_all_media", f"清空所有条目: {count} 条", db=db)
     return {"status": "deleted", "count": count}
 
 
@@ -485,11 +509,12 @@ async def search_media(
     q: str = Query(..., min_length=1, description="Search query"),
     source: str = Query("auto", pattern="^(tmdb|omdb|tvmaze|auto)$", description="Data source: tmdb, omdb, tvmaze, or auto"),
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Search for movies/TV via external sources (TMDB / OMDb / TVmaze)."""
     try:
         results = search_external_movies(q, source)
-        log_operation(current_user["id"], current_user["username"], "search", f"搜索: {q} (来源: {source})")
+        log_operation(current_user["id"], current_user["username"], "search", f"搜索: {q} (来源: {source})", db=db)
         return {"results": results}
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -500,6 +525,7 @@ async def rematch_media(
     media_id: int,
     request: dict,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Manually rematch a media item to a specific search result.
 
@@ -516,7 +542,7 @@ async def rematch_media(
     if source not in ("tmdb", "omdb", "tvmaze"):
         raise HTTPException(status_code=400, detail="source 只能是 tmdb、omdb 或 tvmaze")
 
-    media_item = get_media_for_user(media_id, current_user["id"])
+    media_item = get_media_for_user(media_id, current_user["id"], db=db)
     if not media_item:
         raise HTTPException(status_code=404, detail="Media item not found")
 
@@ -541,14 +567,14 @@ async def rematch_media(
             poster_cached = True
 
     # Update metadata fields (preserves user's title/year)
-    updated = db_enrich_media_metadata(media_id, current_user["id"], detail)
+    updated = db_enrich_media_metadata(media_id, current_user["id"], detail, db=db)
     if not updated:
         raise HTTPException(status_code=404, detail="Media item not found")
 
     # Clear scrape_error on success
-    db_clear_scrape_error(media_id, current_user["id"])
+    db_clear_scrape_error(media_id, current_user["id"], db=db)
 
-    log_operation(current_user["id"], current_user["username"], "rematch_media", f"手动匹配: {updated.title}")
+    log_operation(current_user["id"], current_user["username"], "rematch_media", f"手动匹配: {updated.title}", db=db)
     return {
         "id": updated.id,
         "title": updated.title,
@@ -580,10 +606,12 @@ async def media_detail(
     source_id: str = Query(..., min_length=1, description="Media ID from the source"),
     media_type: str = Query("movie", pattern="^(movie|tv)$", description="Media type: movie or tv"),
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Fetch full media details from external source."""
     try:
         detail = get_external_movie_detail(source, source_id, media_type=media_type)
+        log_operation(current_user["id"], current_user["username"], "media_detail", f"查看详情: {detail.get('title', '')}", db=db)
         return detail
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -597,6 +625,7 @@ async def replace_wishlist(
     request: WishlistData,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Replace all wishlist items for current user (clear + insert).
 
@@ -613,15 +642,15 @@ async def replace_wishlist(
                 genre=m.genre,
             )
         )
-    db_delete_media_by_status(current_user["id"], "wish")
-    records = save_wishlist_items(items, current_user["id"])
+    db_delete_media_by_status(current_user["id"], "wish", db=db)
+    records = save_wishlist_items(items, current_user["id"], db=db)
 
     # Launch background metadata scraping
     media_ids = [r.id for r in records]
     if media_ids:
         background_tasks.add_task(async_background_enrich_movies, current_user["id"], media_ids)
 
-    log_operation(current_user["id"], current_user["username"], "replace_wishlist", f"替换想看列表: {len(records)} 条")
+    log_operation(current_user["id"], current_user["username"], "replace_wishlist", f"替换想看列表: {len(records)} 条", db=db)
     return {"status": "saved", "count": len(records)}
 
 
@@ -630,12 +659,13 @@ async def add_to_wishlist(
     request: WishlistItem,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Add a single media item to the wishlist.
 
     Metadata enrichment runs asynchronously in the background.
     """
-    records = save_wishlist_items([request], current_user["id"])
+    records = save_wishlist_items([request], current_user["id"], db=db)
     if not records:
         raise HTTPException(status_code=400, detail="Failed to add item")
     r = records[0]
@@ -643,7 +673,7 @@ async def add_to_wishlist(
     # Launch background metadata scraping for this single item
     background_tasks.add_task(async_background_enrich_movies, current_user["id"], [r.id])
 
-    log_operation(current_user["id"], current_user["username"], "add_to_wishlist", f"添加到想看: {r.title}")
+    log_operation(current_user["id"], current_user["username"], "add_to_wishlist", f"添加到想看: {r.title}", db=db)
     return {
         "id": r.id,
         "title": r.title,
@@ -658,6 +688,7 @@ async def import_wishlist(
     request: WishlistData,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Append items to the wishlist (no clearing of existing items).
 
@@ -682,21 +713,22 @@ async def import_wishlist(
     if not items:
         return {"status": "saved", "count": 0}
 
-    records = save_wishlist_items(items, current_user["id"])
+    records = save_wishlist_items(items, current_user["id"], db=db)
 
     media_ids = [r.id for r in records]
     if media_ids:
         background_tasks.add_task(async_background_enrich_movies, current_user["id"], media_ids)
 
-    log_operation(current_user["id"], current_user["username"], "import_wishlist", f"导入想看列表: {len(records)} 条")
+    log_operation(current_user["id"], current_user["username"], "import_wishlist", f"导入想看列表: {len(records)} 条", db=db)
     return {"status": "saved", "count": len(records)}
 
 
 @router.delete("/wishlist")
 async def clear_wishlist(
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Delete all wishlist items for current user."""
-    count = db_delete_media_by_status(current_user["id"], "wish")
-    log_operation(current_user["id"], current_user["username"], "clear_wishlist", f"清空想看列表: {count} 条")
+    count = db_delete_media_by_status(current_user["id"], "wish", db=db)
+    log_operation(current_user["id"], current_user["username"], "clear_wishlist", f"清空想看列表: {count} 条", db=db)
     return {"status": "deleted", "count": count}

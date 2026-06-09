@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
+import { translateGenres } from "../../utils/genre";
 
 interface RatingModalProps {
   open: boolean;
@@ -40,7 +41,7 @@ export function WishlistRatingModal({ open, movie, onClose, onConfirm }: RatingM
               <p className="text-sm font-semibold">{movie.title}</p>
               <div className="flex items-center gap-2 mt-0.5">
                 {movie.year && <span className="text-xs text-muted-foreground">{movie.year}</span>}
-                {movie.genre && <Badge variant="outline" className="text-[10px]">{movie.genre}</Badge>}
+                {movie.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(movie.genre)}</Badge>}
               </div>
             </div>
           </div>

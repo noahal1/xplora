@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaItem, Recommendation, ChatMessage } from "../types";
+import type { MediaItem, Recommendation, ChatMessage, ExternalDetail } from "../types";
 import * as api from "../api";
 import { exportJSON, exportScreenshot } from "../utils/export";
 import { useToast } from "../context/ToastContext";
@@ -11,6 +11,7 @@ import {
   Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { translateGenreName, translateGenres } from "../utils/genre";
 
 const VISIBLE_GENRES = 6;
 
@@ -54,6 +55,9 @@ export function RecommendTab() {
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
+  const [detailData, setDetailData] = useState<ExternalDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
 
   // Load watched movies from DB on mount
   const loadMoviesFromDB = useCallback(async () => {
@@ -345,6 +349,40 @@ export function RecommendTab() {
     }
   }, [filteredMovies, recommendations, chatMessages, selectedModel, recCount, isChatProcessing, showToast, t]);
 
+  const closeDetail = useCallback(() => {
+    setDetailRec(null);
+    setDetailData(null);
+    setDetailError("");
+  }, []);
+
+  // Fetch TMDB detail when recommendation detail modal opens
+  useEffect(() => {
+    if (!detailRec) return;
+    setDetailData(null);
+    setDetailError("");
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const searchData = await api.searchMedia(detailRec.title, "tmdb");
+        const matches = searchData.results ?? [];
+        const yearMatch = detailRec.year
+          ? matches.find((m) => m.year === detailRec.year)
+          : undefined;
+        const match = yearMatch ?? matches[0];
+        if (match?.source && match?.source_id) {
+          const data = await api.getExternalDetail(match.source, match.source_id);
+          setDetailData(data);
+        } else {
+          setDetailError(t("wishlist.search_empty", { query: detailRec.title }));
+        }
+      } catch (err: any) {
+        setDetailError(err.message);
+      } finally {
+        setDetailLoading(false);
+      }
+    })();
+  }, [detailRec, t]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
@@ -467,7 +505,7 @@ export function RecommendTab() {
                   onClick={() => setGenreFilter("all")}>{t("manage.media_type_all")}</button>
                 {(showAllGenres ? uniqueGenres : uniqueGenres.slice(0, VISIBLE_GENRES)).map((g) => (
                   <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
-                    onClick={() => setGenreFilter(g)}>{g}</button>
+                    onClick={() => setGenreFilter(g)}>{translateGenreName(g)}</button>
                 ))}
                 {uniqueGenres.length > VISIBLE_GENRES && (
                   <button
@@ -678,7 +716,7 @@ export function RecommendTab() {
                         {rec.media_type === "tv" && (
                           <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
                         )}
-                        {rec.genre && <span className="badge">{rec.genre}</span>}
+                        {rec.genre && <span className="badge">{translateGenres(rec.genre)}</span>}
                       </div>
                       {rec.year && (
                         <p className="text-xs mt-0.5" style={{ color: "var(--fg-muted)" }}>{rec.year}</p>
@@ -731,8 +769,8 @@ export function RecommendTab() {
         </section>
       )}
 
-      {/* === Recommendation Detail Modal === */}
-      <Modal open={detailRec !== null} onClose={() => setDetailRec(null)}
+      {/* === TMDB Detail Modal === */}
+      <Modal open={detailRec !== null} onClose={closeDetail}
         title={
           <div className="flex items-center gap-2">
             <span className="truncate">{detailRec?.title || ""}</span>
@@ -741,56 +779,121 @@ export function RecommendTab() {
             )}
           </div>
         }
-        description={detailRec?.year ? `${detailRec.year}${detailRec?.genre ? ` · ${detailRec.genre}` : ""}` : detailRec?.genre || ""}
+        description={detailData?.tagline || undefined}
       >
-        {detailRec && (
+        {detailLoading && (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+            <span className="ml-2 text-sm" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.loading")}</span>
+          </div>
+        )}
+        {detailError && (
+          <div className="px-3 py-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">{detailError}</div>
+        )}
+        {detailData && !detailLoading && !detailError && (
           <div className="space-y-5">
-            {/* Poster + Quick info */}
-            <div className="flex gap-5">
-              <div className="w-[130px] h-[186px] shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center shadow-md"
-                style={{ border: "1px solid var(--border-subtle)" }}>
-                {detailRec.poster_url ? (
-                  <img src={detailRec.poster_url} alt={detailRec.title} className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                ) : (
-                  <Film size={36} className="text-muted-foreground/30" />
-                )}
+            <div className="flex gap-4">
+              <div className="w-[100px] shrink-0">
+                <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
+                  {detailData.poster_url ? (
+                    <img src={detailData.poster_url} alt={detailData.title} className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  ) : <span className="text-3xl opacity-30">🎬</span>}
+                </div>
               </div>
-              <div className="flex-1 min-w-0 flex flex-col justify-between">
-                <div>
-                  <h3 className="text-base font-[590] mb-1" style={{ color: "var(--seed-fg)" }}>
-                    {detailRec.title}
-                  </h3>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {detailRec.year && <span className="text-sm text-muted-foreground tabular-nums">{detailRec.year}</span>}
-                    {detailRec.genre && <Badge variant="secondary" className="text-[11px]">{detailRec.genre}</Badge>}
-                  </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {detailData.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{detailData.year}</span>}
+                  {detailData.runtime && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{Math.floor(detailData.runtime / 60)}h {detailData.runtime % 60}m</span>}
+                  {detailData.original_language && <Badge variant="outline" className="text-[9px]">{detailData.original_language.toUpperCase()}</Badge>}
+                  <Badge variant="outline" className="text-[9px] font-mono border-primary/30" style={{ color: "var(--seed-primary)" }}>{detailData.source.toUpperCase()}</Badge>
                 </div>
-                {/* Confidence */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
-                    <div className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${Math.round(detailRec.confidence * 100)}%`,
-                        background: detailRec.confidence >= 0.8
-                          ? "var(--seed-primary)"
-                          : detailRec.confidence >= 0.5
-                            ? "#f59e0b"
-                            : "var(--fg-dim)",
-                      }} />
+                {detailData.genre && (
+                  <div className="flex flex-wrap gap-1">
+                    {detailData.genre.split(" / ").map((g) => (
+                      <Badge key={g} variant="secondary" className="text-[10px]">{translateGenreName(g)}</Badge>
+                    ))}
                   </div>
-                  <span className="text-xs font-[590] tabular-nums shrink-0" style={{ color: "var(--seed-primary)" }}>
-                    {Math.round(detailRec.confidence * 100)}%
-                  </span>
+                )}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {detailData.rating != null && (
+                    <div className="flex items-center gap-1">
+                      <span style={{ color: "var(--seed-primary)" }}>★</span>
+                      <span className="font-semibold text-sm">{Number(detailData.rating).toFixed(1)}</span>
+                      {detailData.vote_count != null && <span className="text-[10px]" style={{ color: "var(--fg-muted)" }}>({detailData.vote_count})</span>}
+                    </div>
+                  )}
+                  {detailData.ratings && Object.entries(detailData.ratings).map(([key, val]) => (
+                    <Badge key={key} variant="outline" className="text-[9px]">{key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "🍅" : key === "metacritic" ? "M" : key}: {val}</Badge>
+                  ))}
                 </div>
+                {/* Confidence & reason from recommendation */}
+                {detailRec && (
+                  <div className="pt-2 mt-2" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
+                        <div className="h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${Math.round(detailRec.confidence * 100)}%`,
+                            background: detailRec.confidence >= 0.8
+                              ? "var(--seed-primary)"
+                              : detailRec.confidence >= 0.5
+                                ? "#f59e0b"
+                                : "var(--fg-dim)",
+                          }} />
+                      </div>
+                      <span className="text-xs font-[590] tabular-nums shrink-0" style={{ color: "var(--seed-primary)" }}>
+                        {Math.round(detailRec.confidence * 100)}%
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--fg-secondary)" }}>{detailRec.reason}</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Reason */}
-            <div>
-              <p className="text-xs text-muted-foreground font-medium mb-1.5 uppercase tracking-wider">{t("recommend.reason_label")}</p>
-              <p className="text-sm leading-relaxed">{detailRec.reason}</p>
-            </div>
+            {detailData.overview && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.overview")}</h4>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--fg-secondary)" }}>{detailData.overview}</p>
+              </div>
+            )}
+
+            {(detailData.director || detailData.actors || detailData.writer || detailData.awards) && (
+              <div className="grid grid-cols-2 gap-3">
+                {detailData.director && (
+                  <div><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.director")}</h4><p className="text-sm">{detailData.director}</p></div>
+                )}
+                {detailData.writer && (
+                  <div><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.writer")}</h4><p className="text-sm">{detailData.writer}</p></div>
+                )}
+                {detailData.actors && (
+                  <div className="col-span-2"><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.actors")}</h4><p className="text-sm">{detailData.actors}</p></div>
+                )}
+                {detailData.awards && (
+                  <div className="col-span-2"><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.awards")}</h4><p className="text-sm">{detailData.awards}</p></div>
+                )}
+              </div>
+            )}
+
+            {(detailData.country || detailData.box_office) && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--fg-muted)" }}>
+                {detailData.country && <span>{t("detail_modal.country")}: {detailData.country}</span>}
+                {detailData.box_office && <span>{t("detail_modal.box_office")}: {detailData.box_office}</span>}
+              </div>
+            )}
+
+            {detailData.homepage && (
+              <div>
+                <a href={detailData.homepage} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                  {t("detail_modal.homepage")}
+                </a>
+              </div>
+            )}
           </div>
         )}
       </Modal>

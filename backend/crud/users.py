@@ -4,17 +4,24 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from passlib.hash import bcrypt
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from database import get_session
 from models import UserRecord
 
 
-def create_user(username: str, password: str, is_admin: bool = False) -> UserRecord:
+def _resolve_db(db: Optional[Session] = None) -> tuple[Session, bool]:
+    """Return a session and whether it needs to be closed."""
+    if db is not None:
+        return db, False
+    return get_session(), True
+
+
+def create_user(username: str, password: str, is_admin: bool = False, db: Optional[Session] = None) -> UserRecord:
     """Create a new user. Raises ValueError if username already exists."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        existing = db.exec(
+        existing = session.exec(
             select(UserRecord).where(UserRecord.username == username)
         ).first()
         if existing:
@@ -25,22 +32,23 @@ def create_user(username: str, password: str, is_admin: bool = False) -> UserRec
             is_admin=is_admin,
             created_at=datetime.now(timezone.utc),
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
         return user
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def authenticate_user(username: str, password: str) -> Optional[UserRecord]:
+def authenticate_user(username: str, password: str, db: Optional[Session] = None) -> Optional[UserRecord]:
     """Verify username/password. Returns UserRecord on success, None on failure."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        user = db.exec(
+        user = session.exec(
             select(UserRecord).where(UserRecord.username == username)
         ).first()
         if not user:
@@ -49,25 +57,27 @@ def authenticate_user(username: str, password: str) -> Optional[UserRecord]:
             return None
         return user
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def get_user_by_id(user_id: int) -> Optional[UserRecord]:
+def get_user_by_id(user_id: int, db: Optional[Session] = None) -> Optional[UserRecord]:
     """Get a user by ID."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        return db.exec(
+        return session.exec(
             select(UserRecord).where(UserRecord.id == user_id)
         ).first()
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def change_password(user_id: int, old_password: str, new_password: str) -> bool:
+def change_password(user_id: int, old_password: str, new_password: str, db: Optional[Session] = None) -> bool:
     """Change a user's password. Returns True on success, False if old password is wrong."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        user = db.exec(
+        user = session.exec(
             select(UserRecord).where(UserRecord.id == user_id)
         ).first()
         if not user:
@@ -75,60 +85,64 @@ def change_password(user_id: int, old_password: str, new_password: str) -> bool:
         if not bcrypt.verify(old_password, user.password_hash):
             return False
         user.password_hash = bcrypt.hash(new_password)
-        db.commit()
+        session.commit()
         return True
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def list_users() -> list[UserRecord]:
+def list_users(db: Optional[Session] = None) -> list[UserRecord]:
     """List all users (admin panel)."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        results = db.exec(
+        results = session.exec(
             select(UserRecord).order_by(UserRecord.created_at.desc())
         ).all()
         return list(results)
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def admin_delete_user(target_user_id: int) -> bool:
+def admin_delete_user(target_user_id: int, db: Optional[Session] = None) -> bool:
     """Admin: delete a user (cannot delete self). Returns True if deleted."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        user = db.exec(
+        user = session.exec(
             select(UserRecord).where(UserRecord.id == target_user_id)
         ).first()
         if not user:
             return False
-        db.delete(user)
-        db.commit()
+        session.delete(user)
+        session.commit()
         return True
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()
 
 
-def admin_reset_user_password(target_user_id: int, new_password: str) -> bool:
+def admin_reset_user_password(target_user_id: int, new_password: str, db: Optional[Session] = None) -> bool:
     """Admin: reset a user's password. Returns True if successful."""
-    db = get_session()
+    session, close_db = _resolve_db(db)
     try:
-        user = db.exec(
+        user = session.exec(
             select(UserRecord).where(UserRecord.id == target_user_id)
         ).first()
         if not user:
             return False
         user.password_hash = bcrypt.hash(new_password)
-        db.commit()
+        session.commit()
         return True
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        db.close()
+        if close_db:
+            session.close()

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, memo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaItem, MediaImport, MediaSearchResult, SortField, SortDir } from "../types";
 import { parseCSV, parseMovieData } from "../utils/csv";
@@ -11,6 +11,7 @@ import { Pagination } from "./Pagination";
 import { ProgressiveImage } from "./ProgressiveImage";
 import { Upload, List, LayoutGrid, Loader2 } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { translateGenres, translateGenreName } from "../utils/genre";
 
 const SLIDER_BASE_CLASS = "h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
 const SLIDER_RANGE_CLASS = `${SLIDER_BASE_CLASS} w-14 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3`;
@@ -33,6 +34,8 @@ export function WatchedTab() {
   const [searchInput, setSearchInput] = useState("");
   const [ratingFilter, setRatingFilter] = useState("all");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState("all");
+  const [showAllGenres, setShowAllGenres] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -69,7 +72,7 @@ export function WatchedTab() {
 
   // ── Load data from API ──
 
-  const loadMovies = useCallback(async (page: number, search: string, sortF: string, sortD: string, rating: string, mediaType: string, signal?: AbortSignal) => {
+  const loadMovies = useCallback(async (page: number, search: string, sortF: string, sortD: string, rating: string, mediaType: string, genre: string, signal?: AbortSignal) => {
     setLoading(true);
     let ratingMin: number | undefined;
     let ratingMax: number | undefined;
@@ -89,6 +92,7 @@ export function WatchedTab() {
         rating_min: ratingMin,
         rating_max: ratingMax,
         media_type: (mediaType !== "all" ? mediaType : undefined),
+        genre: (genre !== "all" ? genre : undefined),
         signal,
       });
       if (signal?.aborted) return;
@@ -119,9 +123,9 @@ export function WatchedTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, controller.signal);
+    loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, controller.signal);
     return () => controller.abort();
-  }, [currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, reloadTrigger, loadMovies]);
+  }, [currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, reloadTrigger, loadMovies]);
 
   // Auto-refresh when background enrichment completes
   useEffect(() => {
@@ -413,6 +417,20 @@ export function WatchedTab() {
     [showToast, t]
   );
 
+  // Derive unique genre tags from loaded media
+  const uniqueGenres = useMemo(() => {
+    const set = new Set<string>();
+    media.forEach((m) => {
+      if (m.genre) {
+        m.genre.split("/").forEach((g) => {
+          const trimmed = g.trim();
+          if (trimmed) set.add(trimmed);
+        });
+      }
+    });
+    return Array.from(set).sort();
+  }, [media]);
+
   // ── Filtering & pagination ──
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -597,7 +615,7 @@ export function WatchedTab() {
                     <span className="font-medium truncate block">{r.title}</span>
                     <div className="flex items-center gap-2 mt-0.5">
                       {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
-                      {r.genre && <Badge variant="outline" className="text-[10px]">{r.genre}</Badge>}
+                      {r.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(r.genre)}</Badge>}
                       {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
                       <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
                     </div>
@@ -791,6 +809,29 @@ export function WatchedTab() {
             ))}
           </div>
 
+          {/* Genre Filter */}
+          {media.length > 0 && uniqueGenres.length > 0 && (
+            <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+              <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.genre_filter")}</span>
+              <button className={`pill ${genreFilter === "all" ? "active" : ""}`}
+                onClick={() => { setGenreFilter("all"); setCurrentPage(0); }}>{t("manage.media_type_all")}</button>
+              {(showAllGenres ? uniqueGenres : uniqueGenres.slice(0, 6)).map((g) => (
+                <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
+                  onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
+              ))}
+              {uniqueGenres.length > 6 && (
+                <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5"
+                  onClick={() => setShowAllGenres((v) => !v)}>
+                  {showAllGenres ? (
+                    <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
+                  ) : (
+                    <><span className="text-[10px]">▼</span> +{uniqueGenres.length - 6} {t("manage.genre_more")}</>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Loading state */}
           {loading ? (
             <div className="flex items-center justify-center py-10">
@@ -832,7 +873,7 @@ export function WatchedTab() {
               )}
 
               {/* Movie List / Grid */}
-              {media.length === 0 && (searchQuery || ratingFilter !== "all" || mediaTypeFilter !== "all") ? (
+              {media.length === 0 && (searchQuery || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all") ? (
                 <div className="text-center py-6 text-muted-foreground text-sm">
                   {t("watched.no_match")}
                 </div>
@@ -894,6 +935,7 @@ export function WatchedTab() {
                     setSearchQuery("");
                     setRatingFilter("all");
                     setMediaTypeFilter("all");
+                    setGenreFilter("all");
                     setCurrentPage(0);
                   }}
                 >

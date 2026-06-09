@@ -5,6 +5,7 @@ import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { useEnrich } from "../../context/EnrichContext";
 import { Badge } from "../ui/badge";
+import { translateGenres, translateGenreName } from "../../utils/genre";
 import { Separator } from "../ui/separator";
 import { Pagination } from "../Pagination";
 import { GenreInput } from "../GenreInput";
@@ -353,7 +354,7 @@ export function WishlistTab() {
                         <span className="font-medium truncate block">{r.title}</span>
                         <div className="flex items-center gap-2 mt-0.5">
                           {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
-                          {r.genre && <Badge variant="outline" className="text-[10px]">{r.genre}</Badge>}
+                          {r.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(r.genre)}</Badge>}
                           {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
                           <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
                         </div>
@@ -474,7 +475,7 @@ export function WishlistTab() {
                         <p className="text-sm font-[510]" style={{ color: "var(--seed-fg)" }}>{m.title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
                           {m.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{m.year}</span>}
-                          {m.genre && <span className="badge text-xs">{m.genre}</span>}
+                          {m.genre && <span className="badge text-xs">{translateGenres(m.genre)}</span>}
                           {m.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
                           {m.season_number != null && (
                             <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">

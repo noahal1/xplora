@@ -7,6 +7,7 @@ import { ProgressiveImage } from "../ProgressiveImage";
 import { Film, Sparkles, Pencil, X, Loader2 } from "lucide-react";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
+import { translateGenres } from "../../utils/genre";
 
 interface DetailModalProps {
   open: boolean;
@@ -37,6 +38,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         awards: movie.awards ?? "",
         tagline: movie.tagline ?? "",
         runtime: movie.runtime,
+        media_type: movie.media_type || "movie",
       });
     }
   }, [open, movie]);
@@ -51,11 +53,18 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
     if (!movie) return;
     setSaving(true);
     try {
+      const isMovie = form.media_type === "movie";
       const updated = await api.updateMedia(movie.id, {
         title: movie.title,
         rating: movie.rating,
         year: movie.year,
         genre: movie.genre,
+        media_type: form.media_type || "movie",
+        // Clear TV-specific fields when switching to movie
+        tv_series_id: isMovie ? null : movie.tv_series_id,
+        season_number: isMovie ? null : movie.season_number,
+        episode_count: isMovie ? null : movie.episode_count,
+        series_poster_url: isMovie ? null : movie.series_poster_url,
         overview: form.overview || null,
         director: form.director || null,
         actors: form.actors || null,
@@ -73,6 +82,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         awards: updated.awards ?? "",
         tagline: updated.tagline ?? "",
         runtime: updated.runtime,
+        media_type: updated.media_type || "movie",
       });
       // Optimistically update the movie object so view mode shows new data immediately
       Object.assign(movie, {
@@ -83,6 +93,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         awards: updated.awards,
         tagline: updated.tagline,
         runtime: updated.runtime,
+        media_type: updated.media_type,
       });
       // onSave triggers fetchData in ManageTab to refresh from server
       showToast(t("manage.updated"), "success");
@@ -96,24 +107,24 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
   }, [movie, form, showToast, t]);
 
   const startEditing = useCallback(() => {
-    if (!movie) return;
-    setForm({
-      overview: movie.overview ?? "",
-      director: movie.director ?? "",
-      actors: movie.actors ?? "",
-      country: movie.country ?? "",
-      awards: movie.awards ?? "",
-      tagline: movie.tagline ?? "",
-      runtime: movie.runtime,
-    });
-    setEditing(true);
-  }, [movie]);
+    if (!movie) return;      setForm({
+        overview: movie.overview ?? "",
+        director: movie.director ?? "",
+        actors: movie.actors ?? "",
+        country: movie.country ?? "",
+        awards: movie.awards ?? "",
+        tagline: movie.tagline ?? "",
+        runtime: movie.runtime,
+        media_type: movie.media_type || "movie",
+      });
+      setEditing(true);
+    }, [movie]);
 
   if (!movie) return null;
 
   const descParts = [];
   if (movie.year) descParts.push(movie.year);
-  if (movie.genre) descParts.push(movie.genre);
+  if (movie.genre) descParts.push(translateGenres(movie.genre));
   if (movie.runtime) descParts.push(`${movie.runtime} ${t("detail_modal.minutes")}`);
   const description = descParts.join(" · ");
 
@@ -136,6 +147,23 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       {editing ? (
         /* ── Edit Mode ──────────────────────────────────── */
         <div className="space-y-4">
+          {/* ── Media Type Toggle ──────────────────────── */}
+          <div>
+            <p className="text-xs text-muted-foreground font-medium mb-1.5 uppercase tracking-wider">{t("manage.media_type")}</p>
+            <div className="flex gap-1.5">
+              {[{ value: "movie", label: t("manage.media_type_movie") }, { value: "tv", label: t("manage.media_type_tv") }].map((opt) => (
+                <button key={opt.value} type="button"
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${
+                    form.media_type === opt.value
+                      ? "bg-primary/10 text-primary border-primary/25 shadow-sm"
+                      : "bg-muted/40 text-muted-foreground border-border/60 hover:border-primary/30 hover:text-foreground hover:bg-accent/40"
+                  }`}
+                  onClick={() => setForm(f => ({ ...f, media_type: opt.value }))}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <EditField label={t("detail_modal.overview")}>
             <textarea className="input-field w-full h-24 text-sm px-3 py-2 resize-y leading-relaxed"
               value={form.overview ?? ""}

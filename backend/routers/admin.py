@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlmodel import Session
 
 from auth import require_admin
 from config_manager import (
@@ -13,19 +14,20 @@ from config_manager import (
     API_KEY_NAMES,
 )
 from crud import log_operation
+from database import get_db
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 @router.get("/export")
-async def export_all_data(_admin: dict = Depends(require_admin)):
+async def export_all_data(
+    _admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     """Admin only: export all user data as JSON."""
-    from database import get_session
     from models import UserRecord, MediaItemRecord, SessionRecord, RecommendationRecord
 
-    db = get_session()
-    try:
-        users = db.query(UserRecord).all()
+    users = db.query(UserRecord).all()
         export = {
             "export_time": datetime.now(timezone.utc).isoformat(),
             "version": "2.0.0",
@@ -81,9 +83,6 @@ async def export_all_data(_admin: dict = Depends(require_admin)):
                 "Content-Disposition": f'attachment; filename="xplora-backup-{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}.json"',
             },
         )
-    finally:
-        db.close()
-
 
 @router.get("/config")
 async def get_config(
@@ -114,5 +113,5 @@ async def update_config(
             value = api_keys[key_name]
             set_config_api_key(key_name, value.strip() if value else "")
 
-    log_operation(_admin["id"], _admin["username"], "update_config", f"更新 API Key 配置")
+    log_operation(_admin["id"], _admin["username"], "update_config", "更新 API Key 配置", db=db)
     return {"status": "ok", "api_keys": get_config_status()}

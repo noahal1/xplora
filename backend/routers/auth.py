@@ -1,6 +1,7 @@
 """Authentication & user management endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session
 
 from auth import get_current_user, require_admin, create_token
 from crud import (
@@ -12,6 +13,7 @@ from crud import (
     change_password,
     log_operation,
 )
+from database import get_db
 from models import (
     LoginRequest,
     LoginResponse,
@@ -24,13 +26,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, db: Session = Depends(get_db)):
     """Login with username and password. Returns JWT token."""
-    user = authenticate_user(req.username, req.password)
+    user = authenticate_user(req.username, req.password, db=db)
     if not user:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     token = create_token(user.id, user.username, user.is_admin)
-    log_operation(user.id, user.username, "login", f"用户登录")
+    log_operation(user.id, user.username, "login", "用户登录", db=db)
     return LoginResponse(token=token, username=user.username, is_admin=user.is_admin)
 
 
@@ -44,11 +46,12 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 async def admin_create_user(
     req: CreateUserRequest,
     _admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
     """Admin only: create a new user account."""
     try:
-        user = create_user(req.username, req.password, is_admin=False)
-        log_operation(_admin["id"], _admin["username"], "admin_create_user", f"创建用户: {user.username}")
+        user = create_user(req.username, req.password, is_admin=False, db=db)
+        log_operation(_admin["id"], _admin["username"], "admin_create_user", f"创建用户: {user.username}", db=db)
         return UserInfo(
             id=user.id,
             username=user.username,
@@ -62,9 +65,10 @@ async def admin_create_user(
 @router.get("/users")
 async def admin_list_users(
     _admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
     """Admin only: list all users."""
-    users = list_users()
+    users = list_users(db=db)
     return {
         "users": [
             UserInfo(
@@ -82,14 +86,15 @@ async def admin_list_users(
 async def admin_delete_user_endpoint(
     user_id: int,
     admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
     """Admin only: delete a user account."""
     if user_id == admin["id"]:
         raise HTTPException(status_code=400, detail="不能删除自己的账号")
-    deleted = admin_delete_user(user_id)
+    deleted = admin_delete_user(user_id, db=db)
     if not deleted:
         raise HTTPException(status_code=404, detail="用户不存在")
-    log_operation(admin["id"], admin["username"], "admin_delete_user", f"删除用户: {user_id}")
+    log_operation(admin["id"], admin["username"], "admin_delete_user", f"删除用户: {user_id}", db=db)
     return {"status": "deleted"}
 
 
@@ -98,15 +103,16 @@ async def admin_reset_password_endpoint(
     user_id: int,
     req: dict,
     _admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
     """Admin only: reset a user's password."""
     new_password = req.get("new_password", "")
     if len(new_password) < 4:
         raise HTTPException(status_code=400, detail="密码长度不能少于4位")
-    success = admin_reset_user_password(user_id, new_password)
+    success = admin_reset_user_password(user_id, new_password, db=db)
     if not success:
         raise HTTPException(status_code=404, detail="用户不存在")
-    log_operation(_admin["id"], _admin["username"], "admin_reset_password", f"重置用户 {user_id} 密码")
+    log_operation(_admin["id"], _admin["username"], "admin_reset_password", f"重置用户 {user_id} 密码", db=db)
     return {"status": "ok", "message": "密码已重置"}
 
 
@@ -114,10 +120,11 @@ async def admin_reset_password_endpoint(
 async def change_my_password(
     req: ChangePasswordRequest,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Change the current user's password."""
-    success = change_password(current_user["id"], req.old_password, req.new_password)
+    success = change_password(current_user["id"], req.old_password, req.new_password, db=db)
     if not success:
         raise HTTPException(status_code=400, detail="原密码错误")
-    log_operation(current_user["id"], current_user["username"], "change_password", "修改密码")
+    log_operation(current_user["id"], current_user["username"], "change_password", "修改密码", db=db)
     return {"status": "ok", "message": "密码已更新"}

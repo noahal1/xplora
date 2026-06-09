@@ -6,6 +6,7 @@ import { useToast } from "../../context/ToastContext";
 import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
 import { Search, X, Film, AlertCircle, RefreshCw, Check, Loader2 } from "lucide-react";
+import { translateGenres } from "../../utils/genre";
 
 interface RematchModalProps {
   open: boolean;
@@ -130,7 +131,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
               </div>
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
                 {movie.year && <span className="tabular-nums">{movie.year}</span>}
-                {movie.genre && <span className="truncate max-w-[160px]">{movie.genre}</span>}
+                {movie.genre && <span className="truncate max-w-[160px]">{translateGenres(movie.genre)}</span>}
                 {movie.scrape_error && (
                   <span className="inline-flex items-center gap-1 text-destructive bg-destructive/5 px-1.5 py-0.5 rounded-full text-[10px]">
                     <AlertCircle size={10} />{t("manage.rematch_error")}
@@ -251,7 +252,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           {result.year && <span className="text-xs text-muted-foreground tabular-nums">{result.year}</span>}
-                          {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground truncate max-w-[120px]">{result.genre}</span>}
+                          {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground truncate max-w-[120px]">{translateGenres(result.genre)}</span>}
                           {result.season_number != null && (
                             <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
                               S{result.season_number}

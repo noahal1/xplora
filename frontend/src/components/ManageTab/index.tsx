@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail, MediaSearchResult } from "../../types";
 import * as api from "../../api";
@@ -7,6 +7,7 @@ import { useEnrich } from "../../context/EnrichContext";
 import { Badge } from "../ui/badge";
 import { Pagination } from "../Pagination";
 import { SkeletonTable } from "../Skeleton";
+import { translateGenres, translateGenreName } from "../../utils/genre";
 import { Modal } from "../Modal";
 import { Film, Upload, Plus, Search, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, AlertCircle, Star, X } from "lucide-react";
 
@@ -46,6 +47,8 @@ export function ManageTab() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [errorFilter, setErrorFilter] = useState(false);
   const [mediaTypeFilter, setMediaTypeFilter] = useState("");
+  const [genreFilter, setGenreFilter] = useState("");
+  const [showAllGenres, setShowAllGenres] = useState(false);
   const [sort, setSort] = useState<SortConfig>({ field: "created_at", dir: "desc" });
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
@@ -89,6 +92,7 @@ export function ManageTab() {
         sort_dir: sort.dir,
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
+        genre: genreFilter || undefined,
         signal,
       });
       if (signal?.aborted) return;
@@ -102,7 +106,7 @@ export function ManageTab() {
         setLoading(false);
       }
     }
-  }, [search, page, statusFilter, mediaTypeFilter, errorFilter, sort]);
+  }, [search, page, statusFilter, mediaTypeFilter, genreFilter, errorFilter, sort]);
 
   // Clear debounce timeout on unmount
   useEffect(() => {
@@ -278,6 +282,7 @@ export function ManageTab() {
         sort_dir: sort.dir,
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
+        genre: genreFilter || undefined,
       });
       if (allData.media.length === 0) return;
       const data = JSON.stringify({ movies: allData.media, exported_at: new Date().toISOString(), total: allData.total }, null, 2);
@@ -293,10 +298,26 @@ export function ManageTab() {
     } catch (err: any) {
       showToast(t("manage.export_failed", { message: err.message }), "error");
     }
-  }, [total, search, statusFilter, sort, errorFilter, mediaTypeFilter, showToast, t]);
+  }, [total, search, statusFilter, sort, errorFilter, mediaTypeFilter, genreFilter, showToast, t]);
 
   /* ── Pagination helpers ──────────────────────────────────────── */
   const totalPages = Math.ceil(total / MANAGE_PAGE_SIZE);
+
+  // Derive unique genre tags from loaded media list
+  const uniqueGenres = useMemo(() => {
+    const set = new Set<string>();
+    mediaList.forEach((m) => {
+      if (m.genre) {
+        m.genre.split("/").forEach((g) => {
+          const trimmed = g.trim();
+          if (trimmed) set.add(trimmed);
+        });
+      }
+    });
+    return Array.from(set).sort();
+  }, [mediaList]);
+
+  const VISIBLE_GENRES = 6;
 
   const SortArrow = ({ field }: { field: SortField }) => (
     <span className="text-[11px] ml-1 transition-opacity" style={{ opacity: sort.field === field ? 1 : 0.25 }}>
@@ -379,6 +400,29 @@ export function ManageTab() {
             onClick={() => { setMediaTypeFilter(opt.value); setPage(0); setSelected(new Set()); }}>{opt.label}</button>
         ))}
       </div>
+
+      {/* Genre Filter */}
+      {mediaList.length > 0 && uniqueGenres.length > 0 && (
+        <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <span className="text-xs text-muted-foreground mr-1">{t("manage.genre_filter")}</span>
+          <button className={`pill ${genreFilter === "" ? "active" : ""}`}
+            onClick={() => { setGenreFilter(""); setPage(0); setSelected(new Set()); }}>{t("manage.media_type_all")}</button>
+          {(showAllGenres ? uniqueGenres : uniqueGenres.slice(0, VISIBLE_GENRES)).map((g) => (
+            <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
+              onClick={() => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}>{translateGenreName(g)}</button>
+          ))}
+          {uniqueGenres.length > VISIBLE_GENRES && (
+            <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5"
+              onClick={() => setShowAllGenres((v) => !v)}>
+              {showAllGenres ? (
+                <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
+              ) : (
+                <><span className="text-[10px]">▼</span> +{uniqueGenres.length - VISIBLE_GENRES} {t("manage.genre_more")}</>
+              )}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Sort bar ────────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 mb-3.5 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
@@ -642,7 +686,7 @@ const ManageTableRow = memo(function ManageTableRow({
       </TableEditableCell>
       <TableEditableCell movie={movie} field="genre" editingCell={editingCell} sliderValue={sliderValue}
         onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
-        <span className="text-muted-foreground truncate block">{movie.genre || "—"}</span>
+        <span className="text-muted-foreground truncate block">{translateGenres(movie.genre) || "—"}</span>
       </TableEditableCell>
       <TableEditableCell movie={movie} field="created_at" editingCell={editingCell} sliderValue={sliderValue}
         onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
@@ -701,7 +745,8 @@ const ManageTableRow = memo(function ManageTableRow({
   if (nextEditing && prev.sliderValue !== next.sliderValue) return false;
 
   if (prev.enrichingIds.has(id) !== next.enrichingIds.has(id)) return false;
-  if (prev.editingCell?.movieId === id && prev.editingCell?.field !== next.editingCell?.field) return false;
+  // Re-render when editing starts, ends, or changes for this row
+  if (prev.editingCell?.movieId === id || next.editingCell?.movieId === id) return false;
 
   return true;
 });

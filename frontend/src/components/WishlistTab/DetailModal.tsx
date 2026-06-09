@@ -3,6 +3,7 @@ import type { MovieSearchResult, MovieDetail } from "../../types";
 import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
 import { ProgressiveImage } from "../ProgressiveImage";
+import { translateGenreName } from "../../utils/genre";
 
 interface DetailModalProps {
   open: boolean;
@@ -50,7 +51,7 @@ export function WishlistDetailModal({ open, movie, detailData, loading, error, o
               {detailData.genre && (
                 <div className="flex flex-wrap gap-1">
                   {detailData.genre.split(" / ").map((g) => (
-                    <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>
+                    <Badge key={g} variant="secondary" className="text-[10px]">{translateGenreName(g.trim())}</Badge>
                   ))}
                 </div>
               )}

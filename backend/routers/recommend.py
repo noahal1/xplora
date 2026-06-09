@@ -4,8 +4,10 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlmodel import Session
 
 from auth import get_current_user
+from database import get_db
 from helpers import parse_movie_data, get_api_key
 from ai_service import AIService
 from crud import save_session as db_save_session
@@ -21,6 +23,9 @@ router = APIRouter(prefix="/api/recommend", tags=["recommend"])
 
 
 # ── Helper: stream with persistence ─────────────────────────────────
+# Note: _stream_with_persistence is a generator used inside StreamingResponse,
+# which lives longer than the request scope. It manages its own DB session
+# by not passing db=db, letting save_session create its own session.
 
 
 def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None):
@@ -53,6 +58,8 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
                     for r in recommendations_cache
                 ]
                 if rec_models:
+                    # Uses its own session (no db=db) since streaming response
+                    # outlives the request-scoped DI session
                     db_save_session(
                         model=model,
                         source_count=len(movies),
@@ -71,6 +78,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
 async def recommend(
     request: RecommendationRequest,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Generate movie recommendations based on watched movies and ratings."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])

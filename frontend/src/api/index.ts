@@ -63,6 +63,7 @@ export async function listMedia(params: {
   rating_max?: number;
   has_error?: boolean;
   media_type?: string;
+  genre?: string;
   signal?: AbortSignal;
 }): Promise<{ media: MediaDetail[]; total: number }> {
   const qs = new URLSearchParams();
@@ -76,6 +77,7 @@ export async function listMedia(params: {
   if (params.rating_max !== undefined) qs.set("rating_max", String(params.rating_max));
   if (params.has_error) qs.set("has_error", "true");
   if (params.media_type) qs.set("media_type", params.media_type);
+  if (params.genre) qs.set("genre", params.genre);
   return fetchJSON(`${API_BASE}/media?${qs.toString()}`, { headers: getAuthHeaders(), signal: params.signal });
 }
 
