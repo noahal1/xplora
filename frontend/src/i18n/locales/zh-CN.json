@@ -26,7 +26,8 @@
     "watched": "看过",
     "wishlist": "想看",
     "recommend": "推荐",
-    "manage": "管理"
+    "manage": "管理",
+    "history": "历史"
   },
   "watched": {
     "title": "我看过的",

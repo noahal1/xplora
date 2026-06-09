@@ -26,7 +26,8 @@
     "watched": "Watched",
     "wishlist": "Wishlist",
     "recommend": "Recommend",
-    "manage": "Manage"
+    "manage": "Manage",
+    "history": "History"
   },
   "watched": {
     "title": "Watched Movies",
@@ -285,6 +286,10 @@
     "rematch_failed": "Match failed: {{message}}",
     "rematch_select": "Select",
     "rematch_current": "✓ Current",
+    "media_type": "Type:",
+    "media_type_all": "All",
+    "media_type_movie": "🎬 Movie",
+    "media_type_tv": "📺 TV",
     "scrape_source": "Scrape source:",
     "genre_filter": "Genre:",
     "genre_more": "more",
