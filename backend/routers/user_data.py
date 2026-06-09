@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
+from sqlmodel import Session
 
 from auth import get_current_user
+from database import get_db
 from crud import log_operation, save_media, save_wishlist_items
 from models import MediaRating, WishlistItem
 from scraper import async_background_enrich_movies
@@ -17,59 +19,55 @@ router = APIRouter(prefix="/api/user", tags=["user-data"])
 @router.get("/export")
 async def export_my_data(
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Export current user's data as JSON (movies + wishlist + sessions)."""
-    from database import get_session
     from models import MediaItemRecord, SessionRecord, RecommendationRecord
 
-    db = get_session()
-    try:
-        user_id = current_user["id"]
-        movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == user_id).all()
-        sessions = db.query(SessionRecord).filter(SessionRecord.user_id == user_id).all()
+    user_id = current_user["id"]
+    movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == user_id).all()
+    sessions = db.query(SessionRecord).filter(SessionRecord.user_id == user_id).all()
 
-        sessions_data = []
-        for s in sessions:
-            recs = db.query(RecommendationRecord).filter(RecommendationRecord.session_id == s.id).all()
-            sessions_data.append({
-                "id": s.id,
-                "model": s.model,
-                "source_count": s.source_count,
-                "created_at": s.created_at.isoformat(),
-                "recommendations": [
-                    {"title": r.title, "year": r.year, "genre": r.genre, "reason": r.reason, "confidence": r.confidence}
-                    for r in recs
-                ],
-            })
-
-        export = {
-            "export_time": datetime.now(timezone.utc).isoformat(),
-            "version": "2.0.0",
-            "username": current_user["username"],
-            "movies": [
-                {
-                    "id": m.id,
-                    "title": m.title,
-                    "rating": m.rating,
-                    "year": m.year,
-                    "genre": m.genre,
-                    "status": m.status,
-                    "created_at": m.created_at.isoformat(),
-                }
-                for m in movies
+    sessions_data = []
+    for s in sessions:
+        recs = db.query(RecommendationRecord).filter(RecommendationRecord.session_id == s.id).all()
+        sessions_data.append({
+            "id": s.id,
+            "model": s.model,
+            "source_count": s.source_count,
+            "created_at": s.created_at.isoformat(),
+            "recommendations": [
+                {"title": r.title, "year": r.year, "genre": r.genre, "reason": r.reason, "confidence": r.confidence}
+                for r in recs
             ],
-            "sessions": sessions_data,
-        }
+        })
 
-        return StreamingResponse(
-            iter([json.dumps(export, ensure_ascii=False, indent=2)]),
-            media_type="application/json",
-            headers={
-                "Content-Disposition": f'attachment; filename="xplora-{current_user["username"]}-{datetime.now(timezone.utc).strftime("%Y%m%d")}.json"',
-            },
-        )
-    finally:
-        db.close()
+    export = {
+        "export_time": datetime.now(timezone.utc).isoformat(),
+        "version": "2.0.0",
+        "username": current_user["username"],
+        "movies": [
+            {
+                "id": m.id,
+                "title": m.title,
+                "rating": m.rating,
+                "year": m.year,
+                "genre": m.genre,
+                "status": m.status,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in movies
+        ],
+        "sessions": sessions_data,
+    }
+
+    return StreamingResponse(
+        iter([json.dumps(export, ensure_ascii=False, indent=2)]),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="xplora-{current_user["username"]}-{datetime.now(timezone.utc).strftime("%Y%m%d")}.json"',
+        },
+    )
 
 
 @router.post("/import")
@@ -77,6 +75,7 @@ async def import_my_data(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Import movies from a previously exported JSON file.
 
@@ -129,10 +128,10 @@ async def import_my_data(
     total_records = []
     if watched_items:
         rating_items = [MediaRating(title=m["title"], rating=m["rating"], year=m["year"], genre=m.get("genre")) for m in watched_items]
-        total_records.extend(save_media(rating_items, current_user["id"], status="watched"))
+        total_records.extend(save_media(rating_items, current_user["id"], status="watched", db=db))
     if wish_items:
         wish_list = [WishlistItem(title=m["title"], year=m["year"], genre=m.get("genre")) for m in wish_items]
-        total_records.extend(save_wishlist_items(wish_list, current_user["id"]))
+        total_records.extend(save_wishlist_items(wish_list, current_user["id"], db=db))
 
     # Launch background metadata scraping for all imported records
     movie_ids = [r.id for r in total_records]
@@ -141,5 +140,5 @@ async def import_my_data(
 
     # Determine primary status type for response
     status_type = "watched" if len(watched_items) >= len(wish_items) else "wish"
-    log_operation(current_user["id"], current_user["username"], "import_data", f"导入数据: {len(total_records)} 部电影")
+    log_operation(current_user["id"], current_user["username"], "import_data", f"导入数据: {len(total_records)} 部电影", db=db)
     return {"status": "imported", "count": len(total_records), "status_type": status_type}

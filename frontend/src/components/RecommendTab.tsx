@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenreName, translateGenres } from "../utils/genre";
+import { useGenreExtractor } from "../hooks/useGenreExtractor";
 
 const VISIBLE_GENRES = 6;
 
@@ -99,18 +100,7 @@ export function RecommendTab() {
   }, [strategy, strategyMood, strategyYearStart, strategyYearEnd]);
 
   // Derive unique genre tags from watched movies
-  const uniqueGenres = useMemo(() => {
-    const set = new Set<string>();
-    movies.forEach((m) => {
-      if (m.genre) {
-        m.genre.split("/").forEach((g) => {
-          const trimmed = g.trim();
-          if (trimmed) set.add(trimmed);
-        });
-      }
-    });
-    return Array.from(set).sort();
-  }, [movies]);
+  const uniqueGenres = useGenreExtractor(movies);
 
   const filteredMovies = useMemo(() => {
     let result = mediaTypeFilter === "all" ? movies : movies.filter((m) => m.media_type === mediaTypeFilter);

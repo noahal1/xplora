@@ -3,9 +3,11 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from sqlmodel import Session
 
 from auth import require_admin
 from crud import get_operation_logs
+from database import get_db
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
@@ -17,6 +19,7 @@ async def list_logs(
     page: int = Query(0, ge=0, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
     _admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
     """Admin only: list operation logs with optional filters."""
     records, total = get_operation_logs(
@@ -24,6 +27,7 @@ async def list_logs(
         action=action,
         page=page,
         page_size=page_size,
+        db=db,
     )
     return {
         "logs": [

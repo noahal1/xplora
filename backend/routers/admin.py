@@ -28,61 +28,62 @@ async def export_all_data(
     from models import UserRecord, MediaItemRecord, SessionRecord, RecommendationRecord
 
     users = db.query(UserRecord).all()
-        export = {
-            "export_time": datetime.now(timezone.utc).isoformat(),
-            "version": "2.0.0",
-            "users": [],
-        }
-        for u in users:
-            user_movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == u.id).all()
-            user_sessions = db.query(SessionRecord).filter(SessionRecord.user_id == u.id).all()
+    export = {
+        "export_time": datetime.now(timezone.utc).isoformat(),
+        "version": "2.0.0",
+        "users": [],
+    }
+    for u in users:
+        user_movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == u.id).all()
+        user_sessions = db.query(SessionRecord).filter(SessionRecord.user_id == u.id).all()
 
-            sessions_data = []
-            for s in user_sessions:
-                recs = db.query(RecommendationRecord).filter(RecommendationRecord.session_id == s.id).all()
-                sessions_data.append({
-                    "id": s.id,
-                    "model": s.model,
-                    "source_count": s.source_count,
-                    "created_at": s.created_at.isoformat(),
-                    "recommendations": [
-                        {
-                            "title": r.title,
-                            "year": r.year,
-                            "genre": r.genre,
-                            "reason": r.reason,
-                            "confidence": r.confidence,
-                        }
-                        for r in recs
-                    ],
-                })
-
-            export["users"].append({
-                "id": u.id,
-                "username": u.username,
-                "is_admin": u.is_admin,
-                "created_at": u.created_at.isoformat(),
-                "movies": [
+        sessions_data = []
+        for s in user_sessions:
+            recs = db.query(RecommendationRecord).filter(RecommendationRecord.session_id == s.id).all()
+            sessions_data.append({
+                "id": s.id,
+                "model": s.model,
+                "source_count": s.source_count,
+                "created_at": s.created_at.isoformat(),
+                "recommendations": [
                     {
-                        "id": m.id,
-                        "title": m.title,
-                        "rating": m.rating,
-                        "year": m.year,
-                        "genre": m.genre,
-                        "created_at": m.created_at.isoformat(),
+                        "title": r.title,
+                        "year": r.year,
+                        "genre": r.genre,
+                        "reason": r.reason,
+                        "confidence": r.confidence,
                     }
-                    for m in user_movies
+                    for r in recs
                 ],
-                "sessions": sessions_data,
             })
 
-        return StreamingResponse(
-            iter([json.dumps(export, ensure_ascii=False, indent=2)]),
-            media_type="application/json",
-            headers={
-                "Content-Disposition": f'attachment; filename="xplora-backup-{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}.json"',
-            },
-        )
+        export["users"].append({
+            "id": u.id,
+            "username": u.username,
+            "is_admin": u.is_admin,
+            "created_at": u.created_at.isoformat(),
+            "movies": [
+                {
+                    "id": m.id,
+                    "title": m.title,
+                    "rating": m.rating,
+                    "year": m.year,
+                    "genre": m.genre,
+                    "created_at": m.created_at.isoformat(),
+                }
+                for m in user_movies
+            ],
+            "sessions": sessions_data,
+        })
+
+    return StreamingResponse(
+        iter([json.dumps(export, ensure_ascii=False, indent=2)]),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="xplora-backup-{datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")}.json"',
+        },
+    )
+
 
 @router.get("/config")
 async def get_config(
@@ -98,6 +99,7 @@ async def get_config(
 async def update_config(
     request: dict,
     _admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
 ):
     """Admin only: update API key configuration.
 

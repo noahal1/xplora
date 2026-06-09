@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useEffect, useMemo, memo } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaItem, MediaImport, MediaSearchResult, SortField, SortDir } from "../types";
+import type { MediaItem, MediaImport, MediaSearchResult, SortField } from "../types";
 import { parseCSV, parseMovieData } from "../utils/csv";
 import * as api from "../api";
 import { useToast } from "../context/ToastContext";
@@ -12,6 +12,10 @@ import { ProgressiveImage } from "./ProgressiveImage";
 import { Upload, List, LayoutGrid, Loader2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenres, translateGenreName } from "../utils/genre";
+import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
+import { useGenreExtractor } from "../hooks/useGenreExtractor";
+import { usePagination } from "../hooks/usePagination";
+import { useSort } from "../hooks/useSort";
 
 const SLIDER_BASE_CLASS = "h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
 const SLIDER_RANGE_CLASS = `${SLIDER_BASE_CLASS} w-14 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3`;
@@ -25,19 +29,17 @@ export function WatchedTab() {
   const { startPolling } = useEnrich();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [total, setTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchInput, setSearchInput] = useState("");
   const [ratingFilter, setRatingFilter] = useState("all");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
   const [genreFilter, setGenreFilter] = useState("all");
   const [showAllGenres, setShowAllGenres] = useState(false);
-  const [sortField, setSortField] = useState<SortField>("created_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const search = useDebouncedSearch("", 300);
+  const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
+  const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, 30);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -72,7 +74,7 @@ export function WatchedTab() {
 
   // ── Load data from API ──
 
-  const loadMovies = useCallback(async (page: number, search: string, sortF: string, sortD: string, rating: string, mediaType: string, genre: string, signal?: AbortSignal) => {
+  const loadMovies = useCallback(async (page: number, q: string, sortF: string, sortD: string, rating: string, mediaType: string, genre: string, signal?: AbortSignal) => {
     setLoading(true);
     let ratingMin: number | undefined;
     let ratingMax: number | undefined;
@@ -84,9 +86,9 @@ export function WatchedTab() {
     try {
       const data = await api.listMedia({
         page,
-        page_size: PAGE_SIZE,
+        page_size: 30,
         status: "watched",
-        search: search || undefined,
+        search: q || undefined,
         sort_field: sortF,
         sort_dir: sortD,
         rating_min: ratingMin,
@@ -123,9 +125,9 @@ export function WatchedTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadMovies(currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, controller.signal);
+    loadMovies(currentPage, search.debouncedValue, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, controller.signal);
     return () => controller.abort();
-  }, [currentPage, searchQuery, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, reloadTrigger, loadMovies]);
+  }, [currentPage, search.debouncedValue, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, reloadTrigger, loadMovies]);
 
   // Auto-refresh when background enrichment completes
   useEffect(() => {
@@ -194,7 +196,6 @@ export function WatchedTab() {
   // Clear debounce timeout on unmount
   useEffect(() => {
     return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
       if (externalSearchTimeoutRef.current) clearTimeout(externalSearchTimeoutRef.current);
     };
   }, []);
@@ -206,15 +207,14 @@ export function WatchedTab() {
   // ── Import helpers ──
 
   const saveAndReload = useCallback(
-    async (raw: MovieImport[], toastMsg: string) => {
+    async (raw: MediaImport[], toastMsg: string) => {
       try {
         await api.replaceMedia(raw);
         showToast(toastMsg, "success");
         // Start polling for background metadata enrichment
         startPolling();
         setCurrentPage(0);
-        setSearchInput("");
-        setSearchQuery("");
+        search.clear();
         setRatingFilter("all");
         setSelectedIds(new Set());
         setReloadTrigger((n) => n + 1);
@@ -226,14 +226,14 @@ export function WatchedTab() {
   );
 
   const importMovies = useCallback(
-    (raw: MovieImport[]) => {
+    (raw: MediaImport[]) => {
       saveAndReload(raw, t("watched_import.data_parsed", { count: raw.length }));
     },
     [saveAndReload, t]
   );
 
   const loadSampleData = useCallback(() => {
-    const sample: MovieImport[] = [
+    const sample: MediaImport[] = [
       { title: "The Shawshank Redemption", rating: 9.3, year: 1994, genre: "Drama" },
       { title: "The Dark Knight", rating: 9.0, year: 2008, genre: "Action / Crime" },
       { title: "Inception", rating: 8.8, year: 2010, genre: "Sci-Fi / Action" },
@@ -258,7 +258,7 @@ export function WatchedTab() {
       reader.onload = (e) => {
         try {
           const text = e.target?.result as string;
-          let movies: MovieImport[];
+          let movies: MediaImport[];
           if (name.endsWith(".json")) {
             const data = JSON.parse(text);
             movies = parseMovieData(data);
@@ -417,23 +417,12 @@ export function WatchedTab() {
     [showToast, t]
   );
 
-  // Derive unique genre tags from loaded media
-  const uniqueGenres = useMemo(() => {
-    const set = new Set<string>();
-    media.forEach((m) => {
-      if (m.genre) {
-        m.genre.split("/").forEach((g) => {
-          const trimmed = g.trim();
-          if (trimmed) set.add(trimmed);
-        });
-      }
-    });
-    return Array.from(set).sort();
-  }, [media]);
+  const uniqueGenres = useGenreExtractor(media);
 
-  // ── Filtering & pagination ──
-
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  // Reset page when search query changes
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [search.debouncedValue, ratingFilter, mediaTypeFilter, genreFilter]);
 
   // ── Render ──
 
@@ -697,27 +686,14 @@ export function WatchedTab() {
               <input
                 type="text"
                 placeholder={t("watched.search_placeholder")}
-                value={searchInput}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSearchInput(value);
-                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-                  searchTimeoutRef.current = setTimeout(() => {
-                    setSearchQuery(value);
-                    setCurrentPage(0);
-                  }, 300);
-                }}
+                value={search.input}
+                onChange={(e) => search.setInput(e.target.value)}
                 className="input-field pl-3 pr-8 py-2 h-auto text-sm"
               />
-              {searchQuery && (
+              {search.debouncedValue && (
                 <button
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-                    setSearchInput("");
-                    setSearchQuery("");
-                    setCurrentPage(0);
-                  }}
+                  onClick={search.clear}
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 6 6 18" />
@@ -748,15 +724,7 @@ export function WatchedTab() {
               <button
                 key={opt.field}
                 className={`pill ${sortField === opt.field ? "active" : ""}`}
-                onClick={() => {
-                  if (sortField === opt.field) {
-                    setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-                  } else {
-                    setSortField(opt.field);
-                    setSortDir(opt.field === "title" ? "asc" : "desc");
-                  }
-                  setCurrentPage(0);
-                }}
+                onClick={() => handleSortToggle(opt.field)}
               >
                 {opt.label}{" "}
                 {sortField === opt.field && (
@@ -873,7 +841,7 @@ export function WatchedTab() {
               )}
 
               {/* Movie List / Grid */}
-              {media.length === 0 && (searchQuery || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all") ? (
+              {media.length === 0 && (search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all") ? (
                 <div className="text-center py-6 text-muted-foreground text-sm">
                   {t("watched.no_match")}
                 </div>
@@ -924,15 +892,13 @@ export function WatchedTab() {
             <svg className="w-10 h-10 mb-3 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
             </svg>
-            {searchQuery || ratingFilter !== "all" ? (
+            {search.debouncedValue || ratingFilter !== "all" ? (
               <>
                 <p className="text-sm font-medium">{t("watched.no_match")}</p>
                 <button
                   className="btn btn-ghost btn-sm mt-3"
                   onClick={() => {
-                    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-                    setSearchInput("");
-                    setSearchQuery("");
+                    search.clear();
                     setRatingFilter("all");
                     setMediaTypeFilter("all");
                     setGenreFilter("all");

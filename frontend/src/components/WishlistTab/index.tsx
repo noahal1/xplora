@@ -1,16 +1,19 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { WishlistItem, MediaSearchResult, ExternalDetail, SortField, SortDir } from "../../types";
+import type { WishlistItem, MediaSearchResult, ExternalDetail, SortField } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { useEnrich } from "../../context/EnrichContext";
 import { Badge } from "../ui/badge";
-import { translateGenres, translateGenreName } from "../../utils/genre";
+import { translateGenres } from "../../utils/genre";
 import { Separator } from "../ui/separator";
 import { Pagination } from "../Pagination";
 import { GenreInput } from "../GenreInput";
 import { ProgressiveImage } from "../ProgressiveImage";
 import { Film, ChevronRight } from "lucide-react";
+import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
+import { usePagination } from "../../hooks/usePagination";
+import { useSort } from "../../hooks/useSort";
 
 import { WishlistDetailModal } from "./DetailModal";
 import { WishlistRatingModal } from "./RatingModal";
@@ -35,14 +38,14 @@ export function WishlistTab() {
   // ── Wishlist data ──
   const [items, setItems] = useState<WishlistEntry[]>([]);
   const [total, setTotal] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [filterQuery, setFilterQuery] = useState("");
-  const [filterInput, setFilterInput] = useState("");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
-  const [sortField, setSortField] = useState<SortField>("created_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [loading, setLoading] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  const search = useDebouncedSearch("", 300);
+  const filter = useDebouncedSearch("", 300);
+  const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
+  const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, 30);
 
   // === External search (TMDB / OMDb) ===
   const [externalQuery, setExternalQuery] = useState("");
@@ -52,7 +55,7 @@ export function WishlistTab() {
   const [searchError, setSearchError] = useState("");
   const [searchDone, setSearchDone] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const filterTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
@@ -109,15 +112,14 @@ export function WishlistTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadWishlist(currentPage, filterQuery, sortField, sortDir, mediaTypeFilter, controller.signal);
+    loadWishlist(currentPage, search.debouncedValue, sortField, sortDir, mediaTypeFilter, controller.signal);
     return () => controller.abort();
-  }, [currentPage, filterQuery, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
+  }, [currentPage, search.debouncedValue, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
 
   // Clear debounce timeouts on unmount
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-      if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
     };
   }, []);
 
@@ -128,7 +130,7 @@ export function WishlistTab() {
     return () => window.removeEventListener("enrich-done", handler);
   }, []);
 
-  const refreshWishlist = useCallback(() => { setCurrentPage(0); setFilterQuery(""); setReloadTrigger((n) => n + 1); }, []);
+  const refreshWishlist = useCallback(() => { setCurrentPage(0); search.clear(); setReloadTrigger((n) => n + 1); }, []);
 
   // ── Search results sort (memoised to avoid re-filter/sort on every render) ──
 
@@ -282,9 +284,6 @@ export function WishlistTab() {
     } catch (err: any) { showToast(t("wishlist.mark_failed", { message: err.message }), "error"); }
   }, [items, currentPage, showToast, t]);
 
-  // ── Pagination ──
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-
   return (
     <div className="space-y-5">
       {/* === External Search Section === */}
@@ -421,9 +420,10 @@ export function WishlistTab() {
             <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: total })}</span>
           </div>
           <div className="relative flex-1 mb-2">
-            <input type="text" id="wishlist-filter" placeholder={t("wishlist.filter_placeholder")} value={filterInput} onChange={(e) => { const value = e.target.value; setFilterInput(value); if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current); filterTimeoutRef.current = setTimeout(() => { setFilterQuery(value); setCurrentPage(0); }, 300); }}
-              className="input-field pl-3 pr-8 py-2 h-auto text-sm" />              {filterQuery && <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => { if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current); setFilterInput(""); setFilterQuery(""); setMediaTypeFilter("all"); setCurrentPage(0); }}>
+            <input type="text" id="wishlist-filter" placeholder={t("wishlist.filter_placeholder")} value={filter.input} onChange={(e) => filter.setInput(e.target.value)}
+              className="input-field pl-3 pr-8 py-2 h-auto text-sm" />
+            {filter.debouncedValue && <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => { filter.clear(); setMediaTypeFilter("all"); setCurrentPage(0); }}>
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
             </button>}
           </div>
@@ -431,7 +431,7 @@ export function WishlistTab() {
             <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.sort")}</span>
             {[{ field: "created_at" as SortField, label: t("manage.sort_import_time") }, { field: "title" as SortField, label: t("manage.sort_title") }, { field: "rating" as SortField, label: t("manage.sort_rating") }, { field: "year" as SortField, label: t("manage.sort_year") }].map((opt) => (
               <button key={opt.field} className={`pill ${sortField === opt.field ? "active" : ""}`}
-                onClick={() => { if (sortField === opt.field) setSortDir((d) => (d === "asc" ? "desc" : "asc")); else { setSortField(opt.field); setSortDir(opt.field === "title" ? "asc" : "desc"); } setCurrentPage(0); }}>
+                onClick={() => { handleSortToggle(opt.field); setCurrentPage(0); }}>
                 {opt.label} {sortField === opt.field && <span className="text-[10px]">{sortDir === "asc" ? "↑" : "↓"}</span>}
               </button>
             ))}
@@ -461,9 +461,9 @@ export function WishlistTab() {
           ) : (
             <>
               <div className="space-y-1.5">
-                {items.length === 0 && filterQuery ? (
+                {items.length === 0 && filter.debouncedValue ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">
-                    {mediaTypeFilter !== "all" ? t("manage.no_matching", { query: t(`manage.media_type_${mediaTypeFilter}`) }) : t("wishlist.no_matching", { query: filterQuery })}
+                    {mediaTypeFilter !== "all" ? t("manage.no_matching", { query: t(`manage.media_type_${mediaTypeFilter}`) }) : t("wishlist.no_matching", { query: filter.debouncedValue })}
                   </div>
                 ) : items.map((m) => (
                   <div key={m.id} className="card card-lift p-3.5 flex items-center justify-between cursor-pointer group" onClick={() => setMarkingMovie(m)}>

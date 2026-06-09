@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaDetail, MediaSearchResult } from "../../types";
+import type { MediaDetail, MediaSearchResult, SortField } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { useEnrich } from "../../context/EnrichContext";
@@ -10,6 +10,9 @@ import { SkeletonTable } from "../Skeleton";
 import { translateGenres, translateGenreName } from "../../utils/genre";
 import { Modal } from "../Modal";
 import { Film, Upload, Plus, Search, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, AlertCircle, Star, X } from "lucide-react";
+import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
+import { useGenreExtractor } from "../../hooks/useGenreExtractor";
+import { useSort } from "../../hooks/useSort";
 
 import { SearchImportModal } from "./SearchImportModal";
 import { DetailModal } from "./DetailModal";
@@ -18,11 +21,6 @@ import { MarkWatchedModal } from "./MarkWatchedModal";
 import { GenreEditModal } from "./GenreEditModal";
 
 const MANAGE_PAGE_SIZE = 30;
-
-/* ── Sort helpers ─────────────────────────────────────────────── */
-type SortField = "title" | "rating" | "year" | "genre" | "created_at";
-type SortDir = "asc" | "desc";
-interface SortConfig { field: SortField; dir: SortDir }
 
 /* ── Delete confirmation type ─────────────────────────────────── */
 type DeleteAction =
@@ -42,14 +40,13 @@ export function ManageTab() {
   const [error, setError] = useState("");
 
   const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const search = useDebouncedSearch("", 300);
+  const { field: sortField, dir: sortDir, toggle: handleSort } = useSort("created_at", "desc");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [errorFilter, setErrorFilter] = useState(false);
   const [mediaTypeFilter, setMediaTypeFilter] = useState("");
   const [genreFilter, setGenreFilter] = useState("");
   const [showAllGenres, setShowAllGenres] = useState(false);
-  const [sort, setSort] = useState<SortConfig>({ field: "created_at", dir: "desc" });
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const [editingCell, setEditingCell] = useState<{ movieId: number; field: string } | null>(null);
@@ -59,7 +56,6 @@ export function ManageTab() {
   const [markWatchedMovie, setMarkWatchedMovie] = useState<MediaDetail | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   /* ── Delete confirmation modal ───────────────────────────────── */
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteAction>(null);
@@ -84,12 +80,12 @@ export function ManageTab() {
     setError("");
     try {
       const data = await api.listMedia({
-        search,
+        search: search.debouncedValue || undefined,
         page,
         page_size: MANAGE_PAGE_SIZE,
         status: statusFilter || undefined,
-        sort_field: sort.field,
-        sort_dir: sort.dir,
+        sort_field: sortField,
+        sort_dir: sortDir,
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
         genre: genreFilter || undefined,
@@ -106,12 +102,9 @@ export function ManageTab() {
         setLoading(false);
       }
     }
-  }, [search, page, statusFilter, mediaTypeFilter, genreFilter, errorFilter, sort]);
+  }, [search.debouncedValue, page, statusFilter, mediaTypeFilter, genreFilter, errorFilter, sortField, sortDir]);
 
-  // Clear debounce timeout on unmount
-  useEffect(() => {
-    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
-  }, []);
+
 
   useEffect(() => {
     const controller = new AbortController();
@@ -126,20 +119,11 @@ export function ManageTab() {
     return () => window.removeEventListener("enrich-done", handler);
   }, [fetchData]);
 
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchInput(value);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => { setSearch(value); setPage(0); setSelected(new Set()); }, 300);
-  }, []);
-
-  const handleSort = useCallback((field: SortField) => {
-    setSort((prev) => {
-      const dir: SortDir = prev.field === field ? (prev.dir === "asc" ? "desc" : "asc") : "desc";
-      return { field, dir };
-    });
+  const handleSortClick = useCallback((field: SortField) => {
+    handleSort(field);
     setPage(0);
     setSelected(new Set());
-  }, []);
+  }, [handleSort]);
 
   useEffect(() => {
     if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && selected.size < mediaList.length;
@@ -276,10 +260,10 @@ export function ManageTab() {
       const allData = await api.listMedia({
         page: 0,
         page_size: total || 10000,
-        search: search || undefined,
+        search: search.debouncedValue || undefined,
         status: statusFilter || undefined,
-        sort_field: sort.field,
-        sort_dir: sort.dir,
+        sort_field: sortField,
+        sort_dir: sortDir,
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
         genre: genreFilter || undefined,
@@ -298,32 +282,23 @@ export function ManageTab() {
     } catch (err: any) {
       showToast(t("manage.export_failed", { message: err.message }), "error");
     }
-  }, [total, search, statusFilter, sort, errorFilter, mediaTypeFilter, genreFilter, showToast, t]);
+  }, [total, search.debouncedValue, statusFilter, sortField, sortDir, errorFilter, mediaTypeFilter, genreFilter, showToast, t]);
 
   /* ── Pagination helpers ──────────────────────────────────────── */
   const totalPages = Math.ceil(total / MANAGE_PAGE_SIZE);
 
   // Derive unique genre tags from loaded media list
-  const uniqueGenres = useMemo(() => {
-    const set = new Set<string>();
-    mediaList.forEach((m) => {
-      if (m.genre) {
-        m.genre.split("/").forEach((g) => {
-          const trimmed = g.trim();
-          if (trimmed) set.add(trimmed);
-        });
-      }
-    });
-    return Array.from(set).sort();
-  }, [mediaList]);
+  const uniqueGenres = useGenreExtractor(mediaList);
 
   const VISIBLE_GENRES = 6;
 
-  const SortArrow = ({ field }: { field: SortField }) => (
-    <span className="text-[11px] ml-1 transition-opacity" style={{ opacity: sort.field === field ? 1 : 0.25 }}>
-      {sort.field === field ? (sort.dir === "asc" ? "↑" : "↓") : "↓"}
-    </span>
-  );
+  const SortArrow = ({ field }: { field: SortField }) => {
+    return (
+      <span className="text-[11px] ml-1 transition-opacity" style={{ opacity: sortField === field ? 1 : 0.25 }}>
+        {sortField === field ? (sortDir === "asc" ? "↑" : "↓") : "↓"}
+      </span>
+    );
+  };
 
   
 
@@ -337,7 +312,7 @@ export function ManageTab() {
           <span className="badge font-mono text-xs shrink-0">{t("manage.total", { count: total })}</span>
         </h2>
         <div className="flex gap-1.5 items-center flex-wrap w-full sm:w-auto">
-          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={fetchData} title={t("manage.refresh")}>
+          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={() => fetchData()} title={t("manage.refresh")}>
             <RefreshCw size={13} /><span className="hidden sm:inline">{t("manage.refresh")}</span>
           </button>
           <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={handleExportMovies} title={t("manage.export")}>
@@ -357,12 +332,12 @@ export function ManageTab() {
       {/* ── Search & bulk actions ───────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-3">
         <div className="relative flex-1">
-          <input type="text" placeholder={t("manage.search_placeholder")} value={searchInput}
-            onChange={(e) => handleSearchChange(e.target.value)}
+          <input type="text" placeholder={t("manage.search_placeholder")} value={search.input}
+            onChange={(e) => { search.setInput(e.target.value); setPage(0); setSelected(new Set()); }}
             className="input-field pl-3 pr-8 py-2 h-auto text-sm" />
-          {search && (
+          {search.debouncedValue && (
             <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => { setSearchInput(""); setSearch(""); setPage(0); }}><X size={14} /></button>
+              onClick={() => { search.clear(); setPage(0); setSelected(new Set()); }}><X size={14} /></button>
           )}
         </div>
         <div className="flex gap-1.5 shrink-0 w-full sm:w-auto">
@@ -431,8 +406,8 @@ export function ManageTab() {
           { field: "title" as SortField, label: t("manage.sort_title") },
           { field: "rating" as SortField, label: t("manage.sort_rating") },
           { field: "year" as SortField, label: t("manage.sort_year") }]).map((s) => (
-          <button key={s.field} className={`pill ${sort.field === s.field ? "active" : ""}`}
-            onClick={() => handleSort(s.field)}>{s.label} <SortArrow field={s.field} /></button>
+          <button key={s.field} className={`pill ${sortField === s.field ? "active" : ""}`}
+            onClick={() => handleSortClick(s.field)}>{s.label} <SortArrow field={s.field} /></button>
         ))}
       </div>
 
@@ -453,7 +428,7 @@ export function ManageTab() {
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center"><X size={20} className="text-destructive" /></div>
           <p className="text-sm font-medium text-destructive">{t("manage.load_failed", { message: error })}</p>
-          <button className="btn btn-ghost btn-xs gap-1.5" onClick={fetchData}><RefreshCw size={12} />{t("manage.retry")}</button>
+          <button className="btn btn-ghost btn-xs gap-1.5" onClick={() => fetchData()}><RefreshCw size={12} />{t("manage.retry")}</button>
         </div>
       )}
 
@@ -461,9 +436,9 @@ export function ManageTab() {
       {!loading && !error && mediaList.length === 0 && (
         <div className="empty-state">
           <Film size={40} className="mb-3 opacity-40" />
-          <p className="text-sm font-medium">{search ? t("manage.no_matching", { query: search }) : t("manage.no_movies")}</p>
-          {search && <p className="text-xs mt-1 text-muted-foreground">{t("manage.try_other")}</p>}
-          {!search && <button className="btn btn-primary btn-sm mt-4 gap-1.5" onClick={openSearchDialog}><Plus size={13} />{t("manage.add_movie")}</button>}
+          <p className="text-sm font-medium">{search.debouncedValue ? t("manage.no_matching", { query: search.debouncedValue }) : t("manage.no_movies")}</p>
+          {search.debouncedValue && <p className="text-xs mt-1 text-muted-foreground">{t("manage.try_other")}</p>}
+          {!search.debouncedValue && <button className="btn btn-primary btn-sm mt-4 gap-1.5" onClick={openSearchDialog}><Plus size={13} />{t("manage.add_movie")}</button>}
         </div>
       )}
 
@@ -608,6 +583,7 @@ const ManageTableRow = memo(function ManageTableRow({
   editingCell: { movieId: number; field: string } | null;
   sliderValue: number;
   enrichingIds: Set<number>;
+  onToggle: (id: number) => void;
   onConfirmDelete: (movieId: number, title: string) => void;
   onSetDetailMovie: (movie: MediaDetail) => void;
   onSetRematchMovie: (movie: MediaDetail) => void;
