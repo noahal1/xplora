@@ -174,12 +174,57 @@ def _search_scrape(
 ) -> Optional[dict]:
     """Try a search function with each title variant until one matches.
 
+    If the title contains ``" / "`` (e.g. ``"千与千寻 / Spirited Away"``),
+    first tries a **dual-variant consensus** check: search the left and
+    right parts independently; if both match the same ``source_id``,
+    that is treated as the highest-confidence match and returned immediately.
+
+    If no consensus is found (or the title has no slash), falls back to
+    the normal per-variant search.
+
     If ``season_number`` is set and source is TMDB TV, the detail
     fetch also gets season-specific data.
 
     Returns the metadata dict on success, ``None`` otherwise.
     """
+    # ── Dual-variant consensus for " / " titles ─────────────────────
+    # When both the Chinese and English parts of a slash-separated title
+    # independently match the same source_id, we have extremely high
+    # confidence — no need to iterate variants separately.
+    if " / " in title:
+        parts = [p.strip() for p in title.split(" / ")]
+        # parts[0]=left side, parts[1]=right side (and beyond if multiple slashes)
+        part_results: list[Optional[dict]] = []
+        for p in parts:
+            p_results = search_fn(p)
+            if not p_results:
+                part_results.append(None)
+                continue
+            match = find_best_match(p_results, p, year)
+            part_results.append(match if match and match.get("source_id") else None)
+
+        # Check if at least two non-None matches agree on source_id
+        non_none = [r for r in part_results if r is not None]
+        if len(non_none) >= 2:
+            sid = non_none[0]["source_id"]
+            if all(r["source_id"] == sid for r in non_none[1:]):
+                logger.info(
+                    "Dual-variant consensus for '%s': both '%s' and '%s' agree on %s:%s",
+                    title, parts[0], parts[1], source, sid,
+                )
+                detail = try_fetch_detail(
+                    source, sid, title, year,
+                    media_type=media_type, season_number=season_number,
+                )
+                if detail:
+                    return detail
+
+    # ── Normal per-variant search ──────────────────────────────────
+    # Skip parts already searched by the consensus check above
+    already_searched = set(parts) if " / " in title else set()
     for variant in variants:
+        if variant in already_searched:
+            continue
         results = search_fn(variant)
         if not results:
             continue

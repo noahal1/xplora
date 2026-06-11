@@ -206,100 +206,127 @@ def word_overlap_ratio(a: str, b: str) -> float:
     return len(intersection) / min(len(words_a), len(words_b))
 
 
-def titles_match(a: str, b: str) -> bool:
-    """Check if two movie titles match, using progressively fuzzier strategies.
+def _title_similarity(a: str, b: str) -> float:
+    """Compute title similarity as a continuous score between 0.0 and 1.0.
 
-    1. Exact match (after basic normalization)
-    2. Substring match
-    3. Unicode-normalized + punctuation-stripped match
-    4. Word overlap >= 70%
+    Uses the same strategies as :func:`titles_match` but returns a graded
+    score instead of a boolean, allowing fine-grained ranking of candidates.
+
+    ======= ============================================================
+    Score   Condition
+    ======= ============================================================
+    1.00    Exact match (after basic normalization)
+    0.95    Substring match (one title is contained in the other)
+    0.90    Unicode-normalized + punctuation-stripped match
+    0.70–   Word overlap >= 70% (scaled linearly to 0.70–0.90)
+    0.50–   Word overlap 50–70% (scaled linearly to 0.50–0.70)
+    0.30–   Word overlap 30–50% (scaled linearly to 0.30–0.50)
+    0.00    Below confidence — no meaningful similarity
+    ======= ============================================================
     """
     a = normalize(a)
     b = normalize(b)
     if not a or not b:
-        return False
+        return 0.0
 
-    # Strategy 1: Exact or substring
-    if a == b or a in b or b in a:
-        return True
+    # 1.00: Exact match
+    if a == b:
+        return 1.0
 
-    # Strategy 2: Remove accents + punctuation, then compare
+    # 0.95: Substring match
+    if a in b or b in a:
+        return 0.95
+
+    # 0.90: Unicode-normalized + punctuation-stripped match
     a_clean = remove_special_chars(normalize_unicode(a))
     b_clean = remove_special_chars(normalize_unicode(b))
     if not a_clean or not b_clean:
-        return False
-    if a_clean == b_clean or a_clean in b_clean or b_clean in a_clean:
-        return True
+        return 0.0
+    if a_clean == b_clean:
+        return 0.9
 
-    # Strategy 3: Word overlap fuzzy matching
-    if word_overlap_ratio(a, b) >= 0.7:
-        return True
+    # Graded word overlap
+    overlap = word_overlap_ratio(a, b)
+    if overlap >= 0.7:
+        return 0.70 + (overlap - 0.7) * (0.20 / 0.30)
+    elif overlap >= 0.5:
+        return 0.50 + (overlap - 0.5) * (0.20 / 0.20)
+    elif overlap >= 0.3:
+        return 0.30 + (overlap - 0.3) * (0.20 / 0.20)
 
-    return False
+    return 0.0
 
 
 def find_best_match(results: list[dict], title: str, year: Optional[int]) -> Optional[dict]:
-    """Find the best matching TMDB result using fuzzy title similarity + year.
+    """Find the best matching result using scored ranking.
 
-    Priority:
-    1. Original title fuzzy match + year match
-    2. Localized title fuzzy match + year match
-    3. Year match + weak title overlap
-    4. Original title fuzzy match (no year)
-    5. Localized title fuzzy match (no year)
-    6. Word-overlap >= 50% (lenient fallback)
-    7. ``None`` — no confident match (avoids attaching wrong metadata)
+    Scores **all** candidates on a continuous scale rather than returning
+    the first match at each priority level.  This correctly handles cases
+    where TMDB returns multiple similar results — the best title match wins,
+    not whichever TMDB happened to rank first by popularity.
+
+    Scoring:
+    - **Title similarity** (primary): compares ``title`` against both the
+      result's localized ``title`` and ``original_title`` via
+      :func:`_title_similarity`, taking the better score.  Falls back to
+      word overlap on the concatenated original + localized title.
+    - **Year boost**: if the result's year matches the target year **and**
+      there is meaningful title similarity (score >= 0.3), the title score
+      is multiplied by 1.3\u00d7.
+    - **Minimum threshold**: results scoring below 0.30 are rejected to
+      avoid attaching completely wrong metadata.
+
+    Returns the highest-scoring result, or ``None`` if no result meets
+    the minimum bar.
     """
     if not results:
         return None
 
-    # Priority 1: original_title + year (best evidence)
-    if year:
-        for r in results:
-            ot = r.get("original_title") or ""
-            if titles_match(ot, title) and r.get("year") == year:
-                return r
+    _MIN_CONFIDENCE = 0.30
+    best_score = 0.0
+    best_result = None
 
-    # Priority 2: localized title + year
-    if year:
-        for r in results:
-            rt = r.get("title") or ""
-            if titles_match(rt, title) and r.get("year") == year:
-                return r
-
-    # Priority 3: year match + at least some title overlap
-    if year:
-        for r in results:
-            if r.get("year") == year:
-                ot = r.get("original_title") or ""
-                rt = r.get("title") or ""
-                combined = f"{ot} {rt}"
-                if word_overlap_ratio(combined, title) >= 0.3:
-                    return r
-
-    # Priority 4: original_title fuzzy match (no year)
-    for r in results:
-        ot = r.get("original_title") or ""
-        if titles_match(ot, title):
-            return r
-
-    # Priority 5: localized title fuzzy match (no year)
     for r in results:
         rt = r.get("title") or ""
-        if titles_match(rt, title):
-            return r
-
-    # Priority 6: word-overlap >= 50% (fallback for heavily different titles)
-    for r in results:
         ot = r.get("original_title") or ""
-        rt = r.get("title") or ""
-        combined = f"{ot} {rt}"
-        if word_overlap_ratio(combined, title) >= 0.5:
-            return r
 
-    # No good match found — return None rather than attaching wrong metadata
-    logger.info(
-        "No confident match for '%s' (year=%s) among %d results",
-        title, year, len(results),
-    )
-    return None
+        # Title similarity: best of localized and original title
+        candidates = []
+        if rt:
+            candidates.append(rt)
+        if ot and ot != rt:
+            candidates.append(ot)
+        if candidates:
+            title_score = max(_title_similarity(title, c) for c in candidates)
+        else:
+            title_score = 0.0
+
+        # Fallback: combined original + localized for word overlap
+        # (e.g. when search term shares words across both titles)
+        if not title_score:
+            combined = f"{ot} {rt}".strip()
+            if combined:
+                overlap = word_overlap_ratio(combined, title)
+                if overlap >= 0.3:
+                    title_score = overlap
+
+        # Year boost: 1.3x multiplier, requires meaningful title overlap
+        year_mult = 1.0
+        if year is not None and r.get("year") == year and title_score >= 0.3:
+            year_mult = 1.3
+
+        score = title_score * year_mult
+
+        if score > best_score:
+            best_score = score
+            best_result = r
+
+    if best_score < _MIN_CONFIDENCE:
+        logger.info(
+            "No confident match for '%s' (year=%s) — "
+            "best score %.3f < %.2f threshold among %d results",
+            title, year, best_score, _MIN_CONFIDENCE, len(results),
+        )
+        return None
+
+    return best_result

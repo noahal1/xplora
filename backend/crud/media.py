@@ -434,11 +434,27 @@ def enrich_media_metadata(
             if key in metadata and metadata[key] is not None:
                 setattr(record, attr, metadata[key])
 
-        # Update year from scraped data ONLY for movies (not TV series,
-        # where the year is the series' first air date and may not match
-        # the specific season the user imported).
-        if metadata.get("media_type") != "tv" and "year" in metadata and metadata["year"] is not None:
-            record.year = metadata["year"]
+        # ── Update year from scraped data ─────────────────────────────
+        # For movies: use TMDB release_date directly.
+        # For TV series: prefer the season's air date over the series'
+        # first air date.  e.g. "黑袍纠察队 第四季" aired in 2022,
+        # but the series premiered in 2019 — the season air date is
+        # far more useful.
+        if "year" in metadata and metadata["year"] is not None:
+            if metadata.get("media_type") == "tv":
+                season_air = metadata.get("season_air_date")
+                if season_air:
+                    try:
+                        season_year = int(str(season_air)[:4])
+                        record.year = season_year
+                    except (ValueError, TypeError):
+                        # season_air_date is not parseable — fall back
+                        # to the series first air year
+                        record.year = metadata["year"]
+                else:
+                    record.year = metadata["year"]
+            else:
+                record.year = metadata["year"]
 
         session.commit()
         session.refresh(record)
