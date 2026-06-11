@@ -71,7 +71,9 @@
     "add_failed": "Add failed: {{message}}",
     "search_hint": "Search movies from TMDB or TVmaze and add them to your watched list",
     "view_list": "List",
-    "view_grid": "Grid"
+    "view_grid": "Grid",
+    "edit": "Edit",
+    "edit_rating": "Edit rating"
   },
   "watched_import": {
     "sample_data_loaded": "Sample data loaded!",

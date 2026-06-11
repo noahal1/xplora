@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaItem, MediaImport, MediaSearchResult, SortField } from "../types";
+import type { MediaImport, MediaDetail, MediaSearchResult, SortField } from "../types";
 import { parseCSV, parseMovieData } from "../utils/csv";
 import * as api from "../api";
 import { useToast } from "../context/ToastContext";
@@ -9,7 +9,8 @@ import { Separator } from "./ui/separator";
 import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
 import { ProgressiveImage } from "./ProgressiveImage";
-import { Upload, List, LayoutGrid, Loader2 } from "lucide-react";
+import { DetailModal } from "./ManageTab/DetailModal";
+import { Upload, List, LayoutGrid, Loader2, Film } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenres, translateGenreName } from "../utils/genre";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
@@ -30,7 +31,7 @@ export function WatchedTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
-  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [media, setMedia] = useState<MediaDetail[]>([]);
   const [total, setTotal] = useState(0);
   const [ratingFilter, setRatingFilter] = useState("all");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
@@ -45,6 +46,7 @@ export function WatchedTab() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
+  const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
   const [showSampleModal, setShowSampleModal] = useState(false);
   const [jsonText, setJsonText] = useState("");
 
@@ -98,21 +100,7 @@ export function WatchedTab() {
         signal,
       });
       if (signal?.aborted) return;
-      setMedia(
-        data.media.map((m) => ({
-          id: m.id,
-          title: m.title,
-          rating: m.rating,
-          year: m.year,
-          genre: m.genre,
-          poster_url: m.poster_url,
-          media_type: m.media_type,
-          tv_series_id: m.tv_series_id,
-          season_number: m.season_number,
-          episode_count: m.episode_count,
-          series_poster_url: m.series_poster_url,
-        }))
-      );
+      setMedia(data.media);
       setTotal(data.total);
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
@@ -855,6 +843,7 @@ export function WatchedTab() {
                       onToggle={toggleSelection}
                       onRemove={removeMovie}
                       onSaveRating={handleSaveRating}
+                      onOpenDetail={setDetailMovie}
                     />
                   ))}
                 </div>
@@ -868,6 +857,7 @@ export function WatchedTab() {
                       onToggle={toggleSelection}
                       onRemove={removeMovie}
                       onSaveRating={handleSaveRating}
+                      onOpenDetail={setDetailMovie}
                     />
                   ))}
                 </div>
@@ -999,25 +989,31 @@ export function WatchedTab() {
           </div>
         </div>
       </Modal>
+
+      {/* === Saved Item Detail Modal === */}
+      <DetailModal
+        open={detailMovie !== null}
+        movie={detailMovie}
+        onClose={() => setDetailMovie(null)}
+      />
     </div>
   );
 }
 
-/* ── Memo-ized grid card — local editing state prevents slider-drag
-   from re-rendering all 30 grid items ────────────────────────── */
-const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle, onRemove, onSaveRating }: {
-  movie: MediaItem;
+/* ── Memo-ized grid card — cinematic poster with overlay ─────── */
+const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
+  movie: MediaDetail;
   isSelected: boolean;
   onToggle: (id: number) => void;
   onRemove: (id: number) => void;
   onSaveRating: (id: number, rating: number) => Promise<void>;
+  onOpenDetail: (movie: MediaDetail) => void;
 }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [localSlider, setLocalSlider] = useState(movie.rating);
   const [justSaved, setJustSaved] = useState(false);
 
-  // Reset when movie changes (page navigation)
   useEffect(() => { setEditing(false); setLocalSlider(movie.rating); setJustSaved(false); }, [movie.id, movie.rating]);
 
   const handleStartEdit = useCallback(() => {
@@ -1035,69 +1031,98 @@ const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle,
   const handleCancel = useCallback(() => setEditing(false), []);
 
   return (
-    <div className={`card card-lift group relative overflow-hidden ${isSelected ? "card-glow" : ""}`}>
-      <input type="checkbox" className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer"
+    <div className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
+      {/* Checkbox — shown on hover */}
+      <input type="checkbox"
+        className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         checked={isSelected} onChange={() => onToggle(movie.id)} />
-      <button className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 rounded-md bg-background/80 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
-        onClick={() => onRemove(movie.id)} title={t("watched.remove")}>
-        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      {/* Delete button — shown on hover */}
+      <button
+        className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-red-500/80 hover:text-white transition-all duration-200 backdrop-blur-sm"
+        onClick={(e) => { e.stopPropagation(); onRemove(movie.id); }} title={t("watched.remove")}>
+        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
       </button>
-      <div className="aspect-[2/3] bg-muted overflow-hidden">
+      {/* Poster */}
+      <div className="aspect-[2/3] relative cursor-pointer overflow-hidden" onClick={() => onOpenDetail(movie)}>
         {movie.poster_url ? (
-          <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
+          <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-3xl opacity-40">🎬</div>
+          <div className="w-full h-full flex items-center justify-center text-4xl opacity-30 bg-muted/40">🎬</div>
         )}
-      </div>
-      <div className="p-2.5">
-        <div className="truncate font-medium text-sm" title={movie.title}>{movie.title}</div>
-        <div className="flex items-center justify-between gap-1 mt-1">
-          <span className="flex items-center gap-1.5">
-            <span className="shrink-0 text-xs text-muted-foreground">{movie.year ?? ""}</span>
-            {movie.media_type === "tv" && (
-              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
-            )}
-            {movie.season_number != null && (
-              <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
-                S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
-              </Badge>
-            )}
+        {/* Gradient overlay for text readability */}
+        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
+        {/* Year badge top-left */}
+        {movie.year && (
+          <div className="absolute top-2 left-2 z-10">
+            <span className="text-[10px] font-semibold text-white bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md">{movie.year}</span>
+          </div>
+        )}
+        {/* TV badge */}
+        {movie.media_type === "tv" && (
+          <div className="absolute top-2 left-2 z-10" style={{ marginTop: movie.year ? '18px' : '0' }}>
+            <Badge className="text-[9px] text-sky-200 border-sky-400/40 bg-sky-500/20 backdrop-blur-sm">TV</Badge>
+          </div>
+        )}
+        {/* Rating badge top-right */}
+        <div className="absolute top-2 right-2 z-10">
+          <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-amber bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-full">
+            ★ {movie.rating.toFixed(1)}
           </span>
-          {editing ? (
-            <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <input type="range" min={0} max={10} step={0.5} value={localSlider}
-                onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
-                onMouseUp={handleSave} onTouchEnd={handleSave}
-                onBlur={handleSave}
-                onKeyDown={(e) => { if (e.key === "Escape") handleCancel(); if (e.key === "Enter") handleSave(); }}
-                className={SLIDER_RANGE_CLASS} autoFocus />
-              <span className="text-amber font-medium text-xs min-w-[24px] text-center count-badge" key={localSlider}>
-                {localSlider.toFixed(1)}
-              </span>
+        </div>
+        {/* Title on poster */}
+        <div className="absolute bottom-0 inset-x-0 p-2.5 z-10">
+          <div className="font-semibold text-sm text-white leading-tight line-clamp-2 drop-shadow-sm">{movie.title}</div>
+          {/* Season info */}
+          {movie.season_number != null && (
+            <div className="flex items-center gap-1 mt-1">
+              <Badge className="text-[9px] text-violet-200 border-violet-400/40 bg-violet-500/20 backdrop-blur-sm leading-none px-1.5 py-0.5">
+                S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-80">· {movie.episode_count}ep</span>}
+              </Badge>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Rating editing */}
+      <div className="px-2.5 py-2 border-t border-border/50">
+        {editing ? (
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <input type="range" min={0} max={10} step={0.5} value={localSlider}
+              onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+              onMouseUp={handleSave} onTouchEnd={handleSave}
+              onBlur={handleSave}
+              onKeyDown={(e) => { if (e.key === "Escape") handleCancel(); if (e.key === "Enter") handleSave(); }}
+              className={SLIDER_RANGE_CLASS} autoFocus />
+            <span className="text-amber font-semibold text-xs min-w-[24px] text-center count-badge" key={localSlider}>
+              {localSlider.toFixed(1)}
             </span>
-          ) : (
-            <span className={`inline-flex items-center gap-1 text-xs cursor-pointer border-b border-dashed ${justSaved ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center">
+            <span
+              className={`inline-flex items-center gap-1 text-xs cursor-pointer transition-all duration-200 px-2 py-0.5 rounded-full hover:bg-amber/10 ${justSaved ? 'text-green' : 'text-muted-foreground hover:text-amber'}`}
               onClick={handleStartEdit} title={t("watched.click_to_edit")}>
               <span className="text-amber">★</span>
               {justSaved && <span className="text-green text-[10px]">✓</span>}
-              <span>{movie.rating.toFixed(1)}</span>
+              <span className="font-semibold">{movie.rating.toFixed(1)}</span>
+              <span className="text-[9px] opacity-50 ml-0.5">{t("watched.edit")}</span>
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
 });
 
-/* ── Memo-ized list item — local editing state prevents slider-drag
-   from re-rendering all 30 list rows ─────────────────────────── */
-const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle, onRemove, onSaveRating }: {
-  movie: MediaItem;
+/* ── Memo-ized list item — rich layout with poster & metadata ── */
+const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
+  movie: MediaDetail;
   isSelected: boolean;
   onToggle: (id: number) => void;
   onRemove: (id: number) => void;
   onSaveRating: (id: number, rating: number) => Promise<void>;
+  onOpenDetail: (movie: MediaDetail) => void;
 }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
@@ -1121,47 +1146,78 @@ const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle,
   const handleCancel = useCallback(() => setEditing(false), []);
 
   return (
-    <div className={`card card-lift p-3 flex items-center gap-2.5 text-sm transition-all ${isSelected ? "border-primary/20" : ""}`}>
-      <input type="checkbox" className="shrink-0 w-4 h-4 accent-primary"
+    <div
+      className={`group flex items-center gap-3.5 p-3 rounded-xl transition-all duration-200 hover:-translate-y-0.5 ${isSelected ? "ring-1 ring-primary/30" : ""}`}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
+      <input type="checkbox" className="shrink-0 w-4 h-4 accent-primary cursor-pointer"
         checked={isSelected} onChange={() => onToggle(movie.id)} />
-      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-        <span className="truncate max-w-[180px] font-medium" title={movie.title}>{movie.title}</span>
-        {movie.media_type === "tv" && (
-          <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+      {/* Poster */}
+      <div
+        className="w-12 h-[72px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-sm transition-transform duration-200 group-hover:scale-[1.04]"
+        style={{ border: "1px solid var(--border-subtle)" }}
+        onClick={() => onOpenDetail(movie)}>
+        {movie.poster_url ? (
+          <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
+        ) : (
+          <Film size={18} className="text-muted-foreground/30" />
         )}
-        {movie.season_number != null && (
-          <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
-            S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
-          </Badge>
-        )}
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {editing ? (
-            <span className="inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <input type="range" min={0} max={10} step={0.5} value={localSlider}
-                onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
-                onMouseUp={handleSave} onTouchEnd={handleSave}
-                onBlur={handleSave}
-                onKeyDown={(e) => { if (e.key === "Escape") handleCancel(); if (e.key === "Enter") handleSave(); }}
-                className={SLIDER_RANGE_CLASS_LIST} autoFocus />
-              <span className="text-amber font-medium min-w-[28px] text-center count-badge" key={localSlider}>
-                {localSlider.toFixed(1)}
-              </span>
-            </span>
-          ) : (
-            <span className={`inline-flex items-center gap-1 cursor-pointer border-b border-dashed ${justSaved ? 'border-green saved-confirm' : 'border-border hover:border-primary'}`}
-              onClick={handleStartEdit} title={t("watched.click_to_edit")}>
-              <span className="text-amber">★</span>
-              {justSaved && <span className="text-green text-[10px]">✓</span>}
-              <span>{movie.rating.toFixed(1)}</span>
+      </div>
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-sm truncate" title={movie.title}>{movie.title}</span>
+          {movie.media_type === "tv" && (
+            <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0 leading-none">TV</Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {movie.year && <span className="text-xs text-muted-foreground font-medium">{movie.year}</span>}
+          {movie.runtime && <span className="text-xs text-muted-foreground/60">{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
+          {movie.genre && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/70 border border-primary/15">
+              {translateGenres(movie.genre)}
             </span>
           )}
-        </span>
+          {movie.season_number != null && (
+            <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
+              S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
+            </Badge>
+          )}
+        </div>
+        {movie.director && (
+          <p className="text-[11px] text-muted-foreground/50 mt-0.5 truncate">{movie.director}</p>
+        )}
       </div>
-      <button className="text-muted-foreground hover:text-destructive transition-colors"
-        onClick={() => onRemove(movie.id)} title={t("watched.remove")}>
-        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-      </button>
+      {/* Rating + Actions */}
+      <div className="flex items-center gap-2 shrink-0">
+        {editing ? (
+          <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <input type="range" min={0} max={10} step={0.5} value={localSlider}
+              onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+              onMouseUp={handleSave} onTouchEnd={handleSave}
+              onBlur={handleSave}
+              onKeyDown={(e) => { if (e.key === "Escape") handleCancel(); if (e.key === "Enter") handleSave(); }}
+              className={SLIDER_RANGE_CLASS_LIST} autoFocus />
+            <span className="text-amber font-semibold min-w-[28px] text-center text-sm count-badge" key={localSlider}>
+              {localSlider.toFixed(1)}
+            </span>
+          </span>
+        ) : (
+          <span
+            className={`inline-flex items-center gap-1 cursor-pointer transition-all duration-200 px-2 py-1 rounded-lg hover:bg-amber/10 ${justSaved ? 'text-green' : ''}`}
+            onClick={handleStartEdit} title={t("watched.click_to_edit")}>
+            <span className="text-amber text-base leading-none">★</span>
+            {justSaved && <span className="text-green text-[10px]">✓</span>}
+            <span className="font-bold text-sm">{movie.rating.toFixed(1)}</span>
+          </span>
+        )}
+        <button
+          className="flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all duration-200 opacity-0 group-hover:opacity-100"
+          onClick={() => onRemove(movie.id)} title={t("watched.remove")}>
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+        </button>
+      </div>
     </div>
   );
 });

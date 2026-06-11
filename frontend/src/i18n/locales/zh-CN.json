@@ -71,7 +71,9 @@
     "add_failed": "添加失败：{{message}}",
     "search_hint": "从 TMDB 或 TVmaze 搜索电影并添加到已看列表",
     "view_list": "列表",
-    "view_grid": "网格"
+    "view_grid": "网格",
+    "edit": "编辑",
+    "edit_rating": "修改评分"
   },
   "watched_import": {
     "sample_data_loaded": "已加载示例数据！",

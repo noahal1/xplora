@@ -10,6 +10,7 @@ import { Separator } from "../ui/separator";
 import { Pagination } from "../Pagination";
 import { GenreInput } from "../GenreInput";
 import { ProgressiveImage } from "../ProgressiveImage";
+import { DetailModal } from "../ManageTab/DetailModal";
 import { Film, ChevronRight } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { usePagination } from "../../hooks/usePagination";
@@ -26,6 +27,17 @@ interface WishlistEntry {
   media_type?: string;
   season_number?: number | null;
   episode_count?: number | null;
+  poster_url?: string | null;
+  overview?: string | null;
+  director?: string | null;
+  actors?: string | null;
+  runtime?: number | null;
+  imdb_id?: string | null;
+  tmdb_id?: string | null;
+  country?: string | null;
+  awards?: string | null;
+  tagline?: string | null;
+  series_poster_url?: string | null;
 }
 
 const PAGE_SIZE = 30;
@@ -76,11 +88,14 @@ export function WishlistTab() {
   const [searchSortDir, setSearchSortDir] = useState<"asc" | "desc">("desc");
   const [searchSourceFilter, setSearchSourceFilter] = useState<string>("");
 
-  // === Movie detail modal ===
+  // === External search detail modal ===
   const [detailMovie, setDetailMovie] = useState<MediaSearchResult | null>(null);
   const [detailData, setDetailData] = useState<ExternalDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+
+  // === Saved item detail modal ===
+  const [detailSaved, setDetailSaved] = useState<WishlistEntry | null>(null);
 
   // ── Load wishlist from API ──
 
@@ -98,7 +113,7 @@ export function WishlistTab() {
         signal,
       });
       if (signal?.aborted) return;
-      setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, season_number: m.season_number, episode_count: m.episode_count })));
+      setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, poster_url: m.poster_url, overview: m.overview, director: m.director, actors: m.actors, runtime: m.runtime, imdb_id: m.imdb_id, tmdb_id: m.tmdb_id, country: m.country, awards: m.awards, tagline: m.tagline, series_poster_url: m.series_poster_url, season_number: m.season_number, episode_count: m.episode_count })));
       setTotal(data.total);
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
@@ -467,9 +482,10 @@ export function WishlistTab() {
                   </div>
                 ) : items.map((m) => (
                   <div key={m.id} className="card card-lift p-3.5 flex items-center justify-between cursor-pointer group" onClick={() => setMarkingMovie(m)}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-12 rounded shrink-0 flex items-center justify-center" style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}>
-                        <Film size={14} style={{ color: "var(--fg-dim)" }} />
+                    <div className="flex items-center gap-3" style={{ cursor: m.poster_url ? 'pointer' : undefined }}
+                      onClick={(e) => { e.stopPropagation(); setDetailSaved(m); }}>
+                      <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
+                        {m.poster_url ? <ProgressiveImage src={m.poster_url} alt={m.title} className="w-full h-full object-cover" /> : <Film size={14} style={{ color: "var(--fg-dim)" }} />}
                       </div>
                       <div>
                         <p className="text-sm font-[510]" style={{ color: "var(--seed-fg)" }}>{m.title}</p>
@@ -506,8 +522,41 @@ export function WishlistTab() {
         </section>
       )}
 
-      {/* === Movie Detail Modal === */}
+      {/* === External Search Detail Modal === */}
       <WishlistDetailModal open={detailMovie !== null} movie={detailMovie} detailData={detailData} loading={detailLoading} error={detailError} onClose={closeDetail} />
+
+      {/* === Saved Item Detail Modal === */}
+      {detailSaved && (
+        <DetailModal
+          open={detailSaved !== null}
+          movie={{
+            id: detailSaved.id,
+            title: detailSaved.title,
+            rating: 0,
+            year: detailSaved.year,
+            genre: detailSaved.genre,
+            status: "wish",
+            media_type: detailSaved.media_type || "movie",
+            poster_url: detailSaved.poster_url ?? null,
+            overview: detailSaved.overview ?? null,
+            director: detailSaved.director ?? null,
+            actors: detailSaved.actors ?? null,
+            runtime: detailSaved.runtime ?? null,
+            imdb_id: detailSaved.imdb_id ?? null,
+            tmdb_id: detailSaved.tmdb_id ?? null,
+            country: detailSaved.country ?? null,
+            awards: detailSaved.awards ?? null,
+            tagline: detailSaved.tagline ?? null,
+            scrape_error: null,
+            tv_series_id: null,
+            season_number: detailSaved.season_number ?? null,
+            episode_count: detailSaved.episode_count ?? null,
+            series_poster_url: detailSaved.series_poster_url ?? null,
+            created_at: "",
+          }}
+          onClose={() => setDetailSaved(null)}
+        />
+      )}
 
       {/* === Rating Modal === */}
       <WishlistRatingModal open={markingMovie !== null} movie={markingMovie} onClose={() => setMarkingMovie(null)} onConfirm={confirmMarkAsWatched} />
