@@ -1,43 +1,26 @@
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: xplora-db
-    environment:
-      POSTGRES_USER: xplora
-      POSTGRES_PASSWORD: xplora_pg_pass
-      POSTGRES_DB: xplora
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U xplora"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  recommender:
+  xplora:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: movie-recommender
+    container_name: xplora
     ports:
       - "8327:8327"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://xplora:xplora_pg_pass@db:5432/xplora
+      # SQLite database file path (inside the container)
+      - DATABASE_URL=sqlite:////app/data/xplora.db
       # --- API Keys (optional, uncomment and fill in as needed) ---
       # - DEEPSEEK_API_KEY=sk-your-deepseek-key
       # - OPENAI_API_KEY=sk-your-openai-key
       # - TMDB_API_KEY=your-tmdb-api-key
       # - OMDB_API_KEY=your-omdb-api-key
-    depends_on:
-      db:
-        condition: service_healthy
     restart: unless-stopped
     volumes:
+      # SQLite database file lives in your project directory
+      - ./data:/app/data
+      # Poster cache
       - poster_data:/app/backend/static/posters
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8327/api/health"]
@@ -47,5 +30,4 @@ services:
       start_period: 15s
 
 volumes:
-  pgdata:
   poster_data:

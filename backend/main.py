@@ -35,7 +35,8 @@ async def lifespan(app: FastAPI):
 
     init_db()
     from database import DATABASE_URL
-    print(f"  Database: PostgreSQL — {DATABASE_URL}")
+    db_type = "SQLite" if "sqlite" in DATABASE_URL else "PostgreSQL"
+    print(f"  Database: {db_type} — {DATABASE_URL}")
 
     deepseek_key = os.getenv("DEEPSEEK_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
@@ -103,8 +104,9 @@ async def health_check():
     from database import engine as db_engine
     from sqlalchemy import inspect
 
+    from database import DATABASE_URL
+    db_type = "sqlite" if "sqlite" in DATABASE_URL else "postgresql"
     db_ok = True
-    db_info = "postgresql"
     try:
         inspector = inspect(db_engine)
         inspector.get_table_names()
@@ -114,7 +116,7 @@ async def health_check():
     return {
         "status": "ok",
         "version": "2.0.0",
-        "database": db_info if db_ok else "error",
+        "database": db_type if db_ok else "error",
         "database_status": "ok" if db_ok else "error",
         "api_keys": get_config_status(),
     }

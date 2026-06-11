@@ -1,10 +1,12 @@
 """Shared engine builder — single source of truth for SQLModel engine creation.
 
+Supports both PostgreSQL (via pg8000) and SQLite.
+
 Usage:
     from engine import build_engine
     engine = build_engine()
+    engine = build_engine("sqlite:///data.db")
     engine = build_engine("postgresql://user:pass@host:5432/db")
-    engine = build_engine(pool_size=5, max_overflow=10)
 """
 
 import os
@@ -14,14 +16,15 @@ from sqlmodel import create_engine
 
 
 def build_engine(url: str | None = None, **kwargs) -> Engine:
-    """Build a SQLModel engine with pg8000 driver support for PostgreSQL.
+    """Build a SQLModel engine.
 
-    Auto-converts ``postgresql://`` to ``postgresql+pg8000://`` to use the
-    pure-Python pg8000 driver, avoiding UnicodeDecodeError on Windows with
-    Chinese locale (cp936/GBK).
+    For PostgreSQL URLs, auto-converts ``postgresql://`` to
+    ``postgresql+pg8000://`` to use the pure-Python pg8000 driver,
+    avoiding UnicodeDecodeError on Windows with Chinese locale
+    (cp936/GBK).  SQLite URLs (``sqlite:///``) are left as-is.
 
     Args:
-        url: PostgreSQL connection string.  Falls back to ``DATABASE_URL`` env var.
+        url: Connection string.  Falls back to ``DATABASE_URL`` env var.
         **kwargs: Forwarded to ``create_engine()`` (e.g. ``pool_size``,
             ``connect_args``).
 

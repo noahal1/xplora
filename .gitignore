@@ -14,6 +14,9 @@ dist/
 # Environment files
 .env
 
+# SQLite database (local bind mount)
+data/
+
 # OS
 .DS_Store
 Thumbs.db

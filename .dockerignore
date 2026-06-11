@@ -27,6 +27,13 @@ Thumbs.db
 # Docker
 .dockerignore
 
+# SQLite database (local bind mount)
+data/
+
+# Node
+frontend/node_modules/
+node_modules/
+
 # Logs
 *.log
 /tmp/
