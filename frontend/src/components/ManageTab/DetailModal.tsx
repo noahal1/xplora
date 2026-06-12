@@ -38,6 +38,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         awards: movie.awards ?? "",
         tagline: movie.tagline ?? "",
         runtime: movie.runtime,
+        year: movie.year,
         media_type: movie.media_type || "movie",
       });
     }
@@ -57,7 +58,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       const updated = await api.updateMedia(movie.id, {
         title: movie.title,
         rating: movie.rating,
-        year: movie.year,
+        year: form.year !== undefined ? form.year : movie.year,
         genre: movie.genre,
         media_type: form.media_type || "movie",
         // Clear TV-specific fields when switching to movie
@@ -82,6 +83,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         awards: updated.awards ?? "",
         tagline: updated.tagline ?? "",
         runtime: updated.runtime,
+        year: updated.year,
         media_type: updated.media_type || "movie",
       });
       // Optimistically update the movie object so view mode shows new data immediately
@@ -115,6 +117,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         awards: movie.awards ?? "",
         tagline: movie.tagline ?? "",
         runtime: movie.runtime,
+        year: movie.year,
         media_type: movie.media_type || "movie",
       });
       setEditing(true);
@@ -195,6 +198,12 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
                 value={form.runtime ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, runtime: e.target.value ? parseInt(e.target.value) : null }))}
                 min={0} placeholder={t("detail_modal.minutes")} />
+            </EditField>
+            <EditField label={t("manage.col_year")}>
+              <input type="number" className="input-field w-full text-sm px-3 py-2 no-spinner"
+                value={form.year ?? ""}
+                onChange={(e) => setForm(f => ({ ...f, year: e.target.value ? parseInt(e.target.value) : null }))}
+                min={1888} max={2030} placeholder={t("manage.col_year")} />
             </EditField>
             <EditField label={t("detail_modal.tagline")}>
               <input type="text" className="input-field w-full text-sm px-3 py-2"

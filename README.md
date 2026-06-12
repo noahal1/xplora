@@ -1,11 +1,11 @@
-# 🎬 Xplora — AI Movie Recommender
+# 🎬 Xplora — Movie explore and manage
 
-> AI 驱动的电影管理系统 ·  EXplora stories tailored for you
+> AI 驱动的电影管理系统 ·  Explore stories tailored for you
 
 [![Tech Stack](https://img.shields.io/badge/Stack-React+FastAPI-blueviolet)](#)
 [![Frontend](https://img.shields.io/badge/Frontend-React_19+TypeScript_5.8-3178C6?logo=react)](#)
 [![Backend](https://img.shields.io/badge/Backend-Python_3.12+FastAPI-009688?logo=fastapi)](#)
-[![CSS](https:/ /img.shields.io/badge/Style-Tailwind_CSS_v4-06B6D4?logo=tailwindcss)](#)
+[![CSS](https://img.shields.io/badge/Style-Tailwind_CSS_v4-06B6D4?logo=tailwindcss)](#)
 [![AI](https://img.shields.io/badge/AI-DeepSeek+OpenAI-412991?logo=openai)](#)
 
 ---

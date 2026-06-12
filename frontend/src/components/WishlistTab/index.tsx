@@ -12,6 +12,7 @@ import { GenreInput } from "../GenreInput";
 import { ProgressiveImage } from "../ProgressiveImage";
 import { DetailModal } from "../ManageTab/DetailModal";
 import { Film, ChevronRight } from "lucide-react";
+import { Modal } from "../Modal";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { usePagination } from "../../hooks/usePagination";
 import { useSort } from "../../hooks/useSort";
@@ -93,6 +94,10 @@ export function WishlistTab() {
   const [detailData, setDetailData] = useState<ExternalDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+
+  // === Modals ===
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   // === Saved item detail modal ===
   const [detailSaved, setDetailSaved] = useState<WishlistEntry | null>(null);
@@ -242,6 +247,7 @@ export function WishlistTab() {
       showToast(t("wishlist.added_to_wishlist", { title }), "success");
       startPolling();
       refreshWishlist();
+      setAddModalOpen(false);
     } catch (err: any) { showToast(t("wishlist.add_failed", { message: err.message }), "error"); }
   }, [newTitle, newYear, newGenre, showToast, startPolling, refreshWishlist, t]);
 
@@ -271,6 +277,7 @@ export function WishlistTab() {
       startPolling();
       refreshWishlist();
       setJsonText("");
+      setAddModalOpen(false);
     } catch (err: any) { showToast(t("wishlist.json_parse_failed", { message: err.message }), "error"); }
   }, [jsonText, showToast, refreshWishlist, t, startPolling]);
 
@@ -301,128 +308,6 @@ export function WishlistTab() {
 
   return (
     <div className="space-y-5">
-      {/* === External Search Section === */}
-      <section className="section-card">
-        <div className="section-header">
-          <h2 className="section-title flex items-center gap-2">
-            <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
-            {t("wishlist.search_movies")}
-          </h2>
-          <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
-            {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
-              <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Search Input */}
-        <div className="relative">
-          <input type="text" id="wishlist-search" placeholder={t("wishlist.search_placeholder")}
-            value={externalQuery} onChange={(e) => handleSearch(e.target.value)}
-            className="input-field w-full h-10 text-sm pl-3 pr-20" />
-          {externalQuery && (
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              {searchLoading && <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />}
-              <button className="text-muted-foreground hover:text-foreground p-0.5"
-                onClick={() => { setExternalQuery(""); setSearchResults([]); setSearchDone(false); setSearchError(""); }}>
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Search Results */}
-        {searchResults.length > 0 && (
-          <div className="mt-3 animate-slide-down">
-            <p className="text-xs text-muted-foreground mb-2">{t("wishlist.search_results")}</p>
-            <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
-              <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.sort")}</span>
-              {[{ field: "year" as const, label: t("manage.sort_year") }, { field: "title" as const, label: t("manage.sort_title") }].map((s) => (
-                <button key={s.field} className={`pill ${searchSortField === s.field ? "active" : ""}`} onClick={() => toggleSearchSort(s.field)}>
-                  {s.label} <span className="text-[10px]">{searchSortField === s.field ? (searchSortDir === "asc" ? "↑" : "↓") : ""}</span>
-                </button>
-              ))}
-              <span className="w-[1px] h-3.5 bg-border mx-1" />
-              <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.filter")}</span>
-              {[{ value: "", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "omdb", label: t("search_source.omdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
-                <button key={opt.value} className={`pill ${searchSourceFilter === opt.value ? "active" : ""}`} onClick={() => setSearchSourceFilter(opt.value)}>{opt.label}</button>
-              ))}
-            </div>
-            {sortedResults.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground"><p className="text-xs">{t("manage.no_matching", { query: externalQuery })}</p></div>
-            ) : (
-              <div className="space-y-1.5">
-                {sortedResults.map((r, i) => {
-                  const key = `${r.source}:${r.source_id}`;
-                  const isAdding = addingIds.has(key);
-                  const alreadyInList = items.some((m) => m.title.toLowerCase() === r.title.toLowerCase());
-                  return (
-                    <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm cursor-pointer" onClick={() => openDetail(r)}>
-                      <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
-                        {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <span className="opacity-40">🎬</span>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium truncate block">{r.title}</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
-                          {r.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(r.genre)}</Badge>}
-                          {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
-                          <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
-                        </div>
-                      </div>
-                      <button className={`btn ${alreadyInList ? "btn-ghost" : ""} btn-xs shrink-0 transition-all`} disabled={isAdding || alreadyInList}
-                        onClick={(e) => { e.stopPropagation(); addSearchResultToWishlist(r); }}>
-                        {isAdding ? <span className="flex items-center gap-1"><div className="w-3 h-3 border-2 border-border border-t-primary rounded-full animate-stream-spin" />{t("wishlist.adding")}</span>
-                          : alreadyInList ? t("wishlist.already_added")
-                          : <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>{t("wishlist.add")}</span>}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {searchDone && searchResults.length === 0 && externalQuery.trim() && !searchLoading && !searchError && (
-          <div className="mt-4 text-center py-4 text-muted-foreground">
-            <p className="text-sm">{t("wishlist.search_empty", { query: externalQuery })}</p>
-            <p className="text-xs mt-1">{t("wishlist.search_empty_hint")}</p>
-          </div>
-        )}
-        {searchError && <div className="mt-3 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">{searchError}</div>}
-      </section>
-
-      {/* === Add Movie Section === */}
-      <section className="section-card">
-        <div className="section-header">
-          <h2 className="section-title flex items-center gap-2">
-            <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            {t("wishlist.manual_add")}
-          </h2>
-        </div>
-        <div className="space-y-2.5">
-          <input type="text" id="wishlist-title" placeholder={t("wishlist.title_placeholder")} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={handleKeyDown} className="input-field w-full h-10 text-sm" />
-          <div className="flex items-center gap-2">
-            <input type="number" id="wishlist-year" placeholder={t("wishlist.year_placeholder")} value={newYear} onChange={(e) => setNewYear(e.target.value)} onKeyDown={handleKeyDown}
-              className="input-field w-[80px] h-10 text-sm no-spinner shrink-0" />
-            <div className="flex-1 min-w-0"><GenreInput value={newGenre} onChange={setNewGenre} placeholder={t("wishlist.genre_placeholder")} onKeyDown={handleKeyDown} /></div>
-            <button className="btn btn-primary h-10 shrink-0" onClick={addMovie}>
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              {t("wishlist.add")}
-            </button>
-          </div>
-        </div>
-        <div className="relative my-4"><div className="absolute inset-0 flex items-center"><Separator /></div><div className="relative flex justify-center"><span className="bg-card px-2 text-xs text-muted-foreground">{t("wishlist.batch_import")}</span></div></div>
-        <div className="space-y-3">
-          <textarea id="wishlist-json" value={jsonText} onChange={(e) => setJsonText(e.target.value)} placeholder={t("wishlist.json_placeholder")}
-            rows={3} className="w-full px-3 py-2.5 rounded-lg border border-input bg-transparent text-foreground font-mono text-xs leading-relaxed resize-y min-h-[60px] transition-colors focus:outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20 placeholder:text-muted-foreground" />
-          <button className="btn btn-ghost text-xs" onClick={handleImportJSON}>{t("wishlist.import_to_wishlist")}</button>
-        </div>
-      </section>
 
       {/* === Wishlist Section === */}
       {total > 0 && (
@@ -432,7 +317,27 @@ export function WishlistTab() {
               <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
               {t("wishlist.title")}
             </h2>
-            <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: total })}</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setSearchModalOpen(true)}
+                className="btn btn-ghost btn-xs shrink-0"
+                title={t("wishlist.search_movies")}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                </svg>
+                <span className="hidden sm:inline">{t("wishlist.search_movies")}</span>
+              </button>
+              <button
+                onClick={() => setAddModalOpen(true)}
+                className="btn btn-ghost btn-xs shrink-0"
+                title={t("wishlist.manual_add")}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                <span className="hidden sm:inline">{t("wishlist.manual_add")}</span>
+              </button>
+              <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: total })}</span>
+            </div>
           </div>
           <div className="relative flex-1 mb-2">
             <input type="text" id="wishlist-filter" placeholder={t("wishlist.filter_placeholder")} value={filter.input} onChange={(e) => filter.setInput(e.target.value)}
@@ -522,6 +427,130 @@ export function WishlistTab() {
         </section>
       )}
 
+      {/* === Search Modal === */}
+      <Modal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        title={t("wishlist.search_movies")}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
+              {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
+                <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative">
+            <input type="text" id="wishlist-search" placeholder={t("wishlist.search_placeholder")}
+              value={externalQuery} onChange={(e) => handleSearch(e.target.value)}
+              className="input-field w-full h-10 text-sm pl-3 pr-10" />
+            {externalQuery && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {searchLoading && <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />}
+                <button className="text-muted-foreground hover:text-foreground p-0.5"
+                  onClick={() => { setExternalQuery(""); setSearchResults([]); setSearchDone(false); setSearchError(""); }}>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+              <p className="text-xs text-muted-foreground mb-1">{t("wishlist.search_results")}</p>
+              <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+                <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.sort")}</span>
+                {[{ field: "year" as const, label: t("manage.sort_year") }, { field: "title" as const, label: t("manage.sort_title") }].map((s) => (
+                  <button key={s.field} className={`pill ${searchSortField === s.field ? "active" : ""}`} onClick={() => toggleSearchSort(s.field)}>
+                    {s.label} <span className="text-[10px]">{searchSortField === s.field ? (searchSortDir === "asc" ? "↑" : "↓") : ""}</span>
+                  </button>
+                ))}
+                <span className="w-[1px] h-3.5 bg-border mx-1" />
+                <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.filter")}</span>
+                {[{ value: "", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "omdb", label: t("search_source.omdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
+                  <button key={opt.value} className={`pill ${searchSourceFilter === opt.value ? "active" : ""}`} onClick={() => setSearchSourceFilter(opt.value)}>{opt.label}</button>
+                ))}
+              </div>
+              {sortedResults.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground"><p className="text-xs">{t("manage.no_matching", { query: externalQuery })}</p></div>
+              ) : (
+                <div className="space-y-1.5">
+                  {sortedResults.map((r, i) => {
+                    const key = `${r.source}:${r.source_id}`;
+                    const isAdding = addingIds.has(key);
+                    const alreadyInList = items.some((m) => m.title.toLowerCase() === r.title.toLowerCase());
+                    return (
+                      <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm cursor-pointer" onClick={() => openDetail(r)}>
+                        <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
+                          {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <span className="opacity-40">🎬</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium truncate block">{r.title}</span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
+                            {r.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(r.genre)}</Badge>}
+                            {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
+                            <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
+                          </div>
+                        </div>
+                        <button className={`btn ${alreadyInList ? "btn-ghost" : ""} btn-xs shrink-0 transition-all`} disabled={isAdding || alreadyInList}
+                          onClick={(e) => { e.stopPropagation(); addSearchResultToWishlist(r); }}>
+                          {isAdding ? <span className="flex items-center gap-1"><div className="w-3 h-3 border-2 border-border border-t-primary rounded-full animate-stream-spin" />{t("wishlist.adding")}</span>
+                            : alreadyInList ? t("wishlist.already_added")
+                            : <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>{t("wishlist.add")}</span>}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {searchDone && searchResults.length === 0 && externalQuery.trim() && !searchLoading && !searchError && (
+            <div className="text-center py-4 text-muted-foreground">
+              <p className="text-sm">{t("wishlist.search_empty", { query: externalQuery })}</p>
+              <p className="text-xs mt-1">{t("wishlist.search_empty_hint")}</p>
+            </div>
+          )}
+          {searchError && <div className="px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">{searchError}</div>}
+        </div>
+      </Modal>
+
+      {/* === Add Movie Modal === */}
+      <Modal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        title={t("wishlist.manual_add_title")}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2.5">
+            <input type="text" id="wishlist-title" placeholder={t("wishlist.title_placeholder")} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={handleKeyDown} className="input-field w-full h-10 text-sm" />
+            <div className="flex items-center gap-2">
+              <input type="number" id="wishlist-year" placeholder={t("wishlist.year_placeholder")} value={newYear} onChange={(e) => setNewYear(e.target.value)} onKeyDown={handleKeyDown}
+                className="input-field w-[80px] h-10 text-sm no-spinner shrink-0" />
+              <div className="flex-1 min-w-0"><GenreInput value={newGenre} onChange={setNewGenre} placeholder={t("wishlist.genre_placeholder")} onKeyDown={handleKeyDown} /></div>
+              <button className="btn btn-primary h-10 shrink-0" onClick={addMovie}>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                {t("wishlist.add")}
+              </button>
+            </div>
+          </div>
+          <div className="relative my-3">
+            <div className="absolute inset-0 flex items-center"><Separator /></div>
+            <div className="relative flex justify-center"><span className="bg-card px-2 text-xs text-muted-foreground">{t("wishlist.batch_import")}</span></div>
+          </div>
+          <div className="space-y-3">
+            <textarea id="wishlist-json" value={jsonText} onChange={(e) => setJsonText(e.target.value)} placeholder={t("wishlist.json_placeholder")}
+              rows={3} className="w-full px-3 py-2.5 rounded-lg border border-input bg-transparent text-foreground font-mono text-xs leading-relaxed resize-y min-h-[60px] transition-colors focus:outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20 placeholder:text-muted-foreground" />
+            <button className="btn btn-ghost btn-sm w-full" onClick={handleImportJSON}>{t("wishlist.import_to_wishlist")}</button>
+          </div>
+        </div>
+      </Modal>
+
       {/* === External Search Detail Modal === */}
       <WishlistDetailModal open={detailMovie !== null} movie={detailMovie} detailData={detailData} loading={detailLoading} error={detailError} onClose={closeDetail} />
 
@@ -570,6 +599,24 @@ export function WishlistTab() {
             </svg>
             <p className="text-sm font-medium">{t("wishlist.no_items")}</p>
             <p className="text-xs mt-1">{t("wishlist.no_items_hint")}</p>
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setSearchModalOpen(true)}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                </svg>
+                {t("wishlist.search_movies")}
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setAddModalOpen(true)}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                {t("wishlist.manual_add")}
+              </button>
+            </div>
           </div>
         </section>
       )}

@@ -60,13 +60,14 @@ export function WatchedTab() {
   const [searchError, setSearchError] = useState("");
   const [searchDone, setSearchDone] = useState(false);
   const [addingSearchIds, setAddingSearchIds] = useState<Set<string>>(new Set());
-  const externalSearchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const searchSourceRef = useRef(searchSource);
+  const externalSearchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);    const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
   const mediaRef = useRef(media);
   mediaRef.current = media;
 
-  const [importOpen, setImportOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(false);
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
   const [batchRatingValue, setBatchRatingValue] = useState(7);
   const dragCounterRef = useRef(0);
@@ -195,7 +196,7 @@ export function WatchedTab() {
   // ── Import helpers ──
 
   const saveAndReload = useCallback(
-    async (raw: MediaImport[], toastMsg: string) => {
+    async (raw: MediaImport[], toastMsg: string): Promise<boolean> => {
       try {
         await api.replaceMedia(raw);
         showToast(toastMsg, "success");
@@ -206,16 +207,24 @@ export function WatchedTab() {
         setRatingFilter("all");
         setSelectedIds(new Set());
         setReloadTrigger((n) => n + 1);
+        return true;
       } catch (err: any) {
         showToast(t("watched_import.save_failed", { message: err.message }), "error");
+        return false;
       }
     },
     [showToast, startPolling, t]
   );
 
   const importMovies = useCallback(
-    (raw: MediaImport[]) => {
-      saveAndReload(raw, t("watched_import.data_parsed", { count: raw.length }));
+    async (raw: MediaImport[]) => {
+      const ok = await saveAndReload(raw, t("watched_import.data_parsed", { count: raw.length }));
+      if (ok) {
+        setImportSuccess(true);
+        await new Promise((r) => setTimeout(r, 1000));
+        setImportSuccess(false);
+        setImportModalOpen(false);
+      }
     },
     [saveAndReload, t]
   );
@@ -416,218 +425,7 @@ export function WatchedTab() {
 
   return (
     <div className="space-y-5">
-      {/* === Collapsible Import Section === */}
-      <section className="section-card">
-        <div
-          onClick={() => setImportOpen(!importOpen)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setImportOpen(!importOpen);
-            }
-          }}
-          role="button"
-          tabIndex={0}
-          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 w-full cursor-pointer mb-0"
-        >
-          <h2 className="section-title flex items-center gap-2 text-base">
-            <svg className="w-4 h-4 text-primary shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span className="truncate">{t("watched.import_title")}</span>
-          </h2>
-          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
-            <button
-              className="btn btn-ghost btn-xs shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowSampleModal(true);
-              }}
-              title={t("watched.sample_format")}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="16" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12.01" y2="8" />
-              </svg>
-              <span className="hidden sm:inline">{t("watched.sample_format")}</span>
-            </button>
-            <svg
-              className={`w-4 h-4 text-muted-foreground transition-transform shrink-0 ${importOpen ? "rotate-180" : ""}`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
-        </div>
 
-        {importOpen && (
-          <div className="animate-slide-down">
-            {/* Upload Drop Zone */}
-            <div
-              className={`relative border-2 border-dashed rounded-xl transition-all ${
-                isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-accent/30"
-              }`}
-              onDragEnter={handleDragEnter}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <div
-                className="py-10 px-4 text-center cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <div className={`text-3xl mb-3 transition-transform ${isDragOver ? "scale-110" : ""}`}>📂</div>
-                <p className={`text-sm font-medium ${isDragOver ? "text-primary" : ""}`}>{t("watched.drag_hint")}</p>
-                <p className="text-xs text-muted-foreground mt-1 mb-4">{t("watched.import_json_or_csv")}</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json,.csv"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      handleFile(file);
-                      e.target.value = "";
-                    }
-                  }}
-                />
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    fileInputRef.current?.click();
-                  }}
-                >
-                  {t("watched.select_file")}
-                </button>
-              </div>
-
-              {isDragOver && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/90 rounded-xl z-10 animate-overlay-fade">
-                  <div className="text-4xl">📎</div>
-                  <div className="text-sm font-semibold text-primary">{t("watched.drop_release")}</div>
-                  <span className="badge text-[10px]">JSON / CSV</span>
-                </div>
-              )}
-            </div>
-
-            {/* Manual Input */}
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <Separator />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-card px-2 text-xs text-muted-foreground">{t("watched.or_manual_input")}</span>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <textarea
-                value={jsonText}
-                onChange={(e) => setJsonText(e.target.value)}
-                placeholder='[\n  {"title": "The Shawshank Redemption", "rating": 9.3, "year": 1994, "genre": "Drama"},\n  {"title": "The Dark Knight", "rating": 9.0, "year": 2008, "genre": "Action / Crime"}\n]'
-                rows={5}
-                className="w-full px-3 py-2.5 rounded-lg border border-input bg-transparent text-foreground font-mono text-xs leading-relaxed resize-y min-h-[100px] transition-colors focus:outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20 placeholder:text-muted-foreground"
-              />
-              <button className="btn btn-ghost text-xs" onClick={handleManualParse}>
-                {t("watched.parse_data")}
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* === External Search Section === */}
-      <section className="section-card">
-        <div className="section-header">
-          <h2 className="section-title flex items-center gap-2">
-            <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
-            {t("watched.search_title")}
-          </h2>
-          <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
-            {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
-              <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative">
-          <input type="text" placeholder={t("watched.search_placeholder_external")}
-            value={externalQuery} onChange={(e) => handleSearchInputChange(e.target.value)}
-            className="input-field w-full h-10 text-sm pl-3 pr-20" />
-          {externalQuery && (
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              {searchLoading && <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />}
-              <button className="text-muted-foreground hover:text-foreground p-0.5"
-                onClick={() => { setExternalQuery(""); setSearchResults([]); setSearchDone(false); setSearchError(""); }}>
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {searchResults.length > 0 && (
-          <div className="mt-3 animate-slide-down space-y-1.5">
-            <p className="text-xs text-muted-foreground mb-2">{t("wishlist.search_results")}</p>
-            {searchResults.map((r, i) => {
-              const key = `${r.source}:${r.source_id}`;
-              const isAdding = addingSearchIds.has(key);
-              return (
-                <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm">
-                  <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
-                    {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <span className="opacity-40">🎬</span>}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium truncate block">{r.title}</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
-                      {r.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(r.genre)}</Badge>}
-                      {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
-                      <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
-                    </div>
-                  </div>
-                  <button className="btn btn-primary btn-xs shrink-0 gap-1 transition-all" disabled={isAdding}
-                    onClick={(e) => { e.stopPropagation(); addSearchResultToWatched(r); }}>
-                    {isAdding ? (
-                      <><Loader2 size={12} className="animate-spin" />{t("wishlist.adding")}</>
-                    ) : (
-                      <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>{t("watched.add_to_list")}</>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {searchDone && searchResults.length === 0 && externalQuery.trim() && !searchLoading && !searchError && (
-          <div className="mt-4 text-center py-4 text-muted-foreground">
-            <p className="text-sm">{t("wishlist.search_empty", { query: externalQuery })}</p>
-            <p className="text-xs mt-1">{t("wishlist.search_empty_hint")}</p>
-          </div>
-        )}
-        {searchError && <div className="mt-3 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">{searchError}</div>}
-
-        {!externalQuery && !searchLoading && searchResults.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
-            <svg className="w-8 h-8 mb-2 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
-            <p className="text-sm">{t("watched.search_hint")}</p>
-          </div>
-        )}
-      </section>
 
       {/* === Movie List Section === */}
       {total > 0 && (
@@ -691,12 +489,22 @@ export function WatchedTab() {
               )}
             </div>
             <button
-              onClick={() => setImportOpen(true)}
+              onClick={() => setImportModalOpen(true)}
               className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
               title={t("watched.import_title")}
             >
               <Upload size={14} />
               <span className="hidden sm:inline">{t("watched.import_title")}</span>
+            </button>
+            <button
+              onClick={() => setSearchModalOpen(true)}
+              className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
+              title={t("watched.search_title")}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+              <span className="hidden sm:inline">{t("watched.search_title")}</span>
             </button>
           </div>
 
@@ -902,17 +710,224 @@ export function WatchedTab() {
               <>
                 <p className="text-sm font-medium">{t("watched.no_movies")}</p>
                 <p className="text-xs mt-1">{t("watched.no_movies_hint")}</p>
-                <button
-                  className="btn btn-ghost btn-sm mt-3"
-                  onClick={() => setImportOpen(true)}
-                >
-                  {t("watched.import_title")}
-                </button>
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setImportModalOpen(true)}
+                  >
+                    <Upload size={14} />
+                    {t("watched.import_title")}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSearchModalOpen(true)}
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                    </svg>
+                    {t("watched.search_title")}
+                  </button>
+                </div>
               </>
             )}
           </div>
         </section>
       )}
+
+      {/* === Import Modal === */}
+      <Modal
+        open={importModalOpen}
+        onClose={() => {
+          if (!importSuccess) setImportModalOpen(false);
+        }}
+        title={importSuccess ? undefined : t("watched.import_title")}
+      >
+        {importSuccess ? (
+          <div className="flex flex-col items-center justify-center py-10 animate-in fade-in zoom-in-95 duration-500">
+            <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center mb-5">
+              <svg className="w-8 h-8 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <p className="text-lg font-semibold text-green-500">{t("watched_import.success")}</p>
+          </div>
+        ) : (
+        <div className="space-y-4">
+          {/* Upload Drop Zone */}
+          <div
+            className={`relative border-2 border-dashed rounded-xl transition-all ${
+              isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-accent/30"
+            }`}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div
+              className="py-8 px-4 text-center cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <div className={`text-2xl mb-2 transition-transform ${isDragOver ? "scale-110" : ""}`}>📂</div>
+              <p className={`text-sm font-medium ${isDragOver ? "text-primary" : ""}`}>{t("watched.drag_hint")}</p>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">{t("watched.import_json_or_csv")}</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,.csv"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleFile(file);
+                    e.target.value = "";
+                  }
+                }}
+              />
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+              >
+                {t("watched.select_file")}
+              </button>
+              <button
+                className="btn btn-ghost btn-sm ml-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSampleModal(true);
+                }}
+                title={t("watched.sample_format")}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                {t("watched.sample_format")}
+              </button>
+            </div>
+
+            {isDragOver && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/90 rounded-xl z-10 animate-overlay-fade">
+                <div className="text-4xl">📎</div>
+                <div className="text-sm font-semibold text-primary">{t("watched.drop_release")}</div>
+                <span className="badge text-[10px]">JSON / CSV</span>
+              </div>
+            )}
+          </div>
+
+          {/* Manual Input */}
+          <div className="relative my-3">
+            <div className="absolute inset-0 flex items-center">
+              <Separator />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-card px-2 text-xs text-muted-foreground">{t("watched.or_manual_input")}</span>
+            </div>
+          </div>
+
+          <textarea
+            value={jsonText}
+            onChange={(e) => setJsonText(e.target.value)}
+            placeholder='[\n  {"title": "The Shawshank Redemption", "rating": 9.3, "year": 1994, "genre": "Drama"},\n  {"title": "The Dark Knight", "rating": 9.0, "year": 2008, "genre": "Action / Crime"}\n]'
+            rows={4}
+            className="w-full px-3 py-2.5 rounded-lg border border-input bg-transparent text-foreground font-mono text-xs leading-relaxed resize-y min-h-[80px] transition-colors focus:outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/20 placeholder:text-muted-foreground"
+          />
+          <button
+            className="btn btn-ghost btn-sm w-full"
+            onClick={handleManualParse}
+          >
+            {t("watched.parse_data")}
+          </button>
+        </div>
+        )}
+      </Modal>
+
+      {/* === Search Modal === */}
+      <Modal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+        title={t("watched.search_title")}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
+              {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
+                <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative">
+            <input type="text" placeholder={t("watched.search_placeholder_external")}
+              value={externalQuery} onChange={(e) => handleSearchInputChange(e.target.value)}
+              className="input-field w-full h-10 text-sm pl-3 pr-10" />
+            {externalQuery && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {searchLoading && <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />}
+                <button className="text-muted-foreground hover:text-foreground p-0.5"
+                  onClick={() => { setExternalQuery(""); setSearchResults([]); setSearchDone(false); setSearchError(""); }}>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+              <p className="text-xs text-muted-foreground mb-1">{t("wishlist.search_results")}</p>
+              {searchResults.map((r, i) => {
+                const key = `${r.source}:${r.source_id}`;
+                const isAdding = addingSearchIds.has(key);
+                return (
+                  <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm">
+                    <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
+                      {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <span className="opacity-40">🎬</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium truncate block">{r.title}</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
+                        {r.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(r.genre)}</Badge>}
+                        {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
+                        <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
+                      </div>
+                    </div>
+                    <button className="btn btn-primary btn-xs shrink-0 gap-1 transition-all" disabled={isAdding}
+                      onClick={(e) => { e.stopPropagation(); addSearchResultToWatched(r); }}>
+                      {isAdding ? (
+                        <><Loader2 size={12} className="animate-spin" />{t("wishlist.adding")}</>
+                      ) : (
+                        <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>{t("watched.add_to_list")}</>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {searchDone && searchResults.length === 0 && externalQuery.trim() && !searchLoading && !searchError && (
+            <div className="text-center py-4 text-muted-foreground">
+              <p className="text-sm">{t("wishlist.search_empty", { query: externalQuery })}</p>
+              <p className="text-xs mt-1">{t("wishlist.search_empty_hint")}</p>
+            </div>
+          )}
+          {searchError && <div className="px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">{searchError}</div>}
+
+          {!externalQuery && !searchLoading && searchResults.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-4 text-muted-foreground">
+              <svg className="w-8 h-8 mb-2 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+              <p className="text-sm">{t("watched.search_hint")}</p>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* === Sample Data Modal === */}
       <Modal
@@ -1065,12 +1080,7 @@ const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle,
             <Badge className="text-[9px] text-sky-200 border-sky-400/40 bg-sky-500/20 backdrop-blur-sm">TV</Badge>
           </div>
         )}
-        {/* Rating badge top-right */}
-        <div className="absolute top-2 right-2 z-10">
-          <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-amber bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded-full">
-            ★ {movie.rating.toFixed(1)}
-          </span>
-        </div>
+
         {/* Title on poster */}
         <div className="absolute bottom-0 inset-x-0 p-2.5 z-10">
           <div className="font-semibold text-sm text-white leading-tight line-clamp-2 drop-shadow-sm">{movie.title}</div>

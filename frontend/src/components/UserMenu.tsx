@@ -2,22 +2,17 @@ import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 import {
   User,
   Shield,
   Settings,
   LogOut,
-  Sun,
-  Moon,
   ChevronDown,
 } from "lucide-react";
 
 export function UserMenu() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -140,26 +135,6 @@ export function UserMenu() {
                 onClick={() => handleNavigate("/admin")}
               />
             )}
-          </div>
-
-          <div style={{ height: "1px", background: "var(--border-subtle)" }} />
-
-          {/* Language + Theme */}
-          <div className="px-3 py-2 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{t("header.language")}</span>
-              <LanguageSwitcher compact />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{t("profile.theme")}</span>
-              <button
-                onClick={toggleTheme}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
-                aria-label={theme === "dark" ? t("header.switch_to_light") : t("header.switch_to_dark")}
-              >
-                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-              </button>
-            </div>
           </div>
 
           <div style={{ height: "1px", background: "var(--border-subtle)" }} />
