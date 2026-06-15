@@ -16,7 +16,7 @@ export function LanguageSwitcher() {
   return (
     <button
       onClick={handleToggle}
-      className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors active:scale-95"
       aria-label={label}
       title={label}
     >

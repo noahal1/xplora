@@ -12,28 +12,28 @@ export function Header() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="flex items-center justify-between py-4 mb-2">
-      <div className="flex items-center gap-3">
+    <header className="flex items-center justify-between py-3 sm:py-4 mb-1 sm:mb-2">
+      <div className="flex items-center gap-2 sm:gap-3">
         <Logo />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         <button
           onClick={() => setOpen(true)}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors active:scale-95"
           aria-label={t("history.trigger")}
           title={t("history.trigger")}
         >
-          <Clock size={16} />
+          <Clock size={14} />
         </button>
         <LanguageSwitcher />
         <button
           onClick={toggleTheme}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors active:scale-95"
           aria-label={theme === "dark" ? t("header.switch_to_light") : t("header.switch_to_dark")}
           title={theme === "dark" ? t("header.switch_to_light") : t("header.switch_to_dark")}
         >
-          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
         </button>
         <UserMenu />
       </div>

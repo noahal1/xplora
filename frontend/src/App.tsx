@@ -48,7 +48,7 @@ function MainApp() {
   return (
     <HistoryProvider>
       <EnrichProvider>
-        <div className="max-w-[1024px] mx-auto px-5 py-4 sm:py-6">
+        <div className="max-w-[1024px] mx-auto px-4 sm:px-5 py-3 sm:py-6 pb-20 sm:pb-6">
           <div className="fixed inset-0 pointer-events-none z-[-1] opacity-15">
             <Aurora
               colorStops={['#e8a838', '#f59e0b', '#e8a838']}
@@ -60,7 +60,7 @@ function MainApp() {
           <Header />
           <EnrichBanner />
           <TabNav />
-          <div className="flex flex-col gap-4 sm:gap-6 py-4 sm:py-6">
+          <div className="flex flex-col gap-3 sm:gap-6 py-3 sm:py-6">
             <FadeContent key={location.pathname} duration={600} threshold={0} blur>
               <Suspense fallback={
                 <div className="flex items-center justify-center py-16">

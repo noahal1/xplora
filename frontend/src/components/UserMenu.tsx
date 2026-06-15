@@ -57,12 +57,12 @@ export function UserMenu() {
       {/* Trigger button */}
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-all hover:bg-accent"
+        className="flex items-center gap-1 rounded-lg px-1.5 sm:px-2 py-1 sm:py-1.5 transition-all hover:bg-accent active:scale-95"
         aria-label={t("header.profile")}
         aria-expanded={open}
       >
         <div
-          className="w-7 h-7 rounded-full flex items-center justify-center"
+          className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center"
           style={{
             background: "var(--bg-card)",
             border: "1px solid var(--border-default)",

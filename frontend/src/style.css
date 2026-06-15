@@ -283,6 +283,16 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes bottomNavEnter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes dialogSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
 @keyframes savedConfirm {
   0% {
     color: var(--success);
@@ -839,6 +849,62 @@ input[type="number"].no-spinner {
   background: linear-gradient(90deg, var(--border-default) 25%, var(--border-hover) 50%, var(--border-default) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ============================================
+   Mobile bottom nav bar — slide up on mount
+   ============================================ */
+@theme {
+  --animate-bottom-nav-enter: bottomNavEnter 0.3s var(--ease-out-expo);
+}
+
+/* ============================================
+   Mobile dialog slide-up
+   ============================================ */
+@media (max-width: 639px) {
+  [data-slot="dialog-content"][data-state="open"] {
+    animation: dialogSlideUp 0.3s var(--ease-out-expo);
+  }
+  
+  [data-slot="dialog-content"] {
+    overscroll-behavior: contain;
+  }
+
+  /* Larger touch targets for pill/filter buttons */
+  .pill {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  /* Make table rows more tappable */
+  td, th {
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+  }
+
+  /* Prevent horizontal overflow on body */
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* ============================================
+   Safe area utility
+   ============================================ */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.safe-right {
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* ============================================
