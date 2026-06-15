@@ -172,7 +172,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
               value={form.overview ?? ""}
               onChange={(e) => setForm(f => ({ ...f, overview: e.target.value }))} />
           </EditField>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
             <EditField label={t("detail_modal.director")}>
               <input type="text" className="input-field w-full text-sm px-3 py-2"
                 value={form.director ?? ""}
@@ -215,8 +215,8 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       ) : (
         /* ── View Mode (existing) ────────────────────────── */
         <div className="space-y-5">
-          <div className="flex gap-4">
-            <div className="w-[100px] h-[140px] shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center"
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="w-full sm:w-[100px] h-[140px] shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center max-sm:flex-row max-sm:w-full max-sm:h-auto max-sm:aspect-[2/3]"
               style={{ border: "1px solid var(--border-subtle)" }}>
               {movie.poster_url ? (
                 <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />

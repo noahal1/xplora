@@ -203,7 +203,7 @@ export function HistoryTab() {
       {!loading && detail && (
         <section className="section-card">
           {/* Back + session info bar */}
-          <div className="flex items-center gap-2 pb-4 mb-5" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+          <div className="flex items-start sm:items-center gap-2 pb-4 mb-5 flex-wrap" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
             <button
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all hover:bg-accent"
               style={{ color: "var(--fg-muted)" }}
@@ -421,8 +421,8 @@ export function HistoryTab() {
         )}
         {detailData && !tmdbLoading && !detailError && (
           <div className="space-y-5">
-            <div className="flex gap-4">
-              <div className="w-[100px] shrink-0">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full sm:w-[100px] shrink-0">
                 <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
                   {detailData.poster_url ? (
                     <ProgressiveImage src={detailData.poster_url} alt={detailData.title} className="w-full h-full object-cover" />
@@ -466,7 +466,7 @@ export function HistoryTab() {
             )}
 
             {(detailData.director || detailData.actors || detailData.writer || detailData.awards) && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {detailData.director && (
                   <div><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.director")}</h4><p className="text-sm">{detailData.director}</p></div>
                 )}

@@ -33,8 +33,8 @@ export function WishlistDetailModal({ open, movie, detailData, loading, error, o
       )}
       {detailData && !loading && !error && (
         <div className="space-y-5">
-          <div className="flex gap-4">
-            <div className="w-[100px] shrink-0">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="w-full sm:w-[100px] shrink-0">
               <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
                 {detailData.poster_url ? (
                   <ProgressiveImage src={detailData.poster_url} alt={detailData.title} className="w-full h-full object-cover" />
@@ -78,7 +78,7 @@ export function WishlistDetailModal({ open, movie, detailData, loading, error, o
           )}
 
           {(detailData.director || detailData.actors || detailData.writer || detailData.awards) && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {detailData.director && (
                 <div><h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">{t("detail_modal.director")}</h4><p className="text-sm">{detailData.director}</p></div>
               )}
