@@ -380,8 +380,9 @@ def init_db():
                 print(f"  [Migration] Per-user databases initialized for {len(users)} user(s)")
 
             # Clean up migrated data from master DB (keep only users table)
+            # Delete in FK-safe order: child tables first, then parents
             from sqlmodel import text as sa_text
-            for table in ("media_items", "sessions", "recommendations", "operation_logs"):
+            for table in ("recommendations", "operation_logs", "sessions", "media_items"):
                 db.execute(sa_text(f"DELETE FROM {table}"))
             db.commit()
             print("  [Migration] Cleaned up migrated data from master DB")

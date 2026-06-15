@@ -8,7 +8,6 @@ import { Toaster } from "./components/ui/sonner";
 import Aurora from "./components/Aurora";
 import { Header } from "./components/Header";
 import { TabNav } from "./components/TabNav";
-import FadeContent from "./components/FadeContent";
 import { HistorySidebar } from "./components/HistorySidebar";
 import { EnrichBanner } from "./components/EnrichBanner";
 import { Footer } from "./components/Footer";
@@ -40,7 +39,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function MainApp() {
   const location = useLocation();
 
-  // Reset scroll to top on every route change for reliable FadeContent entrance
+  // Reset scroll to top on every route change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [location.pathname]);
@@ -61,7 +60,7 @@ function MainApp() {
           <EnrichBanner />
           <TabNav />
           <div className="flex flex-col gap-3 sm:gap-6 py-3 sm:py-6">
-            <FadeContent key={location.pathname} duration={600} threshold={0} blur>
+            <div className="animate-fade-in">
               <Suspense fallback={
                 <div className="flex items-center justify-center py-16">
                   <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
@@ -76,7 +75,7 @@ function MainApp() {
                   <Route path="/history" element={<HistoryTab key="history" />} />
                 </Routes>
               </Suspense>
-            </FadeContent>
+            </div>
           </div>
           <HistorySidebar />
           <Footer />
