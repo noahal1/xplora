@@ -408,11 +408,11 @@ export function WishlistTab() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <button className="text-xs text-green hover:text-green/80 px-1.5 py-1 rounded transition-all opacity-0 group-hover:opacity-100"
+                      <button className="text-xs text-green hover:text-green/80 px-1.5 py-1 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
                         onClick={(e) => { e.stopPropagation(); setMarkingMovie(m); }} title={t("wishlist.mark_as_watched")}>
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                       </button>
-                      <button className="text-muted-foreground hover:text-destructive px-1 py-1 rounded transition-all opacity-0 group-hover:opacity-100"
+                      <button className="text-muted-foreground hover:text-destructive px-1 py-1 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
                         onClick={(e) => { e.stopPropagation(); deleteItem(m.id); }} title={t("watched.remove")}>
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
                       </button>

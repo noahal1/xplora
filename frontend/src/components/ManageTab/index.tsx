@@ -809,12 +809,11 @@ const TableEditableCell = memo(function TableEditableCell({ movie, field, editin
     );
   }
 
-  return (
-    <td className="px-3 py-2 border-b border-border cursor-pointer transition-colors hover:bg-accent/30 group"
+  return (      <td className="px-3 py-2 border-b border-border cursor-pointer transition-colors hover:bg-accent/30 group"
       onClick={() => onStartEdit(movie.id, field)} title={t("common.edit")}>
       <div className="flex items-center gap-1">
         {children}
-        <span className="opacity-0 group-hover:opacity-40 transition-opacity">
+        <span className="opacity-0 group-hover:opacity-40 max-sm:opacity-30 transition-opacity">
           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
         </span>
       </div>

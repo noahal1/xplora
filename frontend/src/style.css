@@ -876,6 +876,13 @@ input[type="number"].no-spinner {
     font-size: 0.75rem;
   }
 
+  /* Larger touch targets for pagination buttons */
+  .page-btn {
+    min-width: 2.25rem;
+    height: 2.25rem;
+    font-size: 0.875rem;
+  }
+
   /* Make table rows more tappable */
   td, th {
     padding-top: 0.625rem !important;

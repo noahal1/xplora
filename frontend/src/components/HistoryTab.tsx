@@ -369,7 +369,7 @@ export function HistoryTab() {
                 <div className="flex items-center gap-1.5">
                   {/* Delete button */}
                   <button
-                    className="text-muted-foreground hover:text-destructive p-1.5 rounded transition-all opacity-0 group-hover:opacity-100"
+                    className="text-muted-foreground hover:text-destructive p-1.5 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
                     onClick={(e) => { e.stopPropagation(); setDeleteTarget(s.id); }}
                     title={t("common.delete")}
                   >

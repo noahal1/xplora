@@ -1048,13 +1048,13 @@ const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle,
   return (
     <div className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
-      {/* Checkbox — shown on hover */}
+      {/* Checkbox — always visible on mobile, hover on desktop */}
       <input type="checkbox"
-        className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer opacity-0 group-hover:opacity-100 max-sm:opacity-100 transition-opacity duration-200"
         checked={isSelected} onChange={() => onToggle(movie.id)} />
-      {/* Delete button — shown on hover */}
+      {/* Delete button — always visible on mobile, hover on desktop */}
       <button
-        className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 hover:bg-red-500/80 hover:text-white transition-all duration-200 backdrop-blur-sm"
+        className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 sm:w-6 sm:h-6 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 max-sm:opacity-100 hover:bg-red-500/80 hover:text-white transition-all duration-200 backdrop-blur-sm"
         onClick={(e) => { e.stopPropagation(); onRemove(movie.id); }} title={t("watched.remove")}>
         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
@@ -1222,7 +1222,7 @@ const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle,
           </span>
         )}
         <button
-          className="flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all duration-200 opacity-0 group-hover:opacity-100"
+          className="flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all duration-200 opacity-0 group-hover:opacity-100 max-sm:opacity-100"
           onClick={() => onRemove(movie.id)} title={t("watched.remove")}>
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
