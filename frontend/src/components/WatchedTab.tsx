@@ -509,7 +509,7 @@ export function WatchedTab() {
           </div>
 
           {/* Sort Controls */}
-          <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
             <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.sort")}</span>
             {[
               { field: "created_at" as SortField, label: t("manage.sort_import_time") },
@@ -531,7 +531,7 @@ export function WatchedTab() {
           </div>
 
           {/* Rating Filters */}
-          <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
             {[
               { value: "all", label: t("watched.filter_all") },
               { value: "8-10", label: t("watched.filter_8_10") },
@@ -553,7 +553,7 @@ export function WatchedTab() {
           </div>
 
           {/* Media Type Filter */}
-          <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
             <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.media_type")}</span>
             {[
               { value: "all", label: t("manage.media_type_all") },
@@ -575,16 +575,33 @@ export function WatchedTab() {
 
           {/* Genre Filter */}
           {media.length > 0 && uniqueGenres.length > 0 && (
-            <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-              <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.genre_filter")}</span>
+            <div className="flex items-start gap-1.5 mb-3 flex-wrap pb-0.5">
+              <span className="text-[11px] text-muted-foreground mr-0.5 mt-0.5">{t("manage.genre_filter")}</span>
               <button className={`pill ${genreFilter === "all" ? "active" : ""}`}
                 onClick={() => { setGenreFilter("all"); setCurrentPage(0); }}>{t("manage.media_type_all")}</button>
-              {(showAllGenres ? uniqueGenres : uniqueGenres.slice(0, 6)).map((g) => (
+              {/* First 6 pills — always visible */}
+              {uniqueGenres.slice(0, 6).map((g) => (
                 <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
                   onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
               ))}
+              {/* Remaining pills — animated expand/collapse */}
               {uniqueGenres.length > 6 && (
-                <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5"
+                <div
+                  className="grid transition-all duration-300 ease-out-expo"
+                  style={{ gridTemplateRows: showAllGenres ? '1fr' : '0fr' }}
+                >
+                  <div className="overflow-hidden min-h-0">
+                    <div className="flex flex-wrap gap-1.5">
+                      {uniqueGenres.slice(6).map((g) => (
+                        <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
+                          onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {uniqueGenres.length > 6 && (
+                <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0"
                   onClick={() => setShowAllGenres((v) => !v)}>
                   {showAllGenres ? (
                     <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>

@@ -357,7 +357,7 @@ export function WishlistTab() {
             ))}
           </div>
           {/* Media Type Filter */}
-          <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
             <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.media_type")}</span>
             {[
               { value: "all", label: t("manage.media_type_all") },

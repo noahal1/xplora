@@ -470,7 +470,7 @@ export function RecommendTab() {
             </div>
 
             {/* ── Media Type Filter ─────────────────────── */}
-            <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap justify-start sm:justify-center pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap justify-start sm:justify-center pb-0.5">
               <span className="text-xs text-muted-foreground mr-1">{t("manage.media_type")}</span>
               {[
                 { value: "all", label: t("manage.media_type_all") },
@@ -489,17 +489,34 @@ export function RecommendTab() {
 
             {/* ── Genre Filter ─────────────────────────── */}
             {uniqueGenres.length > 0 && (
-              <div className="flex items-center gap-1.5 mb-5 overflow-x-auto sm:flex-wrap justify-start sm:justify-center pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-                <span className="text-xs text-muted-foreground mr-1 shrink-0">{t("manage.genre_filter")}</span>
+              <div className="flex items-start gap-1.5 mb-5 flex-wrap justify-start sm:justify-center pb-0.5">
+                <span className="text-xs text-muted-foreground mr-1 shrink-0 mt-0.5">{t("manage.genre_filter")}</span>
                 <button className={`pill ${genreFilter === "all" ? "active" : ""}`}
                   onClick={() => setGenreFilter("all")}>{t("manage.media_type_all")}</button>
-                {(showAllGenres ? uniqueGenres : uniqueGenres.slice(0, VISIBLE_GENRES)).map((g) => (
+                {/* First VISIBLE_GENRES pills — always visible */}
+                {uniqueGenres.slice(0, VISIBLE_GENRES).map((g) => (
                   <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
                     onClick={() => setGenreFilter(g)}>{translateGenreName(g)}</button>
                 ))}
+                {/* Remaining pills — animated expand/collapse */}
+                {uniqueGenres.length > VISIBLE_GENRES && (
+                  <div
+                    className="grid transition-all duration-300 ease-out-expo"
+                    style={{ gridTemplateRows: showAllGenres ? '1fr' : '0fr' }}
+                  >
+                    <div className="overflow-hidden min-h-0">
+                      <div className="flex flex-wrap gap-1.5">
+                        {uniqueGenres.slice(VISIBLE_GENRES).map((g) => (
+                          <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
+                            onClick={() => setGenreFilter(g)}>{translateGenreName(g)}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {uniqueGenres.length > VISIBLE_GENRES && (
                   <button
-                    className="pill text-muted-foreground/60 hover:text-foreground gap-0.5"
+                    className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0"
                     onClick={() => setShowAllGenres((v) => !v)}
                   >
                     {showAllGenres ? (

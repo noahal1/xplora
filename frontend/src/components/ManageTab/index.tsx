@@ -354,7 +354,7 @@ export function ManageTab() {
       </div>
 
       {/* ── Filters ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 mb-2 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <div className="flex items-center gap-1.5 mb-2 flex-wrap pb-0.5">
         <span className="text-xs text-muted-foreground mr-1">{t("manage.filter")}</span>
         {[{ value: "", label: t("manage.filter_all") }, { value: "watched", label: t("manage.filter_watched") }, { value: "wish", label: t("manage.filter_wish") }].map((opt) => (
           <button key={opt.value} className={`pill ${statusFilter === opt.value ? "active" : ""}`}
@@ -368,7 +368,7 @@ export function ManageTab() {
       </div>
 
       {/* Media Type Filter */}
-      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
         <span className="text-xs text-muted-foreground mr-1">{t("manage.media_type")}</span>
         {[{ value: "", label: t("manage.media_type_all") }, { value: "movie", label: t("manage.media_type_movie") }, { value: "tv", label: t("manage.media_type_tv") }].map((opt) => (
           <button key={opt.value} className={`pill ${mediaTypeFilter === opt.value ? "active" : ""}`}
@@ -378,16 +378,33 @@ export function ManageTab() {
 
       {/* Genre Filter */}
       {mediaList.length > 0 && uniqueGenres.length > 0 && (
-        <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
-          <span className="text-xs text-muted-foreground mr-1">{t("manage.genre_filter")}</span>
+        <div className="flex items-start gap-1.5 mb-3 flex-wrap pb-0.5">
+          <span className="text-xs text-muted-foreground mr-1 mt-0.5">{t("manage.genre_filter")}</span>
           <button className={`pill ${genreFilter === "" ? "active" : ""}`}
             onClick={() => { setGenreFilter(""); setPage(0); setSelected(new Set()); }}>{t("manage.media_type_all")}</button>
-          {(showAllGenres ? uniqueGenres : uniqueGenres.slice(0, VISIBLE_GENRES)).map((g) => (
+          {/* First VISIBLE_GENRES pills — always visible */}
+          {uniqueGenres.slice(0, VISIBLE_GENRES).map((g) => (
             <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
               onClick={() => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}>{translateGenreName(g)}</button>
           ))}
+          {/* Remaining pills — animated expand/collapse */}
           {uniqueGenres.length > VISIBLE_GENRES && (
-            <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5"
+            <div
+              className="grid transition-all duration-300 ease-out-expo"
+              style={{ gridTemplateRows: showAllGenres ? '1fr' : '0fr' }}
+            >
+              <div className="overflow-hidden min-h-0">
+                <div className="flex flex-wrap gap-1.5">
+                  {uniqueGenres.slice(VISIBLE_GENRES).map((g) => (
+                    <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
+                      onClick={() => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}>{translateGenreName(g)}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {uniqueGenres.length > VISIBLE_GENRES && (
+            <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0"
               onClick={() => setShowAllGenres((v) => !v)}>
               {showAllGenres ? (
                 <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
@@ -400,7 +417,7 @@ export function ManageTab() {
       )}
 
       {/* ── Sort bar ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 mb-3.5 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <div className="flex items-center gap-1.5 mb-3.5 flex-wrap pb-0.5">
         <span className="text-xs text-muted-foreground mr-1">{t("manage.sort")}</span>
         {([{ field: "created_at" as SortField, label: t("manage.sort_import_time") },
           { field: "title" as SortField, label: t("manage.sort_title") },
@@ -412,7 +429,7 @@ export function ManageTab() {
       </div>
 
       {/* ── Scrape source selector ──────────────────────────────── */}
-      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto sm:flex-wrap pb-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
         <span className="text-xs text-muted-foreground mr-1">{t("manage.scrape_source")}</span>
         {[{ value: "tmdb", label: "TMDB" }, { value: "tvmaze", label: "TVmaze" }].map((opt) => (
           <button key={opt.value} className={`pill ${enrichSource === opt.value ? "active" : ""}`}
@@ -453,19 +470,19 @@ export function ManageTab() {
                     <input type="checkbox" ref={selectAllRef} className="w-4 h-4 accent-primary cursor-pointer"
                       checked={mediaList.length > 0 && mediaList.every((m) => selected.has(m.id))} onChange={toggleSelectAll} />
                   </th>
-                  <th className="w-[52px] px-1 py-2.5 text-center font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_poster")}</th>
+                  <th className="w-[52px] px-1 py-2.5 text-center font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none max-sm:hidden">{t("manage.col_poster")}</th>
                   <th className="w-14 px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_status")}</th>
                   {(["title", "rating", "year", "genre", "created_at"] as const).map((field) => {
                     const widths: Record<string, number | undefined> = { title: 200, rating: 140, year: 72, genre: undefined, created_at: 100 };
                     return (
-                      <th key={field} className="px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none cursor-pointer hover:text-foreground transition-colors"
+                      <th key={field} className={`px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none cursor-pointer hover:text-foreground transition-colors${field === 'created_at' ? ' max-sm:hidden' : ''}`}
                         style={widths[field] ? { width: widths[field] } : undefined} onClick={() => handleSort(field)}>
                         {field === "title" ? t("manage.col_title") : field === "rating" ? t("manage.col_rating") : field === "year" ? t("manage.col_year") : field === "genre" ? t("manage.col_genre") : t("manage.col_date")}
                         <SortArrow field={field} />
                       </th>
                     );
                   })}
-                  <th className="w-[120px] text-center px-1 py-2.5 font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_actions")}</th>
+                  <th className="w-[120px] max-sm:w-[160px] text-center px-1 py-2.5 font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -598,11 +615,11 @@ const ManageTableRow = memo(function ManageTableRow({
 
   return (
     <tr className={`transition-colors ${isSelected ? "bg-primary/[0.04]" : "hover:bg-accent/20"}`}>
-      <td className="px-3 py-2 border-b border-border text-center">
-        <input type="checkbox" className="w-4 h-4 accent-primary cursor-pointer"
+      <td className="px-3 max-sm:px-2 py-2 max-sm:py-3 border-b border-border text-center">
+        <input type="checkbox" className="w-4 h-4 max-sm:w-5 max-sm:h-5 accent-primary cursor-pointer"
           checked={isSelected} onChange={() => onToggle(movie.id)} />
       </td>
-      <td className="px-1 py-2 border-b border-border text-center">
+      <td className="px-1 max-sm:hidden py-2 max-sm:py-3 border-b border-border text-center">
         <div className="relative w-[38px] h-[52px] rounded overflow-hidden bg-muted flex items-center justify-center mx-auto"
           style={{ border: "1px solid var(--border-subtle)" }}>
           {movie.poster_url ? (
@@ -620,7 +637,7 @@ const ManageTableRow = memo(function ManageTableRow({
           )}
         </div>
       </td>
-      <td className="px-3 py-2 border-b border-border">
+      <td className="px-3 max-sm:px-2 py-2 max-sm:py-3 border-b border-border">
         <div className="flex items-center gap-1.5">
           {movie.status === "wish" ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-pink px-1.5 py-0.5 rounded-full bg-pink/10 border border-pink/20">
@@ -665,35 +682,36 @@ const ManageTableRow = memo(function ManageTableRow({
         <span className="text-muted-foreground truncate block">{translateGenres(movie.genre) || "—"}</span>
       </TableEditableCell>
       <TableEditableCell movie={movie} field="created_at" editingCell={editingCell} sliderValue={sliderValue}
-        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
+        onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}
+        tdClassName="max-sm:hidden">
         <span className="text-muted-foreground text-xs">{movie.created_at ? movie.created_at.slice(0, 10) : "—"}</span>
       </TableEditableCell>
-      <td className="px-1 py-2 border-b border-border text-center whitespace-nowrap">
-        <div className="inline-flex items-center gap-0.5" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
+      <td className="px-1 max-sm:px-0.5 py-2 max-sm:py-3 border-b border-border text-center whitespace-nowrap">
+        <div className="inline-flex items-center gap-0.5 max-sm:gap-1" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
           {movie.status === "wish" && (
-            <button className="text-muted-foreground hover:text-green px-1.5 py-1 rounded transition-colors hover:bg-green/10"
+            <button className="text-muted-foreground hover:text-green px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors hover:bg-green/10"
               onClick={() => onSetMarkWatchedMovie(movie)} title={t("wishlist.mark_as_watched")}>
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </button>
           )}
-          <button className="text-muted-foreground hover:text-sky px-1.5 py-1 rounded transition-colors hover:bg-sky/10"
+          <button className="text-muted-foreground hover:text-sky px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors hover:bg-sky/10"
             onClick={() => onSetDetailMovie(movie)} title={t("manage.detail")}><InfoIcon size={14} /></button>
-          <button className="text-muted-foreground hover:text-foreground px-1.5 py-1 rounded transition-colors hover:bg-accent"
+          <button className="text-muted-foreground hover:text-foreground px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors hover:bg-accent"
             onClick={() => onStartInlineEdit(movie.id, "title")} title={t("common.edit")}>
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
           </button>
-          <button className={`px-1.5 py-1 rounded transition-colors ${movie.scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
+          <button className={`px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors ${movie.scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
             onClick={() => onSetRematchMovie(movie)} title={movie.scrape_error ? t("manage.rematch_error_hint") : t("manage.rematch")}>
             <Search size={14} />
           </button>
-          <button className={`px-1.5 py-1 rounded transition-colors ${enrichingIds.has(movie.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
+          <button className={`px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors ${enrichingIds.has(movie.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
             onClick={() => onEnrich(movie.id)} disabled={enrichingIds.has(movie.id)}
             title={enrichingIds.has(movie.id) ? t("manage.enriching") : t("manage.enrich")}>
             {enrichingIds.has(movie.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
           </button>
-          <button className="text-muted-foreground hover:text-destructive px-1.5 py-1 rounded transition-colors hover:bg-destructive/10"
+          <button className="text-muted-foreground hover:text-destructive px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors hover:bg-destructive/10"
             onClick={() => onConfirmDelete(movie.id, movie.title)} title={t("common.delete")}><Trash2 size={14} /></button>
         </div>
       </td>
@@ -734,7 +752,7 @@ const ManageTableRow = memo(function ManageTableRow({
    does not flow back through the parent and re-render all other rows.
    The parent's sliderValue prop is only used to INITIALIZE the local state
    when editing starts for THIS cell. ───────────────────────── */
-const TableEditableCell = memo(function TableEditableCell({ movie, field, editingCell, sliderValue, children, onStartEdit, onSaveEdit, onCancelEdit }: {
+const TableEditableCell = memo(function TableEditableCell({ movie, field, editingCell, sliderValue, children, onStartEdit, onSaveEdit, onCancelEdit, tdClassName }: {
   movie: MediaDetail;
   field: string;
   editingCell: { movieId: number; field: string } | null;
@@ -743,6 +761,7 @@ const TableEditableCell = memo(function TableEditableCell({ movie, field, editin
   onStartEdit: (movieId: number, field: string) => void;
   onSaveEdit: (movieId: number, field: string, value: string) => Promise<void>;
   onCancelEdit: () => void;
+  tdClassName?: string;
 }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -769,7 +788,7 @@ const TableEditableCell = memo(function TableEditableCell({ movie, field, editin
   if (isEditing) {
     if (field === "rating") {
       return (
-        <td className="px-3 py-2 border-b border-border">
+        <td className={`px-3 py-2 border-b border-border ${tdClassName || ''}`}>
           <span className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             <input type="range" min={0} max={10} step={0.5} value={localSlider}
               onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
@@ -798,7 +817,7 @@ const TableEditableCell = memo(function TableEditableCell({ movie, field, editin
       case "created_at": inputType = "date"; widthClass = "w-[110px]"; value = movie.created_at ? movie.created_at.slice(0, 10) : ""; break;
     }
     return (
-      <td className="px-3 py-2 border-b border-border">
+      <td className={`px-3 py-2 border-b border-border ${tdClassName || ''}`}>
         <div className="flex items-center gap-1">
           <input ref={inputRef} type={inputType} className={`no-spinner ${widthClass} input-field h-7 text-sm px-1.5 py-0.5`}
             defaultValue={value}                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(); } if (e.key === "Escape") { onCancelEdit(); } }}
@@ -809,7 +828,7 @@ const TableEditableCell = memo(function TableEditableCell({ movie, field, editin
     );
   }
 
-  return (      <td className="px-3 py-2 border-b border-border cursor-pointer transition-colors hover:bg-accent/30 group"
+  return (      <td className={`px-3 py-2 border-b border-border cursor-pointer transition-colors hover:bg-accent/30 group ${tdClassName || ''}`}
       onClick={() => onStartEdit(movie.id, field)} title={t("common.edit")}>
       <div className="flex items-center gap-1">
         {children}

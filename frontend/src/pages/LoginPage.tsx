@@ -5,6 +5,12 @@ import { useAuth } from "../context/AuthContext";
 import Orb from "../components/Orb";
 import { Logo } from "../components/Logo";
 
+// True on touch-capable devices — enables persistent Orb animation
+// since pointer-hover events aren't available on mobile
+const isTouchDevice =
+  typeof window !== "undefined" &&
+  ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
 export function LoginPage() {
   const { t } = useTranslation();
   const { login } = useAuth();
@@ -34,13 +40,26 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-page relative overflow-hidden">
-      {/* Interactive Orb background — larger & brighter on mobile */}
-      <div className="absolute inset-0 z-0 opacity-40 max-sm:opacity-70 max-sm:scale-110">
+      {/* Interactive Orb background — fine-tuned for mobile */}
+      <div className="absolute inset-0 z-0 opacity-40 max-sm:opacity-55">
         <Orb
           hoverIntensity={0.3}
           backgroundColor="#08090a"
+          forceHoverState={isTouchDevice}
+          rotateOnHover={true}
         />
       </div>
+
+      {/* Radial vignette overlay — enhances depth on mobile */}
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none sm:hidden"
+        style={{
+          background: [
+            'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(8,9,10,0.4) 70%, rgba(8,9,10,0.85) 100%)',
+            'radial-gradient(ellipse at 50% 60%, transparent 20%, rgba(8,9,10,0.3) 60%, transparent 100%)',
+          ].join(', '),
+        }}
+      />
 
       <div className="w-full max-w-sm relative z-10">
         {/* Logo — staggered entrance */}
