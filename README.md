@@ -74,6 +74,40 @@ The app will be available at **http://localhost:8327**.
 - The database (SQLite) persists automatically in `./data/`
 - Posters are cached in a Docker volume
 
+### 4. Poster cache configuration (optional)
+
+By default, posters are cached in a Docker named volume. If you want poster files to persist on your local disk instead, update `docker-compose.yml` to use a bind mount:
+
+```diff
+- volumes:
+-   - ./data:/app/data
+-   - poster_data:/app/backend/static/posters
++ volumes:
++   - ./data:/app/data
++   - ./data/posters:/app/backend/static/posters
+```
+
+Then remove the orphaned named volume at the bottom of `docker-compose.yml`:
+
+```diff
+- volumes:
+-   poster_data:
+```
+
+To use a different directory inside the container, add `POSTER_STORAGE_DIR` to your `.env` file and update the bind mount accordingly:
+
+```ini
+# .env — custom poster path inside the container
+POSTER_STORAGE_DIR=/app/data/posters
+```
+
+```yaml
+# docker-compose.yml — bind mount must match POSTER_STORAGE_DIR
+volumes:
+  - ./data:/app/data
+  - ./data/posters:/app/data/posters
+```
+
 ### Common Docker commands
 
 | Command | What it does |
@@ -105,6 +139,7 @@ The app will be available at **http://localhost:8327**.
 | `DB_POOL_TIMEOUT` | No | `30` | Seconds to wait for a pool connection |
 | `DB_POOL_RECYCLE` | No | `1800` | Seconds after which idle connections recycle |
 | `DB_POOL_PRE_PING` | No | `true` | Verify connection before use |
+| `POSTER_STORAGE_DIR` | No | `backend/static/posters/` | Poster image cache directory (inside container: `backend/static/posters/`) |
 
 *\* At least one AI API key required for recommendations. TMDB is strongly recommended.*
 
