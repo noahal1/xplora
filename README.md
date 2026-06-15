@@ -78,21 +78,12 @@ The app will be available at **http://localhost:8327**.
 
 By default, posters are cached in a Docker named volume. If you want poster files to persist on your local disk instead, update `docker-compose.yml` to use a bind mount:
 
-```diff
-- volumes:
--   - ./data:/app/data
--   - poster_data:/app/backend/static/posters
-+ volumes:
-+   - ./data:/app/data
-+   - ./data/posters:/app/backend/static/posters
-```
+volumes:
+ ./data:/app/data
+./data/posters:/app/backend/static/posters
+
 
 Then remove the orphaned named volume at the bottom of `docker-compose.yml`:
-
-```diff
-- volumes:
--   poster_data:
-```
 
 To use a different directory inside the container, add `POSTER_STORAGE_DIR` to your `.env` file and update the bind mount accordingly:
 
