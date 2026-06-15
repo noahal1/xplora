@@ -7,7 +7,8 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from auth import get_current_user
-from database import get_db
+from deps import get_user_db
+from database import get_user_session
 from helpers import parse_movie_data, get_api_key
 from ai_service import AIService
 from crud import save_session as db_save_session
@@ -58,15 +59,21 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
                     for r in recommendations_cache
                 ]
                 if rec_models:
-                    # Uses its own session (no db=db) since streaming response
-                    # outlives the request-scoped DI session
-                    db_save_session(
-                        model=model,
-                        source_count=len(movies),
-                        movies=movies,
-                        recommendations=rec_models,
-                        user_id=user_id,
-                    )
+                    # Create a session to the user's personal database (streaming
+                    # response outlives the request-scoped DI session, so we create
+                    # our own session here)
+                    user_session = get_user_session(user_id)
+                    try:
+                        db_save_session(
+                            model=model,
+                            source_count=len(movies),
+                            movies=movies,
+                            recommendations=rec_models,
+                            user_id=user_id,
+                            db=user_session,
+                        )
+                    finally:
+                        user_session.close()
             except Exception as e:
                 print(f"[DB] Error saving session: {e}")
 
@@ -78,7 +85,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
 async def recommend(
     request: RecommendationRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Generate movie recommendations based on watched movies and ratings."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])

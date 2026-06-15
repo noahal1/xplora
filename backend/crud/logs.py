@@ -1,4 +1,11 @@
-"""Operation / audit log CRUD operations."""
+"""Operation / audit log CRUD operations.
+
+Operation logs are stored in the MASTER database (not per-user DBs)
+so that admin users can query logs across all users.
+
+Each call creates a fresh session to avoid thread-safety issues
+with shared SQLAlchemy Session objects.
+"""
 
 from datetime import datetime, timezone
 import logging
@@ -7,17 +14,15 @@ from typing import Optional
 from sqlalchemy import func as sa_func
 from sqlmodel import Session, select
 
-from database import get_session
 from models import OperationLogRecord
 
 logger = logging.getLogger(__name__)
 
 
-def _resolve_db(db: Optional[Session] = None) -> tuple[Session, bool]:
-    """Return a session and whether it needs to be closed."""
-    if db is not None:
-        return db, False
-    return get_session(), True
+def _get_master_session() -> Session:
+    """Create a fresh master DB session for operation logs."""
+    from database import master_engine
+    return Session(master_engine)
 
 
 def log_operation(
@@ -25,8 +30,13 @@ def log_operation(
     detail: Optional[str] = None,
     db: Optional[Session] = None,
 ):
-    """Record an operation in the audit log."""
-    session, close_db = _resolve_db(db)
+    """Record an operation in the audit log (always writes to master DB).
+
+    The ``db`` parameter is accepted for backward compatibility but
+    is **ignored** — logs always go to the master database.
+    Each call creates its own session for thread safety.
+    """
+    session = _get_master_session()
     try:
         record = OperationLogRecord(
             user_id=user_id,
@@ -41,8 +51,7 @@ def log_operation(
         session.rollback()
         logger.warning("Failed to write operation log (action=%s): %s", action, e)
     finally:
-        if close_db:
-            session.close()
+        session.close()
 
 
 def get_operation_logs(
@@ -52,8 +61,8 @@ def get_operation_logs(
     page_size: int = 50,
     db: Optional[Session] = None,
 ) -> tuple[list[OperationLogRecord], int]:
-    """Query operation logs with optional filters."""
-    session, close_db = _resolve_db(db)
+    """Query operation logs with optional filters (always reads from master DB)."""
+    session = _get_master_session()
     try:
         query = select(OperationLogRecord)
         if user_id is not None:
@@ -74,5 +83,4 @@ def get_operation_logs(
         )
         return records, total
     finally:
-        if close_db:
-            session.close()
+        session.close()

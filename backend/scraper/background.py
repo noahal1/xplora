@@ -7,6 +7,10 @@ wrappers (``async_background_enrich_movies``,
 thread pool via :func:`asyncio.to_thread`.  Calling them directly
 blocks the asyncio event loop and freezes the entire server for
 the duration of the scrape.
+
+All functions operate on the **user's personal database**
+(``data/user_{id}.db``), creating their own sessions since
+background tasks outlive the request-scoped DI session.
 """
 
 import asyncio
@@ -16,6 +20,7 @@ import time
 from typing import Optional
 
 from config_manager import get_api_key as get_config_api_key
+from database import get_user_session
 from poster_cache import download_and_cache_poster
 from scraper.match import has_cjk
 from scraper.search import scrape_movie_metadata, TMDB_REQUEST_DELAY
@@ -30,6 +35,8 @@ def background_enrich_movies(user_id: int, movie_ids: list[int]):
     Skips movies that already have ``poster_url`` populated.
     Processes movies sequentially with rate limiting between TMDB requests.
     On failure, the error reason is stored in ``scrape_error`` for debugging.
+
+    Uses the user's personal database session for all CRUD operations.
     """
     from crud import get_media_for_user, enrich_media_metadata, set_scrape_error, clear_scrape_error
 
@@ -43,71 +50,70 @@ def background_enrich_movies(user_id: int, movie_ids: list[int]):
         total, user_id,
     )
 
-    for idx, movie_id in enumerate(movie_ids):
-        try:
-            movie = get_media_for_user(movie_id, user_id)
-            if not movie:
-                logger.warning("Movie %d not found — skipping", movie_id)
-                set_scrape_error(movie_id, user_id, "电影记录不存在")
-                failed += 1
-                continue
-
-            # Skip movies that already have metadata
-            if movie.poster_url:
-                skipped += 1
-                continue
-
-            metadata = scrape_movie_metadata(movie.title, movie.year)
-            if not metadata:
-                error_msg = _get_failure_reason(movie.title, movie.year)
-                set_scrape_error(movie_id, user_id, error_msg)
-                failed += 1
-                continue
-
-            # ── Poster local caching ────────────────────────────────
-            # Try to download the poster image from TMDB CDN and cache
-            # it locally. If the download fails (CDN blocked, timeout,
-            # etc.), we keep the original TMDB URL in poster_url — no
-            # worse than before — and set scrape_error to notify the
-            # user that local caching failed.
-            poster_cached = False
-            if metadata.get("poster_url"):
-                local_url = download_and_cache_poster(
-                    metadata["poster_url"],
-                    tmdb_id=metadata.get("tmdb_id") or metadata.get("source_id"),
-                )
-                if local_url:
-                    metadata["poster_url"] = local_url
-                    poster_cached = True
-
-            updated = enrich_media_metadata(movie_id, user_id, metadata)
-            if updated:
-                if poster_cached:
-                    clear_scrape_error(movie_id, user_id)
-                elif metadata.get("poster_url"):
-                    # Has a poster_url (TMDB CDN URL) but local
-                    # caching failed — keep the CDN URL as fallback
-                    set_scrape_error(
-                        movie_id, user_id,
-                        "海报图片下载失败，已保留原始 TMDB 地址。"
-                        "可稍后重试「批量刮削」以缓存到本地",
-                    )
-                enriched += 1
-            else:
-                set_scrape_error(movie_id, user_id, "数据库更新失败")
-                failed += 1
-
-            # Rate limit between movies
-            time.sleep(TMDB_REQUEST_DELAY)
-
-        except Exception as e:
-            error_msg = str(e)[:200]  # Truncate to avoid huge messages
+    # Create a session to the user's personal database
+    user_db = get_user_session(user_id)
+    try:
+        for idx, movie_id in enumerate(movie_ids):
             try:
-                set_scrape_error(movie_id, user_id, error_msg)
-            except Exception:
-                pass
-            logger.exception("Unexpected error scraping movie %d: %s", movie_id, e)
-            failed += 1
+                movie = get_media_for_user(movie_id, user_id, db=user_db)
+                if not movie:
+                    logger.warning("Movie %d not found — skipping", movie_id)
+                    set_scrape_error(movie_id, user_id, "电影记录不存在", db=user_db)
+                    failed += 1
+                    continue
+
+                # Skip movies that already have metadata
+                if movie.poster_url:
+                    skipped += 1
+                    continue
+
+                metadata = scrape_movie_metadata(movie.title, movie.year)
+                if not metadata:
+                    error_msg = _get_failure_reason(movie.title, movie.year)
+                    set_scrape_error(movie_id, user_id, error_msg, db=user_db)
+                    failed += 1
+                    continue
+
+                # ── Poster local caching ────────────────────────────────
+                poster_cached = False
+                if metadata.get("poster_url"):
+                    local_url = download_and_cache_poster(
+                        metadata["poster_url"],
+                        tmdb_id=metadata.get("tmdb_id") or metadata.get("source_id"),
+                    )
+                    if local_url:
+                        metadata["poster_url"] = local_url
+                        poster_cached = True
+
+                updated = enrich_media_metadata(movie_id, user_id, metadata, db=user_db)
+                if updated:
+                    if poster_cached:
+                        clear_scrape_error(movie_id, user_id, db=user_db)
+                    elif metadata.get("poster_url"):
+                        set_scrape_error(
+                            movie_id, user_id,
+                            "海报图片下载失败，已保留原始 TMDB 地址。"
+                            "可稍后重试「批量刮削」以缓存到本地",
+                            db=user_db,
+                        )
+                    enriched += 1
+                else:
+                    set_scrape_error(movie_id, user_id, "数据库更新失败", db=user_db)
+                    failed += 1
+
+                # Rate limit between movies
+                time.sleep(TMDB_REQUEST_DELAY)
+
+            except Exception as e:
+                error_msg = str(e)[:200]
+                try:
+                    set_scrape_error(movie_id, user_id, error_msg, db=user_db)
+                except Exception:
+                    pass
+                logger.exception("Unexpected error scraping movie %d: %s", movie_id, e)
+                failed += 1
+    finally:
+        user_db.close()
 
     logger.info(
         "Background enrichment complete for user_id=%d: "
@@ -125,6 +131,8 @@ def background_cache_posters(user_id: int, movie_ids: list[tuple[int, str, str |
     This is separate from :func:`background_enrich_movies` — it doesn't
     scrape metadata, it only downloads the poster image and updates
     ``poster_url`` to the local path.
+
+    Uses the user's personal database session for all CRUD operations.
     """
     from crud import get_media_for_user, enrich_media_metadata, set_scrape_error, clear_scrape_error
 
@@ -138,49 +146,52 @@ def background_cache_posters(user_id: int, movie_ids: list[tuple[int, str, str |
         total, user_id,
     )
 
-    for movie_id, poster_url, tmdb_id in movie_ids:
-        try:
-            movie = get_media_for_user(movie_id, user_id)
-            if not movie:
-                logger.warning("Movie %d not found — skipping", movie_id)
-                failed += 1
-                continue
+    # Create a session to the user's personal database
+    user_db = get_user_session(user_id)
+    try:
+        for movie_id, poster_url, tmdb_id in movie_ids:
+            try:
+                movie = get_media_for_user(movie_id, user_id, db=user_db)
+                if not movie:
+                    logger.warning("Movie %d not found — skipping", movie_id)
+                    failed += 1
+                    continue
 
-            # If the poster_url was already updated to local by a
-            # previous run, skip it
-            if movie.poster_url and movie.poster_url.startswith("/static/"):
-                skipped += 1
-                continue
+                # If the poster_url was already updated to local by a
+                # previous run, skip it
+                if movie.poster_url and movie.poster_url.startswith("/static/"):
+                    skipped += 1
+                    continue
 
-            if not movie.poster_url:
-                # Poster URL went missing (shouldn't happen, but handle
-                # gracefully)
-                skipped += 1
-                continue
+                if not movie.poster_url:
+                    skipped += 1
+                    continue
 
-            local_url = download_and_cache_poster(
-                movie.poster_url,
-                tmdb_id=tmdb_id or str(movie.id),
-            )
-            if local_url:
-                # Update poster_url in DB to local path
-                enrich_media_metadata(movie_id, user_id, {"poster_url": local_url})
-                clear_scrape_error(movie_id, user_id)
-                cached += 1
-            else:
-                set_scrape_error(
-                    movie_id, user_id,
-                    "海报图片下载失败，已保留原始 TMDB 地址。"
-                    "可稍后重试以缓存到本地",
+                local_url = download_and_cache_poster(
+                    movie.poster_url,
+                    tmdb_id=tmdb_id or str(movie.id),
+                )
+                if local_url:
+                    enrich_media_metadata(movie_id, user_id, {"poster_url": local_url}, db=user_db)
+                    clear_scrape_error(movie_id, user_id, db=user_db)
+                    cached += 1
+                else:
+                    set_scrape_error(
+                        movie_id, user_id,
+                        "海报图片下载失败，已保留原始 TMDB 地址。"
+                        "可稍后重试以缓存到本地",
+                        db=user_db,
+                    )
+                    failed += 1
+
+            except Exception as e:
+                logger.exception(
+                    "Unexpected error caching poster for movie %d: %s",
+                    movie_id, e,
                 )
                 failed += 1
-
-        except Exception as e:
-            logger.exception(
-                "Unexpected error caching poster for movie %d: %s",
-                movie_id, e,
-            )
-            failed += 1
+    finally:
+        user_db.close()
 
     logger.info(
         "Poster cache complete for user_id=%d: "

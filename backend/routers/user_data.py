@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from auth import get_current_user
-from database import get_db
+from deps import get_user_db
 from crud import log_operation, save_media, save_wishlist_items
 from models import MediaRating, WishlistItem
 from scraper import async_background_enrich_movies
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/user", tags=["user-data"])
 @router.get("/export")
 async def export_my_data(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Export current user's data as JSON (movies + wishlist + sessions)."""
     from models import MediaItemRecord, SessionRecord, RecommendationRecord
@@ -75,7 +75,7 @@ async def import_my_data(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Import movies from a previously exported JSON file.
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from auth import get_current_user
-from database import get_db
+from deps import get_user_db
 from helpers import parse_movie_data
 from models import (
     MediaData,
@@ -50,7 +50,7 @@ async def add_watched_media(
     request: WishlistItem,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Add a single media item to the watched list.
 
@@ -101,7 +101,7 @@ async def replace_media(
     request: MediaData,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Replace all watched media items for current user (clear + insert).
 
@@ -124,7 +124,7 @@ async def replace_media(
 @router.get("/media/titles")
 async def list_media_titles(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Lightweight endpoint: return just media titles for the current user."""
     titles = db_get_media_titles(current_user["id"], db=db)
@@ -145,7 +145,7 @@ async def list_media(
     media_type: str = "",
     genre: str = "",
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """List saved media items for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv'), genre."""
     status_filter = status if status in ("watched", "wish") else None
@@ -205,7 +205,7 @@ async def update_media_endpoint(
     media_id: int,
     data: dict,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Update a saved media item (must belong to current user)."""
     updated = db_update_media(
@@ -266,7 +266,7 @@ async def enrich_media_metadata_endpoint(
     media_id: int,
     source: str = Query("tmdb", pattern="^(tmdb|tvmaze)$", description="Search source: tmdb or tvmaze"),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Scrape metadata from TMDB or TVmaze for a media item by its title and update the record."""
     media_item = get_media_for_user(media_id, current_user["id"], db=db)
@@ -378,7 +378,7 @@ async def mark_as_watched(
     media_id: int,
     request: MarkAsWatchedRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Move a wishlist item to watched with a rating."""
     updated = mark_media_as_watched(
@@ -407,7 +407,7 @@ async def mark_as_watched(
 async def delete_media_endpoint(
     media_id: int,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Delete a saved media item (must belong to current user)."""
     deleted = db_delete_media(media_id, current_user["id"], db=db)
@@ -421,7 +421,7 @@ async def delete_media_endpoint(
 async def batch_delete_media_endpoint(
     request: dict,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Batch delete media items by IDs."""
     ids = request.get("ids", [])
@@ -435,7 +435,7 @@ async def batch_delete_media_endpoint(
 @router.get("/media/enrich-status")
 async def get_enrich_status(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Get the status of background metadata enrichment for the current user.
 
@@ -457,7 +457,7 @@ async def get_enrich_status(
 async def enrich_all_media(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Launch background metadata scraping for all media items without posters.
 
@@ -478,7 +478,7 @@ async def enrich_all_media(
 async def cache_posters(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Download and cache posters for items that already have TMDB CDN URLs but haven't been cached locally yet."""
     items = db_get_external_poster_media_ids(current_user["id"], db=db)
@@ -493,7 +493,7 @@ async def cache_posters(
 @router.delete("/media")
 async def delete_all_media_endpoint(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Delete all saved media items for current user."""
     count = delete_all_media_for_user(current_user["id"], db=db)
@@ -509,7 +509,7 @@ async def search_media(
     q: str = Query(..., min_length=1, description="Search query"),
     source: str = Query("auto", pattern="^(tmdb|omdb|tvmaze|auto)$", description="Data source: tmdb, omdb, tvmaze, or auto"),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Search for movies/TV via external sources (TMDB / OMDb / TVmaze)."""
     try:
@@ -525,7 +525,7 @@ async def rematch_media(
     media_id: int,
     request: dict,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Manually rematch a media item to a specific search result.
 
@@ -606,7 +606,7 @@ async def media_detail(
     source_id: str = Query(..., min_length=1, description="Media ID from the source"),
     media_type: str = Query("movie", pattern="^(movie|tv)$", description="Media type: movie or tv"),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Fetch full media details from external source."""
     try:
@@ -625,7 +625,7 @@ async def replace_wishlist(
     request: WishlistData,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Replace all wishlist items for current user (clear + insert).
 
@@ -659,7 +659,7 @@ async def add_to_wishlist(
     request: WishlistItem,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Add a single media item to the wishlist.
 
@@ -688,7 +688,7 @@ async def import_wishlist(
     request: WishlistData,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Append items to the wishlist (no clearing of existing items).
 
@@ -726,7 +726,7 @@ async def import_wishlist(
 @router.delete("/wishlist")
 async def clear_wishlist(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Delete all wishlist items for current user."""
     count = db_delete_media_by_status(current_user["id"], "wish", db=db)

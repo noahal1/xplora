@@ -13,7 +13,7 @@ from crud import (
     change_password,
     log_operation,
 )
-from database import get_db
+from database import get_db, init_user_database, delete_user_database
 from models import (
     LoginRequest,
     LoginResponse,
@@ -51,6 +51,13 @@ async def admin_create_user(
     """Admin only: create a new user account."""
     try:
         user = create_user(req.username, req.password, is_admin=False, db=db)
+        try:
+            # Create the user's personal database
+            init_user_database(user.id, user.username)
+        except Exception as e:
+            # Rollback user creation if database creation fails
+            admin_delete_user(user.id, db=db)
+            raise HTTPException(status_code=500, detail=f"创建用户数据库失败: {str(e)}")
         log_operation(_admin["id"], _admin["username"], "admin_create_user", f"创建用户: {user.username}", db=db)
         return UserInfo(
             id=user.id,
@@ -88,12 +95,14 @@ async def admin_delete_user_endpoint(
     admin: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Admin only: delete a user account."""
+    """Admin only: delete a user account and their database."""
     if user_id == admin["id"]:
         raise HTTPException(status_code=400, detail="不能删除自己的账号")
     deleted = admin_delete_user(user_id, db=db)
     if not deleted:
         raise HTTPException(status_code=404, detail="用户不存在")
+    # Delete the user's personal database
+    delete_user_database(user_id)
     log_operation(admin["id"], admin["username"], "admin_delete_user", f"删除用户: {user_id}", db=db)
     return {"status": "deleted"}
 

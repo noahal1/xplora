@@ -34,9 +34,11 @@ async def lifespan(app: FastAPI):
     print("=" * 50)
 
     init_db()
-    from database import DATABASE_URL
-    db_type = "SQLite" if "sqlite" in DATABASE_URL else "PostgreSQL"
-    print(f"  Database: {db_type} — {DATABASE_URL}")
+    from database import MASTER_DATABASE_URL, USE_PER_USER_DBS
+    db_type = "SQLite" if "sqlite" in MASTER_DATABASE_URL else "PostgreSQL"
+    print(f"  Database: {db_type} — {MASTER_DATABASE_URL}")
+    if USE_PER_USER_DBS:
+        print(f"  Per-user DBs: enabled (data/user_{{id}}.db)")
 
     deepseek_key = os.getenv("DEEPSEEK_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
@@ -101,11 +103,11 @@ app.include_router(logs_router)
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint with API key status and system info."""
-    from database import engine as db_engine
+    from database import master_engine as db_engine
     from sqlalchemy import inspect
 
-    from database import DATABASE_URL
-    db_type = "sqlite" if "sqlite" in DATABASE_URL else "postgresql"
+    from database import MASTER_DATABASE_URL
+    db_type = "sqlite" if "sqlite" in MASTER_DATABASE_URL else "postgresql"
     db_ok = True
     try:
         inspector = inspect(db_engine)

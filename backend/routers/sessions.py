@@ -9,7 +9,7 @@ from crud import (
     get_session_detail as db_get_session_detail,
     delete_session as db_delete_session,
 )
-from database import get_db
+from deps import get_user_db
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -19,7 +19,7 @@ async def list_sessions(
     page: int = 0,
     page_size: int = 20,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """List recommendation sessions for current user."""
     sessions, total = db_get_sessions(
@@ -46,7 +46,7 @@ async def list_sessions(
 async def get_session(
     session_id: int,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Get a single session with its recommendations (must belong to user)."""
     session = db_get_session_detail(session_id, current_user["id"], db=db)
@@ -75,7 +75,7 @@ async def get_session(
 async def delete_session(
     session_id: int,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_user_db),
 ):
     """Delete a session (must belong to current user)."""
     deleted = db_delete_session(session_id, current_user["id"], db=db)

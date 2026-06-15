@@ -1,10 +1,12 @@
 """Re-download missing poster files for all users.
 
-Scans the database for media items with ``/static/posters/`` URLs, checks if
-the file exists on disk, and re-fetches from TMDB if missing.
+Scans each user's database for media items with ``/static/posters/`` URLs,
+checks if the file exists on disk, and re-fetches from TMDB if missing.
 
 Uses the TMDB API to get the correct poster_path (hash-based), since the
 original CDN URL was overwritten when the local path was stored.
+
+In per-user DB mode, this script iterates through each user's database.
 """
 
 import logging
@@ -12,10 +14,10 @@ import os
 import sys
 
 from config_manager import get_api_key as get_config_api_key
-from database import get_session
+from database import get_session, USE_PER_USER_DBS, get_user_session
 from httpx import Timeout
 from http_client import get_shared_client
-from models import MediaItemRecord
+from models import MediaItemRecord, UserRecord
 from movie_search import TMDB_IMAGE_BASE
 from poster_cache import download_and_cache_poster, ensure_poster_dir
 from sqlmodel import select
@@ -52,25 +54,10 @@ def _fetch_poster_url(tmdb_id: str, media_type: str) -> str | None:
     return None
 
 
-def recache_missing_posters() -> tuple[int, int, int]:
-    """Find all media items with local poster URLs whose files are missing
-    and re-download them from TMDB.
-
-    Returns (total_checked, already_exist, re_cached).
+def _process_user_records(records: list) -> tuple[int, int]:
+    """Process poster records for a single user's media items.
+    Returns (already_exist, re_cached).
     """
-    ensure_poster_dir()
-    db = get_session()
-    try:
-        records = db.exec(
-            select(MediaItemRecord).where(
-                MediaItemRecord.poster_url.isnot(None),
-                MediaItemRecord.poster_url.like("/static/%"),
-            )
-        ).all()
-    finally:
-        db.close()
-
-    total = len(records)
     exists = 0
     recached = 0
 
@@ -83,15 +70,10 @@ def recache_missing_posters() -> tuple[int, int, int]:
 
         if os.path.isfile(local_path):
             exists += 1
-            continue  # File exists, skip
+            continue
 
         logger.info("Missing: %s (media_id=%d, title=%s)", filename, r.id, r.title)
 
-        # Fetch the poster URL from TMDB using stored tmdb_id
-        # Filename formats:
-        #   Old: "tmdb_550.jpg"
-        #   New: "tmdb_550_abc12345.jpg"  (with URL hash suffix)
-        # Extract the TMDB ID (second part between underscores)
         if r.tmdb_id:
             tmdb_id = r.tmdb_id
         else:
@@ -110,7 +92,63 @@ def recache_missing_posters() -> tuple[int, int, int]:
         else:
             logger.warning("  Could not get poster URL from TMDB for media_id=%d", r.id)
 
-    return total, exists, recached
+    return exists, recached
+
+
+def recache_missing_posters() -> tuple[int, int, int]:
+    """Find all media items with local poster URLs whose files are missing
+    and re-download them from TMDB.
+
+    Returns (total_checked, already_exist, re_cached).
+    """
+    ensure_poster_dir()
+    total = 0
+    total_exists = 0
+    total_recached = 0
+
+    if USE_PER_USER_DBS:
+        # Iterate through each user's database
+        master_db = get_session()
+        try:
+            users = master_db.exec(select(UserRecord)).all()
+        finally:
+            master_db.close()
+
+        for user in users:
+            user_db = get_user_session(user.id)
+            try:
+                records = user_db.exec(
+                    select(MediaItemRecord).where(
+                        MediaItemRecord.poster_url.isnot(None),
+                        MediaItemRecord.poster_url.like("/static/%"),
+                    )
+                ).all()
+                if records:
+                    exists, recached = _process_user_records(records)
+                    total += len(records)
+                    total_exists += exists
+                    total_recached += recached
+            finally:
+                user_db.close()
+    else:
+        # Shared DB mode — query directly
+        db = get_session()
+        try:
+            records = db.exec(
+                select(MediaItemRecord).where(
+                    MediaItemRecord.poster_url.isnot(None),
+                    MediaItemRecord.poster_url.like("/static/%"),
+                )
+            ).all()
+        finally:
+            db.close()
+
+        exists, recached = _process_user_records(records)
+        total = len(records)
+        total_exists = exists
+        total_recached = recached
+
+    return total, total_exists, total_recached
 
 
 if __name__ == "__main__":
