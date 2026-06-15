@@ -62,10 +62,23 @@ def background_enrich_movies(user_id: int, movie_ids: list[int]):
                     failed += 1
                     continue
 
-                # Skip movies that already have metadata
+                # Skip movies that already have metadata AND the file exists on disk
                 if movie.poster_url:
-                    skipped += 1
-                    continue
+                    from poster_cache import local_poster_file_exists
+                    if movie.poster_url.startswith("/static/"):
+                        if local_poster_file_exists(movie.poster_url):
+                            skipped += 1
+                            continue
+                        # File missing — re-scrape to re-download
+                        logger.info(
+                            "Poster file missing for '%s' (ID=%d) — re-scraping",
+                            movie.title, movie.id,
+                        )
+                    else:
+                        # External URL (TMDB CDN) — not cached yet;
+                        # skip here because cache-posters handles these
+                        skipped += 1
+                        continue
 
                 metadata = scrape_movie_metadata(movie.title, movie.year)
                 if not metadata:

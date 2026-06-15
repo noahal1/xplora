@@ -508,16 +508,42 @@ def clear_scrape_error(media_id: int, user_id: int, db: Optional[Session] = None
 
 
 def get_unenriched_media_ids(user_id: int, db: Optional[Session] = None) -> list[int]:
-    """Return IDs of all media items for a user that don't have poster_url yet."""
+    """Return IDs of all media items for a user that need metadata enrichment.
+
+    Includes items where:
+    - ``poster_url`` is ``NULL`` (never scraped), OR
+    - ``poster_url`` points to ``/static/...`` but the file is missing on disk
+      (e.g. Docker volume was reset, files manually deleted)
+
+    This ensures that ``enrich-all`` re-downloads posters for items whose
+    local files have been lost.
+    """
+    from poster_cache import local_poster_file_exists
+
     session, close_db = _resolve_db(db)
     try:
-        records = session.exec(
+        # Items with NULL poster_url
+        null_records = session.exec(
             select(MediaItemRecord.id).where(
                 MediaItemRecord.user_id == user_id,
                 MediaItemRecord.poster_url.is_(None),
             )
         ).all()
-        return list(records)
+        result: list[int] = [r for r in null_records]
+
+        # Items with /static/ poster_url but missing file on disk
+        local_records = session.exec(
+            select(MediaItemRecord.id, MediaItemRecord.poster_url).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.poster_url.isnot(None),
+                MediaItemRecord.poster_url.like("/static/%"),
+            )
+        ).all()
+        for r in local_records:
+            if not local_poster_file_exists(r.poster_url):
+                result.append(r.id)
+
+        return result
     finally:
         if close_db:
             session.close()

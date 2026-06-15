@@ -48,6 +48,26 @@ def get_poster_dir() -> str:
     return POSTER_DIR
 
 
+def local_poster_file_exists(poster_url: str) -> bool:
+    """Check if a local poster file exists on disk for a given ``/static/`` poster URL.
+
+    Returns ``True`` if:
+    - The URL is not a local path (can't check — assume exists)
+    - The file actually exists on disk
+
+    Returns ``False`` if the URL starts with ``/static/`` but the
+    corresponding file is missing from the filesystem.
+
+    This is used to detect poster files that were lost (e.g. deleted
+    manually, Docker volume reset) so they can be re-downloaded.
+    """
+    if not poster_url or not poster_url.startswith("/static/"):
+        return True  # not a local path — can't verify; assume ok
+    filename = poster_url.replace("/static/posters/", "")
+    local_path = os.path.join(POSTER_DIR, filename)
+    return os.path.isfile(local_path)
+
+
 def _generate_filename(poster_url: str, tmdb_id: str | None = None) -> str:
     """Generate a deterministic filename for a poster image.
 

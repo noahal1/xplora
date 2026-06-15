@@ -17,6 +17,7 @@ Set the DATABASE_URL environment variable for the master DB, e.g.:
 
 import os
 import logging
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -111,7 +112,7 @@ def _create_sqlite_engine(url: str):
     engine = build_engine(
         url,
         echo=False,
-        connect_args={"check_same_thread": False},
+        connect_args={"check_same_thread": False, "timeout": 5},
     )
 
     @sa_event.listens_for(engine, "connect")
@@ -151,17 +152,32 @@ else:
 
 # ---- Per-user Engine Cache ----
 
-_user_engines: dict[int, any] = {}
+_user_engines: OrderedDict[int, any] = OrderedDict()
+_MAX_USER_ENGINES = 100
 
 
 def get_user_engine(user_id: int):
-    """Get (or create) the SQLite engine for a specific user's database."""
-    if user_id not in _user_engines:
-        url = get_user_database_url(user_id)
-        engine = _create_sqlite_engine(url)
-        _user_engines[user_id] = engine
-        logger.info(f"Created engine for user DB: {url}")
-    return _user_engines[user_id]
+    """Get (or create) the SQLite engine for a specific user's database.
+
+    Engines are cached in an LRU fashion.  When the cache exceeds
+    ``_MAX_USER_ENGINES``, the least recently used engine is evicted
+    to prevent unbounded memory growth.
+    """
+    if user_id in _user_engines:
+        _user_engines.move_to_end(user_id)
+        return _user_engines[user_id]
+
+    url = get_user_database_url(user_id)
+    engine = _create_sqlite_engine(url)
+
+    # Evict the oldest engine if cache is full
+    if len(_user_engines) >= _MAX_USER_ENGINES:
+        oldest_user_id, _ = _user_engines.popitem(last=False)
+        logger.info(f"Evicted engine for user id={oldest_user_id} (cache full)")
+
+    _user_engines[user_id] = engine
+    logger.info(f"Created engine for user DB: {url}")
+    return engine
 
 
 def init_user_database(user_id: int, username: str) -> None:
