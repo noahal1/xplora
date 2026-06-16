@@ -56,7 +56,10 @@ def save_session(
             session.add(rec_record)
 
         session.commit()
-        session.refresh(sess)
+        # Explicit refresh is intentionally omitted. After commit() the
+        # instance is expired but the primary key (id) is already populated
+        # by SQLite's lastrowid. Other attributes will be lazy-loaded on
+        # first access while the session is still open.
         return sess
     except Exception:
         session.rollback()

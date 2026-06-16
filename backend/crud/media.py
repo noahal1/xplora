@@ -104,8 +104,11 @@ def save_media(
             session.add(record)
             records.append(record)
         session.commit()
-        for r in records:
-            session.refresh(r)
+        # Explicit refresh is intentionally omitted. After commit() the
+        # instances are expired (expire_on_commit=True is the default).
+        # The primary key id is already populated by SQLite's lastrowid,
+        # and other attributes will be auto-refreshed on first access
+        # (lazy loading) while the session is still open.
         return records
     except Exception:
         session.rollback()
@@ -138,8 +141,6 @@ def save_wishlist_items(
             session.add(record)
             records.append(record)
         session.commit()
-        for r in records:
-            session.refresh(r)
         return records
     except Exception:
         session.rollback()
@@ -263,7 +264,10 @@ def mark_media_as_watched(
         record.status = "watched"
         record.rating = max(0.0, min(10.0, rating))
         session.commit()
-        session.refresh(record)
+        # Explicit refresh is intentionally omitted. After commit() the
+        # instance is expired but remains in the session identity map.
+        # Attributes will be auto-refreshed (lazy loaded) on first access
+        # while the session is still open.
         return record
     except Exception:
         session.rollback()
@@ -356,7 +360,6 @@ def update_media(
             if parsed:
                 record.created_at = parsed
         session.commit()
-        session.refresh(record)
         return record
     except Exception:
         session.rollback()
@@ -457,7 +460,6 @@ def enrich_media_metadata(
                 record.year = metadata["year"]
 
         session.commit()
-        session.refresh(record)
         return record
     except Exception:
         session.rollback()
