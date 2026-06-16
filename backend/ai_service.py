@@ -158,19 +158,24 @@ class AIService:
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
     ) -> str:
-        """Build an optimized prompt for the AI model with taste analysis and exclude list."""
+        """Build an optimized prompt for the AI model with taste analysis and exclude list.
 
-        # User's watched movies list
+        Instead of listing ALL watched movies (which wastes tokens), this uses:
+        - A compact sample of top movies (up to 15 highest-rated) as concrete examples
+        - A structured taste analysis summary (the real signal — tells the AI the patterns)
+        - An exclude list to prevent recommending already-watched movies
+        """
+
+        # Compact sample: top 15 highest-rated movies as concrete examples
+        movies_sorted = sorted(movies, key=lambda m: m.rating or 0, reverse=True)
+        sample = movies_sorted[:15]
         movies_list = "\n".join(
             f"- {m.title}" + (f" ({m.year})" if m.year else "") +
             (f" [{m.genre}]" if m.genre else "") +
             f" — Rating: {m.rating}/10"
-            for m in movies
+            for m in sample
         )
-
-        # Watched titles (for exclusion)
-        exclude_list = watched_titles or [m.title for m in movies]
-        exclude_str = "、".join(exclude_list[:50])  # Cap at 50 titles
+        total_count = len(movies)
 
         # Taste analysis summary
         taste_summary = ""
@@ -181,14 +186,12 @@ class AIService:
 
         return f"""You are a professional movie recommendation expert. Based on the movies the user has watched and their ratings, recommend NEW movies they haven't seen.
 
-## User's Watched Movies (with ratings on a 0-10 scale)
+## User's Taste Profile
+Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-rated movies:
 {movies_list}
 
 ## Taste Analysis
 {taste_summary or "No taste analysis available."}
-
-## ⚠️ CRITICAL: DO NOT Recommend These Movies (User has already watched them)
-{exclude_str}
 
 {strategy_instruction}
 
@@ -306,6 +309,25 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             for r in recs
         ]
 
+    @staticmethod
+    def _filter_watched(recs: list, watched_titles: Optional[list[str]]) -> list:
+        """Filter out recommendations that the user has already watched.
+
+        Works with both MediaRecommendation objects and raw dicts.
+        Handles None input gracefully and normalizes titles for comparison.
+        """
+        if not watched_titles:
+            return recs
+        watched_set = {t.strip().lower() for t in watched_titles if t}
+        if not watched_set:
+            return recs
+        filtered = []
+        for r in recs:
+            title = r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "")
+            if title.strip().lower() not in watched_set:
+                filtered.append(r)
+        return filtered
+
     def get_recommendations(
         self,
         movies: list[MediaRating],
@@ -346,7 +368,8 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         if not content:
             raise ValueError("Empty response from AI model")
 
-        return self._parse_response(content)
+        recs = self._parse_response(content)
+        return self._filter_watched(recs, watched_titles)
 
     def _build_followup_prompt(
         self,
@@ -359,12 +382,16 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         taste_analysis: Optional[dict] = None,
     ) -> str:
         """Build the prompt for follow-up conversation."""
+        # Compact sample: top 15 highest-rated movies
+        movies_sorted = sorted(movies, key=lambda m: m.rating or 0, reverse=True)
+        sample = movies_sorted[:15]
         movies_list = "\n".join(
             f"- {m.title}" + (f" ({m.year})" if m.year else "") +
             (f" [{m.genre}]" if m.genre else "") +
             f" — Rating: {m.rating}/10"
-            for m in movies
+            for m in sample
         )
+        total_count = len(movies)
 
         recs_list = "\n".join(
             f"- {r.title}" + (f" ({r.year})" if r.year else "") +
@@ -381,20 +408,14 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         if taste_analysis:
             taste_summary = self._build_taste_summary(taste_analysis)
 
-        # Exclude list
-        exclude_list = watched_titles or [m.title for m in movies]
-        exclude_str = "、".join(exclude_list[:50])
-
         return f"""You are a professional movie recommendation expert in a conversation with a user.
 
-## User's Watched Movies (0-10 scale)
+## User's Taste Profile
+Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-rated movies:
 {movies_list}
 
 ## Taste Analysis
 {taste_summary or "No taste analysis available."}
-
-## Already Watched (DO NOT recommend these)
-{exclude_str}
 
 ## Previously Recommended
 {recs_list}
@@ -496,6 +517,9 @@ Format 2 - For explanation or other questions:
         try:
             json_str = self._extract_json(full_content)
             data = json.loads(json_str)
+            # Filter out already-watched movies from follow-up recommendations
+            if data.get("recommendations"):
+                data["recommendations"] = self._filter_watched(data["recommendations"], watched_titles)
             result_data = json.dumps(data, ensure_ascii=False)
             yield f"event: result\ndata: {result_data}\n\n"
             return
@@ -573,6 +597,9 @@ Format 2 - For explanation or other questions:
             json_str = self._extract_json(accumulated)
             data = json.loads(json_str)
             recs = data.get("recommendations", [])
+
+            # Filter out already-watched movies before yielding
+            recs = self._filter_watched(recs, watched_titles)
 
             # Yield each recommendation
             for rec in recs:
