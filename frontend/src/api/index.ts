@@ -332,6 +332,20 @@ export async function listOperationLogs(params: {
   return fetchJSON(`${API_BASE}/logs?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
+/** Check for app updates via GitHub Releases */
+export async function checkUpdate(force?: boolean): Promise<{
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  release_url: string | null;
+  release_notes: string | null;
+  published_at: string | null;
+  error: string | null;
+}> {
+  const qs = force ? "?force=true" : "";
+  return fetchJSON(`${API_BASE}/update/check${qs}`);
+}
+
 /** Get health status */
 export async function getHealth(): Promise<{
   status: string;

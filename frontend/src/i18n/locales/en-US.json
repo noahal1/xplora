@@ -468,6 +468,21 @@
     "failed": "failed",
     "dismiss": "Dismiss"
   },
+  "update": {
+    "checking": "Checking for updates...",
+    "check_now": "Check for Updates",
+    "up_to_date": "🎉 Xplora is up to date (v{{version}})",
+    "available": "🚀 New version v{{latest}} available",
+    "current": "Current version",
+    "latest": "Latest version",
+    "update_available": "Update Available",
+    "release_notes": "Release Notes",
+    "download": "Download Latest Version",
+    "dismiss": "Dismiss",
+    "check_failed": "Update check failed: {{error}}",
+    "published_at": "Released {{date}}",
+    "notification_badge": "New version available"
+  },
   "detail_modal": {
     "loading": "Loading movie details...",
     "overview": "Overview",

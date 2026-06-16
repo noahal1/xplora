@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { changePassword } from "../api";
+import { changePassword, checkUpdate } from "../api";
 import { useToast } from "../context/ToastContext";
+import { UpdateModal } from "../components/UpdateModal";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
@@ -17,6 +18,16 @@ interface HealthStatus {
   database: string;
   database_status: string;
   api_keys: Record<string, boolean>;
+}
+
+interface UpdateInfo {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  release_url: string | null;
+  release_notes: string | null;
+  published_at: string | null;
+  error: string | null;
 }
 
 const API_KEY_META: Record<string, { label: string; docs: string; placeholder: string }> = {
@@ -45,6 +56,11 @@ export function ProfilePage() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthError, setHealthError] = useState("");
+
+  // === Update check ===
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateLoading, setUpdateLoading] = useState(false);
 
   // === API key editing ===
   const [editKeys, setEditKeys] = useState<Record<string, string>>({});
@@ -599,7 +615,31 @@ export function ProfilePage() {
         <div className="space-y-2 text-sm">
           <div className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/30">
             <span className="text-muted-foreground">{t("profile.app_version")}</span>
-            <span className="font-mono text-xs">{health?.version || "—"}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs">{health?.version || "—"}</span>
+              <button
+                onClick={async () => {
+                  setUpdateLoading(true);
+                  try {
+                    const info = await checkUpdate(true);
+                    setUpdateInfo(info);
+                    setUpdateModalOpen(true);
+                  } catch {
+                    // ignore
+                  } finally {
+                    setUpdateLoading(false);
+                  }
+                }}
+                disabled={updateLoading}
+                className="text-[10px] text-primary hover:underline shrink-0"
+              >
+                {updateLoading ? (
+                  <span className="inline-block w-3 h-3 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+                ) : (
+                  t("update.check_now")
+                )}
+              </button>
+            </div>
           </div>
           <div className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/30">
             <span className="text-muted-foreground">{t("profile.db_status")}</span>
@@ -640,6 +680,15 @@ export function ProfilePage() {
           {t("profile.logout")}
         </Button>
       </section>
+
+      {/* Update Modal */}
+      {updateInfo && (
+        <UpdateModal
+          open={updateModalOpen}
+          onClose={() => setUpdateModalOpen(false)}
+          updateInfo={updateInfo}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { Header } from "./components/Header";
 import { TabNav } from "./components/TabNav";
 import { HistorySidebar } from "./components/HistorySidebar";
 import { EnrichBanner } from "./components/EnrichBanner";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { Footer } from "./components/Footer";
 import "./style.css";
 
@@ -57,6 +58,7 @@ function MainApp() {
             />
           </div>
           <Header />
+          <UpdateBanner />
           <EnrichBanner />
           <TabNav />
           <div className="flex flex-col gap-3 sm:gap-6 py-3 sm:py-6">

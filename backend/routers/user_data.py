@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
+from __version__ import VERSION
 from auth import get_current_user
 from deps import get_user_db
 from crud import log_operation, save_media, save_wishlist_items
@@ -44,7 +45,7 @@ async def export_my_data(
 
     export = {
         "export_time": datetime.now(timezone.utc).isoformat(),
-        "version": "2.0.0",
+        "version": VERSION,
         "username": current_user["username"],
         "movies": [
             {

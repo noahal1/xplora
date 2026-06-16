@@ -1,8 +1,12 @@
 services:
   xplora:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # ── GHCR 镜像 — GitHub Actions 自动构建推送 ──
+    # Watchtower 会自动检测 ghcr.io 的新镜像并重启容器
+    image: ghcr.io/noahal1/xplora:latest
+    # 本地开发时取消注释下一行，注释上面 image 行
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: xplora
     ports:
       - "8327:8327"
@@ -28,6 +32,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    labels:
+      # Watchtower: 只监控打了此标签的容器
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # ── Watchtower: 自动检测并更新 Docker 容器 ──
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      # 必须挂载 Docker 套接字才能操控容器
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Asia/Shanghai
+    command:
+      # 仅更新打了标签的容器（xplora 已打标签）
+      - "--label-enable"
+      # 每 6 小时检查一次（可调）
+      - "--interval"
+      - "21600"
+      # 更新后清理旧镜像
+      - "--cleanup"
+      # 更新时先发 SIGTERM，等待 30 秒优雅关闭
+      - "--stop-timeout"
+      - "30"
 
 volumes:
   poster_data:

@@ -1,0 +1,77 @@
+# =============================================================================
+# Build & push Docker image to GitHub Container Registry (GHCR)
+#
+# Triggers:
+#   - push to main branch
+#   - creating a new release (for versioned tags)
+#
+# After push, Watchtower on your server will auto-detect the new :latest
+# image and restart the container.
+# =============================================================================
+
+name: Build & Push to GHCR
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    # Also run when Dockerfile or workflow changes
+    paths:
+      - "Dockerfile"
+      - ".github/workflows/docker-build.yml"
+      - "backend/**"
+      - "frontend/**"
+      - "docker-compose.yml"
+  release:
+    types: [published]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}  # → ghcr.io/noahal1/xplora
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write       # needed to push to GHCR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from __version__.py
+        id: version
+        run: |
+          VERSION=$(grep "^VERSION" backend/__version__.py | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            BASE_NODE_IMAGE=node:22-alpine
+            BASE_PYTHON_IMAGE=python:3.12-slim
+            NPM_REGISTRY=https://registry.npmjs.org
+            APT_MIRROR_REPLACE=deb.debian.org
+            PIP_MIRROR=https://pypi.org/simple/
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

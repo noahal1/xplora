@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
+from __version__ import VERSION
 from database import init_db
 from config_manager import get_all_status as get_config_status
 from poster_cache import ensure_poster_dir, get_poster_dir
@@ -64,7 +65,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Xplore Movie Recommender",
     description="Multi-user movie recommendation service with JWT auth",
-    version="2.0.0",
+    version=VERSION,
     lifespan=lifespan,
 )
 
@@ -87,6 +88,7 @@ from routers.sessions import router as sessions_router
 from routers.admin import router as admin_router
 from routers.user_data import router as user_data_router
 from routers.logs import router as logs_router
+from routers.updates import router as updates_router
 
 app.include_router(auth_router)
 app.include_router(media_router)
@@ -95,6 +97,7 @@ app.include_router(sessions_router)
 app.include_router(admin_router)
 app.include_router(user_data_router)
 app.include_router(logs_router)
+app.include_router(updates_router)
 
 
 # ── Health check ────────────────────────────────────────────────────
@@ -117,7 +120,7 @@ async def health_check():
 
     return {
         "status": "ok",
-        "version": "2.0.0",
+        "version": VERSION,
         "database": db_type if db_ok else "error",
         "database_status": "ok" if db_ok else "error",
         "api_keys": get_config_status(),

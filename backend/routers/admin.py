@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
+from __version__ import VERSION
 from auth import require_admin
 from config_manager import (
     get_all_status as get_config_status,
@@ -34,7 +35,7 @@ async def export_all_data(
     users = db.exec(select(UserRecord)).all()
     export = {
         "export_time": datetime.now(timezone.utc).isoformat(),
-        "version": "2.0.0",
+        "version": VERSION,
         "users": [],
     }
 
