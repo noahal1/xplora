@@ -182,7 +182,14 @@ export function RecommendTab() {
                 setSourceInfo(t("recommend.source_info_loading", { count: data.source_count }));
                 break;
               case "recommendation": {
-                const rec: Recommendation = { title: data.title, year: data.year, genre: data.genre, reason: data.reason, confidence: data.confidence };
+                const rec: Recommendation = {
+                  title: data.title,
+                  year: data.year,
+                  genre: data.genre,
+                  reason: data.reason,
+                  confidence: data.confidence,
+                  poster_url: data.poster_url || null,
+                };
                 // Try to find media_type from all watched movies
                 const matched = movies.find((m) => m.title.toLowerCase() === (data.title || "").toLowerCase());
                 if (matched?.media_type) rec.media_type = matched.media_type;
@@ -204,9 +211,8 @@ export function RecommendTab() {
 
       if (recs.length === 0) showToast(t("recommend.no_results"), "error");
       else {
-        // Fetch poster URLs from TMDB for each recommendation, then show chat
-        const withPosters = await resolvePosters(recs);
-        setRecommendations(withPosters);
+        // Poster URLs are now resolved on the backend — shown immediately
+        setRecommendations(recs);
         setShowChat(true);
       }
     } catch (err: any) {
@@ -217,31 +223,6 @@ export function RecommendTab() {
       setIsLoading(false);
     }
   }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
-
-  // Search TMDB for poster URLs after recommendations arrive (CDN-only, no caching).
-  // Iterates through results to find one whose year matches ``rec.year`` before falling
-  // back to the first result, avoiding wrong posters for same-named movies.
-  const resolvePosters = useCallback(async (recs: Recommendation[]): Promise<Recommendation[]> => {
-    const results = await Promise.allSettled(
-      recs.map(async (rec) => {
-        try {
-          const data = await api.searchMedia(rec.title, "tmdb");
-          const matches = data.results ?? [];
-          // Prefer a result whose year matches the recommendation (if available)
-          const yearMatch = rec.year
-            ? matches.find((m) => m.year === rec.year && m.poster_url)
-            : undefined;
-          const fallback = matches.find((m) => m.poster_url);
-          const match = yearMatch ?? fallback ?? matches[0];
-          if (match?.poster_url) {
-            return { ...rec, poster_url: match.poster_url };
-          }
-        } catch { /* silent — poster not found, keep placeholder */ }
-        return rec;
-      })
-    );
-    return results.map((r, i) => (r.status === "fulfilled" ? r.value : recs[i]));
-  }, []);
 
   const sendFollowUp = useCallback(async () => {
     const input = chatInputRef.current;
