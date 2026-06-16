@@ -112,6 +112,9 @@ class MediaRecommendation(SQLModel):
     confidence: float = Field(
         ge=0.0, le=1.0, description="Confidence score 0-1"
     )
+    poster_url: Optional[str] = Field(
+        None, description="Poster image URL from TMDB"
+    )
 
 
 class RecommendationResponse(SQLModel):

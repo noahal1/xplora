@@ -8,6 +8,9 @@ from typing import Optional
 from openai import OpenAI, APIError, APITimeoutError, RateLimitError, AuthenticationError
 
 from models import MediaRating, MediaRecommendation
+from scraper.match import normalize, normalize_unicode, remove_special_chars, title_words
+from config_manager import get_api_key as get_config_api_key
+from movie_search import search_movies as search_external_movies
 
 
 # Model configuration
@@ -157,13 +160,17 @@ class AIService:
         strategy_params: Optional[dict] = None,
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
+        exclude_titles: Optional[list[str]] = None,
+        retry_attempt: int = 0,
     ) -> str:
         """Build an optimized prompt for the AI model with taste analysis and exclude list.
 
         Instead of listing ALL watched movies (which wastes tokens), this uses:
         - A compact sample of top movies (up to 15 highest-rated) as concrete examples
         - A structured taste analysis summary (the real signal — tells the AI the patterns)
-        - An exclude list to prevent recommending already-watched movies
+        - An ``exclude_titles`` list that explicitly tells the AI which titles to avoid
+        - A ``retry_attempt`` hint when the previous attempt's suggestions were
+          already watched by the user
         """
 
         # Compact sample: top 15 highest-rated movies as concrete examples
@@ -184,6 +191,31 @@ class AIService:
 
         strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
 
+        # Retry hint — tells the AI its previous suggestions were already seen
+        retry_hint = ""
+        if retry_attempt > 0:
+            retry_hint = (
+                f"\n\nNote: This is retry #{retry_attempt}. Your previous suggestions were "
+                "all movies the user has already seen. Please recommend DIFFERENT movies "
+                "this time, being extra careful to avoid the exclusion list below."
+            )
+
+        # Explicit exclusion list (used on retry to prevent recommending already-seen titles)
+        exclude_section = ""
+        if exclude_titles:
+            exclude_titles_clean = [t for t in exclude_titles if t]
+            if exclude_titles_clean:
+                # Limit to 100 to avoid blowing the token budget
+                exclude_list = "\n".join(f"- {t}" for t in exclude_titles_clean[:100])
+                if len(exclude_titles_clean) > 100:
+                    exclude_list += f"\n- ... and {len(exclude_titles_clean) - 100} more"
+                exclude_section = f"""
+
+## Strict Exclusion List — DO NOT recommend ANY of these titles
+You MUST NOT recommend any of the following movies, even if they seem like a good fit:
+{exclude_list}
+"""
+
         return f"""You are a professional movie recommendation expert. Based on the movies the user has watched and their ratings, recommend NEW movies they haven't seen.
 
 ## User's Taste Profile
@@ -192,6 +224,7 @@ Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-
 
 ## Taste Analysis
 {taste_summary or "No taste analysis available."}
+{exclude_section}{retry_hint}
 
 {strategy_instruction}
 
@@ -310,22 +343,101 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         ]
 
     @staticmethod
+    def _resolve_posters(recs: list) -> list:
+        """Search TMDB for each recommendation's poster URL (sequential).
+
+        Works with both ``list[MediaRecommendation]`` and ``list[dict]``.
+        If TMDB is not configured, returns recs unchanged.
+        """
+        tmdb_key = get_config_api_key("tmdb")
+        if not tmdb_key or not recs:
+            return recs
+
+        is_dict = isinstance(recs[0], dict)
+
+        for rec in recs:
+            title = rec.get("title", "") if is_dict else getattr(rec, "title", "")
+            year = rec.get("year") if is_dict else getattr(rec, "year", None)
+            if not title:
+                continue
+            try:
+                results = search_external_movies(title, "tmdb")
+                if results:
+                    # Prefer year match, otherwise first result with poster
+                    year_match = next(
+                        (r for r in results if r.get("year") == year and r.get("poster_url")),
+                        None,
+                    )
+                    fallback = next((r for r in results if r.get("poster_url")), None)
+                    match = year_match or fallback or results[0]
+                    poster_url = match.get("poster_url")
+                    if poster_url:
+                        if is_dict:
+                            rec["poster_url"] = poster_url
+                        else:
+                            rec.poster_url = poster_url
+            except Exception:
+                continue
+
+        return recs
+
+    @staticmethod
     def _filter_watched(recs: list, watched_titles: Optional[list[str]]) -> list:
         """Filter out recommendations that the user has already watched.
 
+        Uses fuzzy title matching with Jaccard word-set similarity to
+        catch duplicates across Unicode variants (Amélie → Amelie),
+        punctuation differences, and formatting variations — while
+        avoiding false positives for different franchise entries
+        (e.g. "Batman" vs "Batman Begins").
+
+        Matching strategy:
+        - 1.00: Exact match (after normalize/lowercase/strip)
+        - 0.90: Unicode-normalized + punctuation-stripped match
+        - 0.00–1.00: Jaccard similarity of meaningful word sets
+
+        Threshold: >= 0.70 is considered a match.
+
         Works with both MediaRecommendation objects and raw dicts.
-        Handles None input gracefully and normalizes titles for comparison.
+        Handles None input gracefully.
         """
         if not watched_titles:
             return recs
-        watched_set = {t.strip().lower() for t in watched_titles if t}
-        if not watched_set:
+        watched_clean = [t for t in watched_titles if t]
+        if not watched_clean:
             return recs
+
+        MATCH_THRESHOLD = 0.70
+
+        def _match_score(a: str, b: str) -> float:
+            """Jaccard-based similarity sans substring match."""
+            a_norm = normalize(a)
+            b_norm = normalize(b)
+            if not a_norm or not b_norm:
+                return 0.0
+            if a_norm == b_norm:
+                return 1.0
+            a_clean = remove_special_chars(normalize_unicode(a_norm))
+            b_clean = remove_special_chars(normalize_unicode(b_norm))
+            if a_clean and b_clean and a_clean == b_clean:
+                return 0.9
+            words_a = title_words(a_norm)
+            words_b = title_words(b_norm)
+            if not words_a or not words_b:
+                return 0.0
+            intersection = words_a & words_b
+            union = words_a | words_b
+            return len(intersection) / len(union)
+
         filtered = []
         for r in recs:
             title = r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "")
-            if title.strip().lower() not in watched_set:
+            if not title:
                 filtered.append(r)
+                continue
+            if not any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean):
+                filtered.append(r)
+
         return filtered
 
     def get_recommendations(
@@ -337,39 +449,76 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
     ) -> list[MediaRecommendation]:
-        """Generate movie recommendations (non-streaming)."""
-        prompt = self._build_prompt(movies, count, strategy, strategy_params, watched_titles, taste_analysis)
+        """Generate movie recommendations (non-streaming) with retry.
+
+        If the fuzzy dedup filter removes some recommendations, this retries
+        up to ``MAX_RETRIES`` times — each time asking the AI to recommend
+        different movies — until the requested ``count`` is met.
+        """
+        MAX_RETRIES = 3
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
+        all_excluded = list(watched_titles or [])
+        all_recs: list[MediaRecommendation] = []
 
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional movie recommendation expert who analyzes user taste and recommends suitable movies. Always respond with valid JSON only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                max_tokens=MAX_TOKENS,
-                timeout=60,
+        for attempt in range(MAX_RETRIES):
+            remaining = count - len(all_recs)
+            if remaining <= 0:
+                break
+
+            prompt = self._build_prompt(
+                movies, remaining, strategy, strategy_params,
+                watched_titles=all_excluded, taste_analysis=taste_analysis,
+                exclude_titles=all_excluded,
+                retry_attempt=attempt,
             )
-        except AuthenticationError:
-            raise ValueError(f"Authentication failed for {self.model_type}. Please check your API key.")
-        except RateLimitError:
-            raise ValueError(f"Rate limit exceeded for {self.model_type}. Please try again later.")
-        except APITimeoutError:
-            raise ValueError(f"Request to {self.model_type} timed out. Please try again.")
-        except APIError as e:
-            raise ValueError(f"{self.model_type} API error ({e.status_code}): {e.message}")
 
-        content = response.choices[0].message.content
-        if not content:
-            raise ValueError("Empty response from AI model")
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a professional movie recommendation expert who analyzes user taste and recommends suitable movies. Always respond with valid JSON only.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=MAX_TOKENS,
+                    timeout=60,
+                )
+            except AuthenticationError:
+                raise ValueError(f"Authentication failed for {self.model_type}. Please check your API key.")
+            except RateLimitError:
+                raise ValueError(f"Rate limit exceeded for {self.model_type}. Please try again later.")
+            except APITimeoutError:
+                raise ValueError(f"Request to {self.model_type} timed out. Please try again.")
+            except APIError as e:
+                raise ValueError(f"{self.model_type} API error ({e.status_code}): {e.message}")
 
-        recs = self._parse_response(content)
-        return self._filter_watched(recs, watched_titles)
+            content = response.choices[0].message.content
+            if not content:
+                if attempt == 0:
+                    raise ValueError("Empty response from AI model")
+                break
+
+            try:
+                new_recs = self._parse_response(content)
+            except ValueError:
+                if attempt == 0:
+                    raise
+                break
+
+            new_recs = self._filter_watched(new_recs, all_excluded)
+            if not new_recs:
+                # Don't break — retry with retry_hint might help the AI avoid
+                # watched movies on the next attempt
+                continue
+
+            all_recs.extend(new_recs)
+            all_excluded.extend(r.title for r in new_recs)
+
+        all_recs = self._resolve_posters(all_recs)
+        return all_recs[:count]
 
     def _build_followup_prompt(
         self,
@@ -380,8 +529,14 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         count: int,
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
+        exclude_titles: Optional[list[str]] = None,
     ) -> str:
-        """Build the prompt for follow-up conversation."""
+        """Build the prompt for follow-up conversation.
+
+        When ``exclude_titles`` is provided (e.g. on retry), appends a
+        strict exclusion section to prevent the AI from suggesting
+        already-recommended or already-watched movies.
+        """
         # Compact sample: top 15 highest-rated movies
         movies_sorted = sorted(movies, key=lambda m: m.rating or 0, reverse=True)
         sample = movies_sorted[:15]
@@ -408,6 +563,21 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         if taste_analysis:
             taste_summary = self._build_taste_summary(taste_analysis)
 
+        # Explicit exclusion list for retry
+        exclude_section = ""
+        if exclude_titles:
+            exclude_clean = [t for t in exclude_titles if t]
+            if exclude_clean:
+                exclude_list = "\n".join(f"- {t}" for t in exclude_clean[:100])
+                if len(exclude_clean) > 100:
+                    exclude_list += f"\n- ... and {len(exclude_clean) - 100} more"
+                exclude_section = f"""
+
+## Strict Exclusion List — DO NOT recommend ANY of these titles
+You MUST NOT recommend any of the following movies, even if they seem like a good fit:
+{exclude_list}
+"""
+
         return f"""You are a professional movie recommendation expert in a conversation with a user.
 
 ## User's Taste Profile
@@ -419,6 +589,7 @@ Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-
 
 ## Previously Recommended
 {recs_list}
+{exclude_section}
 
 ## Conversation
 {conv_history}
@@ -463,75 +634,115 @@ Format 2 - For explanation or other questions:
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
     ):
-        """Generator that yields SSE-formatted events for follow-up conversation."""
-        prompt = self._build_followup_prompt(
-            movies, previous_recommendations, conversation, question, count,
-            watched_titles, taste_analysis,
-        )
+        """Generator that yields SSE-formatted events for follow-up conversation.
+
+        If the response includes recommendations and the fuzzy dedup filter
+        removes some, retries up to ``MAX_RETRIES`` times to fill the gap.
+        """
+        MAX_RETRIES = 3
         temperature = STRATEGY_TEMPERATURES.get("taste", DEFAULT_TEMPERATURE)
+        all_excluded = list(watched_titles or [])
+        all_recs: list[dict] = []
+        response_message: str | None = None
 
         # Yield start event
         start_data = json.dumps({"model": self.model_type})
         yield f"event: start\ndata: {start_data}\n\n"
 
-        try:
-            stream = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional movie recommendation expert helping a user understand their recommendations. Always respond with valid JSON only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                max_tokens=MAX_TOKENS,
-                timeout=60,
-                stream=True,
+        for attempt in range(MAX_RETRIES):
+            remaining = count - len(all_recs)
+            if remaining <= 0:
+                break
+
+            prompt = self._build_followup_prompt(
+                movies, previous_recommendations, conversation, question, remaining,
+                watched_titles=all_excluded,
+                taste_analysis=taste_analysis,
+                exclude_titles=all_excluded,
             )
-        except AuthenticationError:
-            yield f"event: error\ndata: {json.dumps({'message': f'Authentication failed for {self.model_type}. Please check your API key.'})}\n\n"
-            return
-        except RateLimitError:
-            yield f"event: error\ndata: {json.dumps({'message': f'Rate limit exceeded for {self.model_type}. Please try again later.'})}\n\n"
-            return
-        except APITimeoutError:
-            yield f"event: error\ndata: {json.dumps({'message': f'Request to {self.model_type} timed out. Please try again.'})}\n\n"
-            return
-        except APIError as e:
-            yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({e.status_code}): {e.message}'})}\n\n"
-            return
 
-        accumulated = ""
-        full_content = ""
+            try:
+                stream = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a professional movie recommendation expert helping a user understand their recommendations. Always respond with valid JSON only.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=MAX_TOKENS,
+                    timeout=60,
+                    stream=True,
+                )
+            except AuthenticationError:
+                yield f"event: error\ndata: {json.dumps({'message': f'Authentication failed for {self.model_type}. Please check your API key.'})}\n\n"
+                return
+            except RateLimitError:
+                yield f"event: error\ndata: {json.dumps({'message': f'Rate limit exceeded for {self.model_type}. Please try again later.'})}\n\n"
+                return
+            except APITimeoutError:
+                yield f"event: error\ndata: {json.dumps({'message': f'Request to {self.model_type} timed out. Please try again.'})}\n\n"
+                return
+            except APIError as e:
+                yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({e.status_code}): {e.message}'})}\n\n"
+                return
 
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta and delta.content:
-                token = delta.content
-                accumulated += token
-                full_content += token
-                yield f"event: chunk\ndata: {json.dumps({'text': token})}\n\n"
+            accumulated = ""
 
-        # After stream ends, parse the full accumulated content
-        try:
-            json_str = self._extract_json(full_content)
-            data = json.loads(json_str)
-            # Filter out already-watched movies from follow-up recommendations
-            if data.get("recommendations"):
-                data["recommendations"] = self._filter_watched(data["recommendations"], watched_titles)
-            result_data = json.dumps(data, ensure_ascii=False)
-            yield f"event: result\ndata: {result_data}\n\n"
-            return
-        except (json.JSONDecodeError, ValueError):
-            pass
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    token = delta.content
+                    accumulated += token
+                    yield f"event: chunk\ndata: {json.dumps({'text': token})}\n\n"
 
-        # Fallback
-        fallback = json.dumps({
-            "type": "text",
-            "message": full_content.strip() or "抱歉，AI 暂时无法回答这个问题，请换个方式试试。",
+            # Parse response
+            try:
+                json_str = self._extract_json(accumulated)
+                data = json.loads(json_str)
+            except (json.JSONDecodeError, ValueError):
+                # If we already have results, return those; otherwise fallback
+                if all_recs:
+                    break
+                fallback = json.dumps({
+                    "type": "text",
+                    "message": accumulated.strip() or "抱歉，AI 暂时无法回答这个问题，请换个方式试试。",
+                }, ensure_ascii=False)
+                yield f"event: result\ndata: {fallback}\n\n"
+                return
+
+            if data.get("type") == "text":
+                # Text response — yield immediately, no retry needed
+                response_message = data.get("message", "")
+                result_data = json.dumps(data, ensure_ascii=False)
+                yield f"event: result\ndata: {result_data}\n\n"
+                return
+
+            # Type is "recommendations" — filter and accumulate
+            new_recs = data.get("recommendations", [])
+            if not new_recs:
+                break
+
+            new_recs = self._filter_watched(new_recs, all_excluded)
+            if not new_recs:
+                break
+
+            response_message = data.get("message", "")
+            all_recs.extend(new_recs)
+            all_excluded.extend(r.get("title", "") for r in new_recs)
+
+        # Resolve poster URLs from TMDB
+        all_recs = self._resolve_posters(all_recs)
+
+        # Yield final result with accumulated recommendations
+        result_data = json.dumps({
+            "type": "recommendations",
+            "message": response_message or f"为您推荐以下{len(all_recs[:count])}部电影",
+            "recommendations": all_recs[:count],
         }, ensure_ascii=False)
-        yield f"event: result\ndata: {fallback}\n\n"
+        yield f"event: result\ndata: {result_data}\n\n"
 
     def get_recommendations_stream(
         self,
@@ -544,83 +755,122 @@ Format 2 - For explanation or other questions:
     ):
         """Generator that yields SSE-formatted events as recommendations are streamed.
 
-        Instead of progressive JSON parsing (which is fragile), this collects the full
-        response and parses it once at the end.
+        If the fuzzy dedup filter removes some recommendations, this retries
+        up to ``MAX_RETRIES`` times — each time asking the AI to recommend
+        different movies — until the requested ``count`` is met.  Chunk events
+        from each retry attempt are forwarded to the frontend for progress
+        indication, but all recommendations are yielded after all retries
+        complete, followed by a single ``done`` event.
         """
-        prompt = self._build_prompt(movies, count, strategy, strategy_params, watched_titles, taste_analysis)
+        MAX_RETRIES = 3
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
+        all_excluded = list(watched_titles or [])
+        all_recs: list[dict] = []
 
         # Yield start event
         start_data = json.dumps({"model": self.model_type, "source_count": len(movies)})
         yield f"event: start\ndata: {start_data}\n\n"
 
-        try:
-            stream = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional movie recommendation expert who analyzes user taste and recommends suitable movies. Always respond with valid JSON only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=temperature,
-                max_tokens=MAX_TOKENS,
-                timeout=60,
-                stream=True,
+        for attempt in range(MAX_RETRIES):
+            remaining = count - len(all_recs)
+            if remaining <= 0:
+                break
+
+            prompt = self._build_prompt(
+                movies, remaining, strategy, strategy_params,
+                watched_titles=all_excluded, taste_analysis=taste_analysis,
+                exclude_titles=all_excluded,
+                retry_attempt=attempt,
             )
-        except AuthenticationError:
-            yield f"event: error\ndata: {json.dumps({'message': f'Authentication failed for {self.model_type}. Please check your API key.'})}\n\n"
-            return
-        except RateLimitError:
-            yield f"event: error\ndata: {json.dumps({'message': f'Rate limit exceeded for {self.model_type}. Please try again later.'})}\n\n"
-            return
-        except APITimeoutError:
-            yield f"event: error\ndata: {json.dumps({'message': f'Request to {self.model_type} timed out. Please try again.'})}\n\n"
-            return
-        except APIError as e:
-            yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({e.status_code}): {e.message}'})}\n\n"
-            return
 
-        accumulated = ""
+            # SSE stream from AI
+            try:
+                stream = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a professional movie recommendation expert who analyzes user taste and recommends suitable movies. Always respond with valid JSON only.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temperature,
+                    max_tokens=MAX_TOKENS,
+                    timeout=60,
+                    stream=True,
+                )
+            except AuthenticationError:
+                yield f"event: error\ndata: {json.dumps({'message': f'Authentication failed for {self.model_type}. Please check your API key.'})}\n\n"
+                return
+            except RateLimitError:
+                yield f"event: error\ndata: {json.dumps({'message': f'Rate limit exceeded for {self.model_type}. Please try again later.'})}\n\n"
+                return
+            except APITimeoutError:
+                yield f"event: error\ndata: {json.dumps({'message': f'Request to {self.model_type} timed out. Please try again.'})}\n\n"
+                return
+            except APIError as e:
+                yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({e.status_code}): {e.message}'})}\n\n"
+                return
 
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta and delta.content:
-                token = delta.content
-                accumulated += token
-                # Send raw tokens as chunk events for frontend to show progress
-                yield f"event: chunk\ndata: {json.dumps({'text': token})}\n\n"
+            accumulated = ""
 
-        # After stream completes, parse the full response
-        try:
-            json_str = self._extract_json(accumulated)
-            data = json.loads(json_str)
-            recs = data.get("recommendations", [])
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    token = delta.content
+                    accumulated += token
+                    # Forward chunk events so the frontend can show progress
+                    yield f"event: chunk\ndata: {json.dumps({'text': token})}\n\n"
 
-            # Filter out already-watched movies before yielding
-            recs = self._filter_watched(recs, watched_titles)
+            # Parse and filter this attempt's results
+            try:
+                json_str = self._extract_json(accumulated)
+                data = json.loads(json_str)
+                new_recs = data.get("recommendations", [])
+            except (json.JSONDecodeError, ValueError):
+                if attempt == 0:
+                    error_data = json.dumps({"message": f"Failed to parse AI response: {accumulated[:200]}"})
+                    yield f"event: error\ndata: {error_data}\n\n"
+                    return
+                break
 
-            # Yield each recommendation
-            for rec in recs:
-                rec_data = json.dumps({
-                    "title": rec.get("title", "Unknown"),
-                    "year": rec.get("year"),
-                    "genre": rec.get("genre"),
-                    "reason": rec.get("reason", ""),
-                    "confidence": min(max(float(rec.get("confidence", 0.5)), 0.0), 1.0),
-                })
-                yield f"event: recommendation\ndata: {rec_data}\n\n"
+            if not new_recs:
+                continue
 
-            # Yield done event
-            done_data = json.dumps({
-                "model_used": self.model_type,
-                "source_count": len(movies),
-                "total": len(recs),
+            new_recs = self._filter_watched(new_recs, all_excluded)
+            if not new_recs:
+                # Don't break — retry with retry_hint might help
+                continue
+
+            all_recs.extend(new_recs)
+            all_excluded.extend(r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "") for r in new_recs)
+
+        # Resolve poster URLs from TMDB before yielding
+        all_recs = self._resolve_posters(all_recs)
+
+        # Yield all recommendations after all retries complete
+        for rec in all_recs[:count]:
+            title = rec.get("title", "Unknown") if isinstance(rec, dict) else getattr(rec, "title", "Unknown")
+            year = rec.get("year") if isinstance(rec, dict) else getattr(rec, "year", None)
+            genre = rec.get("genre") if isinstance(rec, dict) else getattr(rec, "genre", None)
+            reason = rec.get("reason", "") if isinstance(rec, dict) else getattr(rec, "reason", "")
+            confidence_raw = rec.get("confidence", 0.5) if isinstance(rec, dict) else getattr(rec, "confidence", 0.5)
+            poster_url = rec.get("poster_url") if isinstance(rec, dict) else getattr(rec, "poster_url", None)
+
+            rec_data = json.dumps({
+                "title": title,
+                "year": year,
+                "genre": genre,
+                "reason": reason,
+                "confidence": min(max(float(confidence_raw), 0.0), 1.0),
+                "poster_url": poster_url,
             })
-            yield f"event: done\ndata: {done_data}\n\n"
+            yield f"event: recommendation\ndata: {rec_data}\n\n"
 
-        except (json.JSONDecodeError, ValueError) as e:
-            # If parsing fails, send error
-            error_data = json.dumps({"message": f"Failed to parse AI response: {str(e)}"})
-            yield f"event: error\ndata: {error_data}\n\n"
+        # Yield done event
+        done_data = json.dumps({
+            "model_used": self.model_type,
+            "source_count": len(movies),
+            "total": len(all_recs[:count]),
+        })
+        yield f"event: done\ndata: {done_data}\n\n"
