@@ -186,6 +186,8 @@ export function RecommendTab() {
                 // Try to find media_type from all watched movies
                 const matched = movies.find((m) => m.title.toLowerCase() === (data.title || "").toLowerCase());
                 if (matched?.media_type) rec.media_type = matched.media_type;
+                // Mark if already in watched library
+                if (matched) rec.watched = true;
                 recs.push(rec);
                 setRecommendations([...recs]);
                 break;
@@ -722,6 +724,11 @@ export function RecommendTab() {
                         </p>
                         {rec.media_type === "tv" && (
                           <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
+                        )}
+                        {rec.watched && (
+                          <Badge variant="outline" className="text-[10px] shrink-0" style={{ color: "var(--fg-muted)", borderColor: "var(--border-default)" }}>
+                            {t("common.watched")}
+                          </Badge>
                         )}
                         {rec.genre && <span className="badge">{translateGenres(rec.genre)}</span>}
                       </div>

@@ -11,7 +11,7 @@ import { Pagination } from "../Pagination";
 import { GenreInput } from "../GenreInput";
 import { ProgressiveImage } from "../ProgressiveImage";
 import { DetailModal } from "../ManageTab/DetailModal";
-import { Film, ChevronRight } from "lucide-react";
+import { Film, ChevronRight, Loader2 } from "lucide-react";
 import { Modal } from "../Modal";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { usePagination } from "../../hooks/usePagination";

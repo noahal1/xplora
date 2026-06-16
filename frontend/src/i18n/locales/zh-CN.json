@@ -11,7 +11,8 @@
     "back": "返回",
     "no_data": "暂无数据",
     "or": "或者",
-    "go": "前往"
+    "go": "前往",
+    "watched": "已看"
   },
   "header": {
     "switch_to_light": "切换到亮色主题",

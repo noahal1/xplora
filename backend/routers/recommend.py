@@ -1,10 +1,11 @@
 """Recommendation endpoints — sync, SSE streaming, and follow-up conversations."""
 
 import json
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from auth import get_current_user
 from deps import get_user_db
@@ -18,9 +19,18 @@ from models import (
     MediaRecommendation,
     FollowUpRequest,
     MediaRating,
+    MediaItemRecord,
 )
 
 router = APIRouter(prefix="/api/recommend", tags=["recommend"])
+
+
+# ── Helpers ─────────────────────────────────────────────────────────
+
+
+def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
+    """Extract watched movie titles from the movie list."""
+    return [m.title for m in movies if m.title]
 
 
 # ── Helper: stream with persistence ─────────────────────────────────
@@ -29,10 +39,16 @@ router = APIRouter(prefix="/api/recommend", tags=["recommend"])
 # by not passing db=db, letting save_session create its own session.
 
 
-def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None):
+def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None, watched_titles=None):
     """SSE generator that auto-saves recommendations to DB on completion."""
     service = AIService(api_key=api_key, model_type=model)
-    raw_generator = service.get_recommendations_stream(movies, count, strategy, strategy_params)
+    taste_analysis = service._analyze_user_taste(movies)
+    watched = watched_titles or _extract_watched_titles(movies)
+    raw_generator = service.get_recommendations_stream(
+        movies, count, strategy, strategy_params,
+        watched_titles=watched,
+        taste_analysis=taste_analysis,
+    )
     recommendations_cache: list[dict] = []
 
     for event in raw_generator:
@@ -92,9 +108,13 @@ async def recommend(
     api_key = get_api_key(request.model)
     try:
         service = AIService(api_key=api_key, model_type=request.model)
+        watched_titles = _extract_watched_titles(movies)
+        taste_analysis = service._analyze_user_taste(movies)
         recommendations = service.get_recommendations(
             movies, request.count, request.strategy,
             request.strategy_params.model_dump() if request.strategy_params else None,
+            watched_titles=watched_titles,
+            taste_analysis=taste_analysis,
         )
         return RecommendationResponse(
             recommendations=recommendations,
@@ -115,11 +135,13 @@ async def recommend_stream(
     """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
+    watched_titles = _extract_watched_titles(movies)
     return StreamingResponse(
         _stream_with_persistence(
             movies, request.count, request.model, api_key, current_user["id"],
             strategy=request.strategy,
             strategy_params=request.strategy_params.model_dump() if request.strategy_params else None,
+            watched_titles=watched_titles,
         ),
         media_type="text/event-stream",
         headers={
@@ -139,6 +161,8 @@ async def followup_stream(
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
     service = AIService(api_key=api_key, model_type=request.model)
+    watched_titles = _extract_watched_titles(movies)
+    taste_analysis = service._analyze_user_taste(movies)
     return StreamingResponse(
         service.get_followup_stream(
             movies=movies,
@@ -146,6 +170,8 @@ async def followup_stream(
             conversation=request.conversation,
             question=request.question,
             count=request.count,
+            watched_titles=watched_titles,
+            taste_analysis=taste_analysis,
         ),
         media_type="text/event-stream",
         headers={

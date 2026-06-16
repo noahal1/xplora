@@ -2,6 +2,7 @@
 
 import json
 import re
+from collections import Counter, defaultdict
 from typing import Optional
 
 from openai import OpenAI, APIError, APITimeoutError, RateLimitError, AuthenticationError
@@ -22,6 +23,20 @@ MODEL_CONFIGS = {
         "env_key": "OPENAI_API_KEY",
     },
 }
+
+# Per-strategy temperature configuration
+# Lower = more deterministic/focused, Higher = more creative/diverse
+STRATEGY_TEMPERATURES = {
+    "taste": 0.5,      # Precise matching to user's taste
+    "classics": 0.6,   # Balanced for canonical picks
+    "mood": 0.7,       # Moderate creativity for mood matching
+    "era": 0.6,        # Focused on time period
+    "gems": 0.8,       # More creative for hidden finds
+    "explore": 0.9,    # Most creative for new genres
+}
+
+DEFAULT_TEMPERATURE = 0.7
+MAX_TOKENS = 3000  # Increased from 2000 for Chinese responses
 
 
 class AIService:
@@ -50,43 +65,150 @@ class AIService:
             base_url=config["api_base"],
         )
 
-    def _build_prompt(self, movies: list[MediaRating], count: int, strategy: str = "taste", strategy_params: Optional[dict] = None) -> str:
-        """Build the prompt for the AI model with strategy support."""
+    def _analyze_user_taste(self, movies: list[MediaRating]) -> dict:
+        """Analyze user's watched movies and extract taste patterns.
+
+        Returns a structured dict with:
+          - top_genres: genres sorted by avg rating (desc)
+          - decade_distribution: count per decade
+          - avg_rating: overall average
+          - rating_distribution: percent per tier
+          - total: movie count
+        """
+        if not movies:
+            return {"top_genres": [], "decade_distribution": {}, "avg_rating": 0, "rating_distribution": {}, "total": 0}
+
+        # Genre analysis — group by genre and compute avg rating
+        genre_ratings: dict[str, list[float]] = defaultdict(list)
+        decade_count: Counter = Counter()
+        ratings = [m.rating for m in movies]
+        avg_rating = sum(ratings) / len(ratings)
+
+        for m in movies:
+            if m.genre:
+                # Split multi-genre (e.g. "Sci-Fi / Action")
+                for g in re.split(r"\s*/\s*", m.genre):
+                    genre_ratings[g.strip().lower()].append(m.rating)
+            if m.year:
+                decade = (m.year // 10) * 10
+                decade_count[decade] += 1
+
+        # Sort genres by avg rating (desc), take top 5
+        top_genres = sorted(
+            [
+                {"genre": g, "avg_rating": round(sum(v) / len(v), 1), "count": len(v)}
+                for g, v in genre_ratings.items()
+            ],
+            key=lambda x: (-x["avg_rating"], -x["count"]),
+        )[:5]
+
+        # Rating distribution
+        high = sum(1 for r in ratings if r >= 8)
+        mid = sum(1 for r in ratings if 5 <= r < 8)
+        low = sum(1 for r in ratings if r < 5)
+        total = len(ratings)
+        rating_dist = {
+            "high_rating_8_10": round(high / total * 100) if total else 0,
+            "mid_rating_5_8": round(mid / total * 100) if total else 0,
+            "low_rating_0_5": round(low / total * 100) if total else 0,
+        }
+
+        # Top decades
+        top_decades = dict(decade_count.most_common(3))
+
+        return {
+            "top_genres": top_genres,
+            "decade_distribution": top_decades,
+            "avg_rating": round(avg_rating, 1),
+            "rating_distribution": rating_dist,
+            "total": total,
+        }
+
+    def _build_taste_summary(self, taste: dict) -> str:
+        """Build a human-readable taste summary from analysis results."""
+        parts = []
+        if taste["top_genres"]:
+            genre_desc = "、".join(
+                f"{g['genre']}(平均{g['avg_rating']}分/{g['count']}部)"
+                for g in taste["top_genres"][:3]
+            )
+            parts.append(f"  高分类型：{genre_desc}")
+
+        if taste["decade_distribution"]:
+            decade_desc = "、".join(
+                f"{d}年代{'-' + str(d+9) + '年代' if d < 2020 else ''}({c}部)"
+                for d, c in sorted(taste["decade_distribution"].items())
+            )
+            parts.append(f"  活跃年代：{decade_desc}")
+
+        dist = taste["rating_distribution"]
+        parts.append(
+            f"  评分分布：高分({dist['high_rating_8_10']}%) 中等({dist['mid_rating_5_8']}%) 低分({dist['low_rating_0_5']}%)"
+        )
+        parts.append(f"  平均评分：{taste['avg_rating']}/10（共{taste['total']}部）")
+
+        return "\n".join(parts)
+
+    def _build_prompt(
+        self,
+        movies: list[MediaRating],
+        count: int,
+        strategy: str = "taste",
+        strategy_params: Optional[dict] = None,
+        watched_titles: Optional[list[str]] = None,
+        taste_analysis: Optional[dict] = None,
+    ) -> str:
+        """Build an optimized prompt for the AI model with taste analysis and exclude list."""
+
+        # User's watched movies list
         movies_list = "\n".join(
             f"- {m.title}" + (f" ({m.year})" if m.year else "") +
             (f" [{m.genre}]" if m.genre else "") +
-            f" \u2014 Rating: {m.rating}/10"
+            f" — Rating: {m.rating}/10"
             for m in movies
         )
 
+        # Watched titles (for exclusion)
+        exclude_list = watched_titles or [m.title for m in movies]
+        exclude_str = "、".join(exclude_list[:50])  # Cap at 50 titles
+
+        # Taste analysis summary
+        taste_summary = ""
+        if taste_analysis:
+            taste_summary = self._build_taste_summary(taste_analysis)
+
         strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
 
-        return f"""You are a professional movie recommendation expert. Based on the movies the user has watched and their ratings (on a scale of 0-10), recommend new movies.
+        return f"""You are a professional movie recommendation expert. Based on the movies the user has watched and their ratings, recommend NEW movies they haven't seen.
 
-Movies the user has watched with ratings:
+## User's Watched Movies (with ratings on a 0-10 scale)
 {movies_list}
 
-Note: All ratings have been normalized to a 0-10 scale. A rating of 8/10 is very good, 5/10 is average, 2/10 is poor.
+## Taste Analysis
+{taste_summary or "No taste analysis available."}
+
+## ⚠️ CRITICAL: DO NOT Recommend These Movies (User has already watched them)
+{exclude_str}
 
 {strategy_instruction}
 
-Requirements:
-1. Each recommendation must include a reason explaining why
-2. The reason should analyze the user's taste based on movies they've watched
-3. Give a confidence score (0-1) indicating how confident you are about this recommendation
-4. Recommendations should be diverse, covering different genres and eras
-5. Use Chinese/localized titles for ALL movies where a Chinese title exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", "Inception" → "盗梦空间"). Only use English titles for movies without a known Chinese translation.
+## Additional Requirements
+1. Each recommendation MUST include a personalized reason that references the user's specific taste (genres they rate highly, preferred eras, etc.)
+2. Confidence score (0-1) should reflect how well the movie matches the user's demonstrated taste
+3. DIVERSITY: Do NOT recommend multiple movies from the same franchise, same director (unless the user clearly loves that director), or same series
+4. Use Chinese/localized titles for ALL movies where a Chinese title exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", "Inception" → "盗梦空间")
+5. Only use English titles for movies without a known Chinese translation
+6. The reason MUST be in Chinese
+7. Ensure recommendations are genuinely diverse in genre, era, and style
 
-Respond in Chinese for the reasons, and use Chinese movie titles where available.
-
-Please respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
+Respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
 {{
     "recommendations": [
         {{
-            "title": "Movie Title",
+            "title": "Movie Title (use Chinese title if available)",
             "year": 2024,
             "genre": "Sci-Fi / Action",
-            "reason": "Recommendation reason in Chinese",
+            "reason": "Recommendation reason in Chinese, referencing user's taste",
             "confidence": 0.85
         }}
     ]
@@ -99,35 +221,40 @@ Please respond with ONLY valid JSON in the following format, without any markdow
 
         strategy_prompts = {
             "taste": (
-                f"Based on the user's taste, recommend {count} movies they would likely enjoy but haven't watched yet. "
-                f"Focus on matching similar genres, directors, themes, and narrative styles to their highest-rated films."
+                f"Based on the user's taste patterns above, recommend {count} movies they would likely enjoy. "
+                f"Focus on matching genres they rate highly, directors/styles they prefer, and eras they watch most. "
+                f"Prioritize films that closely align with their demonstrated preferences."
             ),
             "classics": (
                 f"Recommend {count} classic must-watch movies that every film enthusiast should see. "
-                f"Focus on critically acclaimed, culturally significant, and timeless films across different eras. "
-                f"Balance the user's existing taste with canonical cinematic masterpieces they may have missed."
+                f"Focus on critically acclaimed, culturally significant, and timeless films. "
+                f"Balance the user's existing taste with canonical cinematic masterpieces they may have missed. "
+                f"Prioritize movies that bridge their current taste with essential film history."
             ),
             "mood": (
-                f"Based on the movies the user has watched and their ratings, recommend {count} movies that match "
+                f"Based on the movies the user has watched, recommend {count} movies that match "
                 + (f"the following mood or feeling: \"{params.get('mood', '')}\". " if params.get('mood') else "a specific mood. ")
-                + f"Consider the emotional tone, atmosphere, and pacing that would suit this mood."
+                + f"Consider the emotional tone, atmosphere, and pacing. "
+                + f"Use the user's taste analysis to find movies that match both their preferences and the requested mood."
             ),
             "era": (
                 f"Recommend {count} movies specifically from a particular time period. "
                 + (f"Focus on movies from {params.get('year_start', '')} to {params.get('year_end', '')}. " if params.get('year_start') or params.get('year_end') else "Focus on a specific era. ")
-                + f"Consider how the user's taste translates to films from this period."
+                + f"Consider how the user's demonstrated taste translates to films from this period."
             ),
             "gems": (
-                f"Recommend {count} underrated hidden gems and lesser-known movies that deserve more attention. "
+                f"Recommend {count} underrated hidden gems and lesser-known movies. "
                 f"Avoid mainstream blockbusters and well-known titles. "
                 f"Focus on overlooked indie films, cult classics, foreign cinema, and hidden treasures "
-                f"that align with the user's demonstrated taste preferences."
+                f"that align with the user's demonstrated taste preferences. "
+                f"These should feel like discoveries, not obvious picks."
             ),
             "explore": (
-                f"Recommend {count} movies that explore NEW genres and styles outside the user's usual preferences. "
+                f"Recommend {count} movies that explore NEW genres and styles OUTSIDE the user's usual preferences. "
                 f"Analyze which genres the user watches least or hasn't tried yet, "
-                + (f"and recommend excellent movies in \"{params.get('target_genre', 'new genres')}\" that serve as great entry points. " if params.get('target_genre') else "and recommend excellent movies in those genres that serve as great entry points. ")  # noqa: E501
-                + f"Choose films that are widely considered masterpieces in their respective genres."
+                + (f"recommend excellent movies in \"{params.get('target_genre', 'new genres')}\" that serve as great entry points. " if params.get('target_genre') else "recommend excellent movies in those genres that serve as great entry points. ")
+                + f"Choose films widely considered masterpieces in their respective genres. "
+                + f"The goal is to expand the user's horizons while still providing an enjoyable experience."
             ),
         }
 
@@ -151,7 +278,7 @@ Please respond with ONLY valid JSON in the following format, without any markdow
             elif ch == "}":
                 brace_depth -= 1
                 if brace_depth == 0 and start >= 0:
-                    return content[start : i + 1]
+                    return content[start: i + 1]
 
         raise ValueError("No valid JSON object found in AI response")
 
@@ -180,13 +307,17 @@ Please respond with ONLY valid JSON in the following format, without any markdow
         ]
 
     def get_recommendations(
-        self, movies: list[MediaRating], count: int = 5,
-        strategy: str = "taste", strategy_params: Optional[dict] = None,
+        self,
+        movies: list[MediaRating],
+        count: int = 5,
+        strategy: str = "taste",
+        strategy_params: Optional[dict] = None,
+        watched_titles: Optional[list[str]] = None,
+        taste_analysis: Optional[dict] = None,
     ) -> list[MediaRecommendation]:
-        """
-        Generate movie recommendations (non-streaming).
-        """
-        prompt = self._build_prompt(movies, count, strategy, strategy_params)
+        """Generate movie recommendations (non-streaming)."""
+        prompt = self._build_prompt(movies, count, strategy, strategy_params, watched_titles, taste_analysis)
+        temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
 
         try:
             response = self.client.chat.completions.create(
@@ -198,26 +329,18 @@ Please respond with ONLY valid JSON in the following format, without any markdow
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.7,
-                max_tokens=2000,
+                temperature=temperature,
+                max_tokens=MAX_TOKENS,
                 timeout=60,
             )
         except AuthenticationError:
-            raise ValueError(
-                f"Authentication failed for {self.model_type}. Please check your API key."
-            )
+            raise ValueError(f"Authentication failed for {self.model_type}. Please check your API key.")
         except RateLimitError:
-            raise ValueError(
-                f"Rate limit exceeded for {self.model_type}. Please try again later."
-            )
+            raise ValueError(f"Rate limit exceeded for {self.model_type}. Please try again later.")
         except APITimeoutError:
-            raise ValueError(
-                f"Request to {self.model_type} timed out. Please try again."
-            )
+            raise ValueError(f"Request to {self.model_type} timed out. Please try again.")
         except APIError as e:
-            raise ValueError(
-                f"{self.model_type} API error ({e.status_code}): {e.message}"
-            )
+            raise ValueError(f"{self.model_type} API error ({e.status_code}): {e.message}")
 
         content = response.choices[0].message.content
         if not content:
@@ -232,68 +355,81 @@ Please respond with ONLY valid JSON in the following format, without any markdow
         conversation: list,
         question: str,
         count: int,
+        watched_titles: Optional[list[str]] = None,
+        taste_analysis: Optional[dict] = None,
     ) -> str:
         """Build the prompt for follow-up conversation."""
         movies_list = "\n".join(
             f"- {m.title}" + (f" ({m.year})" if m.year else "") +
             (f" [{m.genre}]" if m.genre else "") +
-            f" \u2014 Rating: {m.rating}/10"
+            f" — Rating: {m.rating}/10"
             for m in movies
         )
 
         recs_list = "\n".join(
             f"- {r.title}" + (f" ({r.year})" if r.year else "") +
             (f" [{r.genre}]" if r.genre else "") +
-            f" \u2014 Confidence: {r.confidence*100:.0f}%" +
-            f" \u2014 Reason: {r.reason}"
+            f" — Confidence: {r.confidence * 100:.0f}%" +
+            f" — Reason: {r.reason}"
             for r in previous_recommendations
         )
 
-        conv_history = "\n".join(
-            f"{m.role}: {m.content}"
-            for m in conversation
-        )
+        conv_history = "\n".join(f"{m.role}: {m.content}" for m in conversation)
+
+        # Taste analysis
+        taste_summary = ""
+        if taste_analysis:
+            taste_summary = self._build_taste_summary(taste_analysis)
+
+        # Exclude list
+        exclude_list = watched_titles or [m.title for m in movies]
+        exclude_str = "、".join(exclude_list[:50])
 
         return f"""You are a professional movie recommendation expert in a conversation with a user.
 
-The user has watched these movies with ratings (on a scale of 0-10):
+## User's Watched Movies (0-10 scale)
 {movies_list}
 
-You previously recommended these movies:
+## Taste Analysis
+{taste_summary or "No taste analysis available."}
+
+## Already Watched (DO NOT recommend these)
+{exclude_str}
+
+## Previously Recommended
 {recs_list}
 
-Conversation so far:
+## Conversation
 {conv_history}
 
-The user now asks: {question}
+## User's New Question
+{question}
 
 Note: All ratings are on a 0-10 scale. 8/10 is very good, 5/10 is average, 2/10 is poor.
-Use Chinese/localized titles for ALL movies where a Chinese title exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", "Inception" → "盗梦空间"). Only use English titles for movies without a known Chinese translation.
-
-Respond in Chinese for explanations, and use Chinese movie titles where available.
+Use Chinese/localized titles where available. Respond in Chinese for explanations.
 
 IMPORTANT: You must respond with valid JSON only, without markdown code blocks, in one of these two formats:
 
-Format 1 - When the user asks for MORE RECOMMENDATIONS (recommend {count} new movies they haven't seen yet, different from previously recommended ones):
-{{
+Format 1 - When the user asks for MORE RECOMMENDATIONS (recommend {count} new movies, different from previously recommended ones):
+{{{{
     "type": "recommendations",
     "message": "Your Chinese message introducing the recommendations",
     "recommendations": [
-        {{
+        {{{{
             "title": "Movie Title",
             "year": 2024,
             "genre": "Sci-Fi / Action",
             "reason": "Why this movie in Chinese",
             "confidence": 0.85
-        }}
+        }}}}
     ]
-}}
+}}}}
 
 Format 2 - For explanation or other questions:
-{{
+{{{{
     "type": "text",
     "message": "Your detailed Chinese response to the user's question"
-}}
+}}}}
 """
 
     def get_followup_stream(
@@ -303,19 +439,15 @@ Format 2 - For explanation or other questions:
         conversation: list,
         question: str,
         count: int = 3,
+        watched_titles: Optional[list[str]] = None,
+        taste_analysis: Optional[dict] = None,
     ):
-        """
-        Generator that yields SSE-formatted events for follow-up conversation.
-
-        Events:
-          event: start\ndata: {{"model": "{model}"}}
-          event: chunk\ndata: {{"text": "partial token..."}}
-          event: result\ndata: {{...parsed JSON response...}}  # final structured result
-          event: error\ndata: {{"message": "..."}}
-        """
+        """Generator that yields SSE-formatted events for follow-up conversation."""
         prompt = self._build_followup_prompt(
-            movies, previous_recommendations, conversation, question, count
+            movies, previous_recommendations, conversation, question, count,
+            watched_titles, taste_analysis,
         )
+        temperature = STRATEGY_TEMPERATURES.get("taste", DEFAULT_TEMPERATURE)
 
         # Yield start event
         start_data = json.dumps({"model": self.model_type})
@@ -331,8 +463,8 @@ Format 2 - For explanation or other questions:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.7,
-                max_tokens=2000,
+                temperature=temperature,
+                max_tokens=MAX_TOKENS,
                 timeout=60,
                 stream=True,
             )
@@ -350,60 +482,52 @@ Format 2 - For explanation or other questions:
             return
 
         accumulated = ""
+        full_content = ""
 
         for chunk in stream:
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 token = delta.content
                 accumulated += token
+                full_content += token
                 yield f"event: chunk\ndata: {json.dumps({'text': token})}\n\n"
 
-                # Try to parse the full JSON
-                try:
-                    json_str = self._extract_json(accumulated)
-                    data = json.loads(json_str)
-
-                    # Successfully parsed! Yield result event and stop.
-                    result_data = json.dumps(data, ensure_ascii=False)
-                    yield f"event: result\ndata: {result_data}\n\n"
-                    return
-                except (json.JSONDecodeError, ValueError):
-                    pass
-
-        # If we exhaust the stream without parsing, try one more time
+        # After stream ends, parse the full accumulated content
         try:
-            json_str = self._extract_json(accumulated)
+            json_str = self._extract_json(full_content)
             data = json.loads(json_str)
             result_data = json.dumps(data, ensure_ascii=False)
             yield f"event: result\ndata: {result_data}\n\n"
+            return
         except (json.JSONDecodeError, ValueError):
-            # Fallback: yield accumulated as a text response
-            fallback = json.dumps({
-                "type": "text",
-                "message": accumulated.strip() or "抱歉，AI 暂时无法回答这个问题，请换个方式试试。",
-            }, ensure_ascii=False)
-            yield f"event: result\ndata: {fallback}\n\n"
+            pass
+
+        # Fallback
+        fallback = json.dumps({
+            "type": "text",
+            "message": full_content.strip() or "抱歉，AI 暂时无法回答这个问题，请换个方式试试。",
+        }, ensure_ascii=False)
+        yield f"event: result\ndata: {fallback}\n\n"
 
     def get_recommendations_stream(
-        self, movies: list[MediaRating], count: int = 5,
-        strategy: str = "taste", strategy_params: Optional[dict] = None,
+        self,
+        movies: list[MediaRating],
+        count: int = 5,
+        strategy: str = "taste",
+        strategy_params: Optional[dict] = None,
+        watched_titles: Optional[list[str]] = None,
+        taste_analysis: Optional[dict] = None,
     ):
-        """
-        Generator that yields SSE-formatted events as recommendations are streamed.
+        """Generator that yields SSE-formatted events as recommendations are streamed.
 
-        Events:
-          event: start\ndata: {{"model": "{model}", "source_count": {n}}}
-          event: recommendation\ndata: {{...recommendation dict...}}
-          event: done\ndata: {{"model_used": "{model}", "source_count": {n}, "total": {count}}}
-          event: error\ndata: {{"message": "..."}}
+        Instead of progressive JSON parsing (which is fragile), this collects the full
+        response and parses it once at the end.
         """
-        prompt = self._build_prompt(movies, count, strategy, strategy_params)
+        prompt = self._build_prompt(movies, count, strategy, strategy_params, watched_titles, taste_analysis)
+        temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
 
         # Yield start event
-        start_data = json.dumps({
-            "model": self.model_type,
-            "source_count": len(movies),
-        })
+        start_data = json.dumps({"model": self.model_type, "source_count": len(movies)})
         yield f"event: start\ndata: {start_data}\n\n"
 
         try:
@@ -416,8 +540,8 @@ Format 2 - For explanation or other questions:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.7,
-                max_tokens=2000,
+                temperature=temperature,
+                max_tokens=MAX_TOKENS,
                 timeout=60,
                 stream=True,
             )
@@ -435,39 +559,41 @@ Format 2 - For explanation or other questions:
             return
 
         accumulated = ""
-        last_rec_count = 0
 
         for chunk in stream:
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 token = delta.content
                 accumulated += token
+                # Send raw tokens as chunk events for frontend to show progress
+                yield f"event: chunk\ndata: {json.dumps({'text': token})}\n\n"
 
-                # Try to parse accumulated JSON progressively
-                try:
-                    json_str = self._extract_json(accumulated)
-                    data = json.loads(json_str)
-                    recs = data.get("recommendations", [])
+        # After stream completes, parse the full response
+        try:
+            json_str = self._extract_json(accumulated)
+            data = json.loads(json_str)
+            recs = data.get("recommendations", [])
 
-                    # Yield any new recommendations found
-                    while last_rec_count < len(recs):
-                        rec = recs[last_rec_count]
-                        rec_data = json.dumps({
-                            "title": rec.get("title", "Unknown"),
-                            "year": rec.get("year"),
-                            "genre": rec.get("genre"),
-                            "reason": rec.get("reason", ""),
-                            "confidence": min(max(float(rec.get("confidence", 0.5)), 0.0), 1.0),
-                        })
-                        yield f"event: recommendation\ndata: {rec_data}\n\n"
-                        last_rec_count += 1
-                except (json.JSONDecodeError, ValueError):
-                    pass
+            # Yield each recommendation
+            for rec in recs:
+                rec_data = json.dumps({
+                    "title": rec.get("title", "Unknown"),
+                    "year": rec.get("year"),
+                    "genre": rec.get("genre"),
+                    "reason": rec.get("reason", ""),
+                    "confidence": min(max(float(rec.get("confidence", 0.5)), 0.0), 1.0),
+                })
+                yield f"event: recommendation\ndata: {rec_data}\n\n"
 
-        # Yield done event with summary
-        done_data = json.dumps({
-            "model_used": self.model_type,
-            "source_count": len(movies),
-            "total": last_rec_count,
-        })
-        yield f"event: done\ndata: {done_data}\n\n"
+            # Yield done event
+            done_data = json.dumps({
+                "model_used": self.model_type,
+                "source_count": len(movies),
+                "total": len(recs),
+            })
+            yield f"event: done\ndata: {done_data}\n\n"
+
+        except (json.JSONDecodeError, ValueError) as e:
+            # If parsing fails, send error
+            error_data = json.dumps({"message": f"Failed to parse AI response: {str(e)}"})
+            yield f"event: error\ndata: {error_data}\n\n"

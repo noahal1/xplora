@@ -37,6 +37,8 @@ export interface Recommendation {
   confidence: number;
   media_type?: string;
   poster_url?: string | null;
+  /** Whether this movie is already in the user's watched library. */
+  watched?: boolean;
 }
 
 export interface ChatMessage {
