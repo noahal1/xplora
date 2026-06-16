@@ -1,6 +1,7 @@
 """Update check router — queries GitHub Releases API for latest version."""
 
 import json
+import re
 import time
 from datetime import datetime, timezone
 
@@ -16,18 +17,18 @@ router = APIRouter(prefix="/api/update", tags=["update"])
 
 _CACHE: dict | None = None
 _CACHE_TIME: float = 0.0
-_CACHE_TTL = 3600  # 1 hour
-
+_CACHE_TTL = 7200  
 GITHUB_API_URL = "https://api.github.com/repos/noahal1/xplora/releases/latest"
 
 
 def _semver_tuple(v: str) -> tuple:
-    """Parse a semver string like '2.0.0' into a comparable tuple."""
-    parts = v.lstrip("v").split(".")
-    try:
-        return tuple(int(p) for p in parts)
-    except (ValueError, TypeError):
+    """Parse a semver string like '2.0.0' or 'dawn-1.2.0' into a comparable tuple."""
+    # Extract numeric semver (e.g. "1.2.0" from "dawn-1.2.0" or "v2.0.0")
+    match = re.search(r"(\d+\.\d+\.\d+)", v)
+    if not match:
         return (0, 0, 0)
+    parts = match.group(1).split(".")
+    return tuple(int(p) for p in parts)
 
 
 def _get_update_info() -> dict:
