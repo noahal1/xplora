@@ -49,7 +49,7 @@ WORKDIR /app
 RUN sed -i "s/deb.debian.org/${APT_MIRROR_REPLACE}/g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
     sed -i "s/deb.debian.org/${APT_MIRROR_REPLACE}/g" /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl docker.io && \
     rm -rf /var/lib/apt/lists/*
 
 # Ensure SQLite database directory exists (baked into image)

@@ -26,6 +26,8 @@ services:
       - ./data:/app/data
       # Poster cache
       - poster_data:/app/backend/static/posters
+      # Docker socket — for manual update trigger via watchtower
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8327/api/health"]
       interval: 30s
@@ -56,7 +58,7 @@ services:
       - "--cleanup"
       # 更新时先发 SIGTERM，等待 30 秒优雅关闭
       - "--stop-timeout"
-      - "30"
+      - "30s"
 
 volumes:
   poster_data:

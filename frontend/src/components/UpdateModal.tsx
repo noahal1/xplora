@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Modal } from "./Modal";
+import { triggerUpdate } from "../api";
+import { useToast } from "../context/ToastContext";
 
 interface UpdateInfo {
   current_version: string;
@@ -33,6 +36,8 @@ function formatDate(dateStr: string | null): string {
 
 export function UpdateModal({ open, onClose, updateInfo }: Props) {
   const { t, i18n } = useTranslation();
+  const { showToast } = useToast();
+  const [updating, setUpdating] = useState(false);
 
   const formatDateLocalized = (dateStr: string | null): string => {
     if (!dateStr) return "";
@@ -45,6 +50,18 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
       });
     } catch {
       return dateStr;
+    }
+  };
+
+  const handleUpdateNow = async () => {
+    setUpdating(true);
+    try {
+      const result = await triggerUpdate();
+      showToast(result.message, "success");
+    } catch (err: any) {
+      showToast(err.message, "error");
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -120,34 +137,46 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
 
         {/* Actions */}
         <div className="flex items-center justify-between gap-2 pt-1">
-          {updateInfo.release_url ? (
-            <a
-              href={updateInfo.release_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all"
+          {updateInfo.update_available && (
+            <button
+              onClick={handleUpdateNow}
+              disabled={updating}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
               style={{
                 background: "var(--foreground)",
                 color: "var(--background)",
               }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = "0.9"}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = "1"}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-              </svg>
-              {t("update.download")}
-            </a>
-          ) : (
-            <div />
+              {updating ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  {t("update.updating")}
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                  {t("update.update_now")}
+                </>
+              )}
+            </button>
           )}
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+            className="px-4 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all ml-auto"
           >
             {t("common.close")}
           </button>
         </div>
+
+        {/* Info text when triggered */}
+        {!updateInfo.update_available && (
+          <p className="text-center text-[11px]" style={{ color: "var(--fg-muted)" }}>
+            {t("update.up_to_date")}
+          </p>
+        )}
       </div>
     </Modal>
   );

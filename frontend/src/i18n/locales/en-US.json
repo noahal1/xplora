@@ -482,7 +482,10 @@
     "dismiss": "Dismiss",
     "check_failed": "Update check failed: {{error}}",
     "published_at": "Released {{date}}",
-    "notification_badge": "New version available"
+    "notification_badge": "New version available",
+    "update_now": "Update Now",
+    "updating": "Updating...",
+    "up_to_date": "🎉 Xplora is up to date"
   },
   "detail_modal": {
     "loading": "Loading movie details...",

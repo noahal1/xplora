@@ -2,12 +2,14 @@
 
 import json
 import re
+import subprocess
 import time
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from __version__ import VERSION
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/update", tags=["update"])
 
@@ -19,6 +21,61 @@ _CACHE: dict | None = None
 _CACHE_TIME: float = 0.0
 _CACHE_TTL = 7200  
 GITHUB_API_URL = "https://api.github.com/repos/noahal1/xplora/releases/latest"
+WATCHTOWER_CONTAINER = "watchtower"
+
+
+@router.post("/trigger")
+def trigger_update(current_user: dict = Depends(get_current_user)):
+    """Manually trigger watchtower to check for updates immediately.
+
+    Sends SIGHUP to the watchtower container, which causes it to
+    run its update cycle right away instead of waiting for the
+    normal polling interval.
+
+    Requires:
+      - Docker socket mounted to the xplora container
+      - docker CLI installed in the container
+      - watchtower container running and labeled
+
+    Returns 503 if docker/watchtower is unavailable.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "kill", "-s", "HUP", WATCHTOWER_CONTAINER],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            return {
+                "status": "triggered",
+                "message": f"已向 {WATCHTOWER_CONTAINER} 发送更新信号，将在数秒内检测并拉取新镜像",
+            }
+        error_msg = result.stderr.strip() or f"docker kill returned {result.returncode}"
+        raise RuntimeError(error_msg)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=503,
+            detail="Docker CLI 未安装，无法触发手动更新",
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=504,
+            detail="向 Docker 发送信号超时",
+        )
+    except RuntimeError as e:
+        if "No such container" in str(e):
+            raise HTTPException(
+                status_code=503,
+                detail=f"未检测到 {WATCHTOWER_CONTAINER} 容器，请确认 watchtower 正在运行",
+            )
+        raise HTTPException(
+            status_code=503,
+            detail=f"触发更新失败: {e}",
+        )
+
+
+@router.get("/check")
 
 
 def _semver_tuple(v: str) -> tuple:

@@ -346,6 +346,14 @@ export async function checkUpdate(force?: boolean): Promise<{
   return fetchJSON(`${API_BASE}/update/check${qs}`);
 }
 
+/** Manually trigger watchtower to check for updates immediately */
+export async function triggerUpdate(): Promise<{ status: string; message: string }> {
+  return fetchJSON(`${API_BASE}/update/trigger`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
 /** Get health status */
 export async function getHealth(): Promise<{
   status: string;
