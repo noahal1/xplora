@@ -24,13 +24,13 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
   const [importingBatch, setImportingBatch] = useState(false);
   const [batchImportProgress, setBatchImportProgress] = useState<{ current: number; total: number } | null>(null);
   const searchTmdbRef = useRef<HTMLInputElement>(null);
-  const searchTmdbTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (open) setTimeout(() => searchTmdbRef.current?.focus(), 100);
   }, [open]);
 
-  const handleSearchTMDB = useCallback(async (q: string) => {
+  const handleSearch = useCallback(async () => {
+    const q = searchQuery;
     if (!q.trim()) { setSearchResults([]); setSelectedSearchIds(new Set()); return; }
     setSearchLoading(true);
     setSelectedSearchIds(new Set());
@@ -42,13 +42,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
     } finally {
       setSearchLoading(false);
     }
-  }, [showToast]);
-
-  const handleSearchInputChange = useCallback((value: string) => {
-    setSearchQuery(value);
-    if (searchTmdbTimeout.current) clearTimeout(searchTmdbTimeout.current);
-    searchTmdbTimeout.current = setTimeout(() => handleSearchTMDB(value), 400);
-  }, [handleSearchTMDB]);
+  }, [searchQuery, showToast]);
 
   const handleImportFromSearch = useCallback(async (result: MediaSearchResult) => {
     try {
@@ -105,19 +99,25 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
     else showToast(t("manage.batch_import_done", { count: successCount }), "success");
   }, [searchResults, selectedSearchIds, onImportComplete, showToast, t]);
 
-  // Cleanup on unmount
-  useEffect(() => { return () => { if (searchTmdbTimeout.current) clearTimeout(searchTmdbTimeout.current); }; }, []);
-
   return (
     <Modal open={open} onClose={() => { onClose(); setSearchQuery(""); setSearchResults([]); setSearchLoading(false); setSelectedSearchIds(new Set()); }}
       title={t("manage.search_tmdb")} description={t("manage.search_tmdb_desc")}
     >
       <div className="space-y-4">
-        <input ref={searchTmdbRef} type="text" placeholder={t("manage.search_tmdb_placeholder")}
-          value={searchQuery} onChange={(e) => handleSearchInputChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleSearchTMDB(searchQuery); }}
-          className="input-field w-full"
-        />
+        <div className="flex items-center gap-2">
+          <input ref={searchTmdbRef} type="text" placeholder={t("manage.search_tmdb_placeholder")}
+            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+            className="input-field flex-1"
+          />
+          <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={handleSearch} disabled={searchLoading || !searchQuery.trim()}>
+            {searchLoading ? (
+              <><Loader2 size={13} className="animate-spin" />{t("manage.searching")}</>
+            ) : (
+              <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>{t("common.search")}</>
+            )}
+          </button>
+        </div>
 
         {searchLoading && (
           <div className="flex items-center justify-center py-8 text-muted-foreground">

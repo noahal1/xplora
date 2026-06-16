@@ -67,7 +67,6 @@ export function WishlistTab() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searchDone, setSearchDone] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
@@ -136,12 +135,7 @@ export function WishlistTab() {
     return () => controller.abort();
   }, [currentPage, search.debouncedValue, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
 
-  // Clear debounce timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-  }, []);
+
 
   // Auto-refresh when background enrichment completes
   useEffect(() => {
@@ -184,27 +178,22 @@ export function WishlistTab() {
   // External search
   // ================================
 
-  const handleSearch = useCallback((value: string) => {
-    setExternalQuery(value);
-    setSearchDone(false);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (!value.trim()) { setSearchResults([]); setSearchError(""); return; }
-    searchTimeoutRef.current = setTimeout(async () => {
-      setSearchLoading(true);
-      setSearchError("");
-      try {
-        const data = await api.searchMedia(value.trim(), searchSourceRef.current);
-        setSearchResults(data.results);
-        setSearchDone(true);
-      } catch (err: any) { setSearchError(err.message); setSearchResults([]); setSearchDone(true); }
-      finally { setSearchLoading(false); }
-    }, 350);
-  }, []);
+  const handleSearch = useCallback(async () => {
+    const q = externalQuery;
+    if (!q.trim()) { setSearchResults([]); setSearchError(""); setSearchDone(false); return; }
+    setSearchLoading(true);
+    setSearchError("");
+    try {
+      const data = await api.searchMedia(q.trim(), searchSourceRef.current);
+      setSearchResults(data.results);
+      setSearchDone(true);
+    } catch (err: any) { setSearchError(err.message); setSearchResults([]); setSearchDone(true); }
+    finally { setSearchLoading(false); }
+  }, [externalQuery]);
 
   const changeSearchSource = useCallback((source: string) => {
     setSearchSource(source);
-    if (externalQuery.trim()) handleSearch(externalQuery);
-  }, [externalQuery, handleSearch]);
+  }, []);
 
   const openDetail = useCallback(async (result: MediaSearchResult) => {
     setDetailMovie(result);
@@ -443,19 +432,26 @@ export function WishlistTab() {
             </div>
           </div>
 
-          <div className="relative">
-            <input type="text" id="wishlist-search" placeholder={t("wishlist.search_placeholder")}
-              value={externalQuery} onChange={(e) => handleSearch(e.target.value)}
-              className="input-field w-full h-10 text-sm pl-3 pr-10" />
-            {externalQuery && (
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {searchLoading && <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />}
-                <button className="text-muted-foreground hover:text-foreground p-0.5"
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input type="text" id="wishlist-search" placeholder={t("wishlist.search_placeholder")}
+                value={externalQuery} onChange={(e) => setExternalQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                className="input-field w-full h-10 text-sm pl-3 pr-10" />
+              {externalQuery && (
+                <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
                   onClick={() => { setExternalQuery(""); setSearchResults([]); setSearchDone(false); setSearchError(""); }}>
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+            <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={handleSearch} disabled={searchLoading || !externalQuery.trim()}>
+              {searchLoading ? (
+                <><Loader2 size={13} className="animate-spin" />{t("manage.searching")}</>
+              ) : (
+                <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>{t("common.search")}</>
+              )}
+            </button>
           </div>
 
           {searchResults.length > 0 && (

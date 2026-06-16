@@ -60,7 +60,7 @@ export function WatchedTab() {
   const [searchError, setSearchError] = useState("");
   const [searchDone, setSearchDone] = useState(false);
   const [addingSearchIds, setAddingSearchIds] = useState<Set<string>>(new Set());
-  const externalSearchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);    const searchSourceRef = useRef(searchSource);
+  const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
   const mediaRef = useRef(media);
   mediaRef.current = media;
@@ -136,7 +136,8 @@ export function WatchedTab() {
 
   // ── External search handlers ──
 
-  const handleExternalSearch = useCallback(async (q: string) => {
+  const handleSearch = useCallback(async () => {
+    const q = externalQuery;
     if (!q.trim()) { setSearchResults([]); setSearchError(""); setSearchDone(false); return; }
     setSearchLoading(true);
     setSearchError("");
@@ -151,20 +152,11 @@ export function WatchedTab() {
     } finally {
       setSearchLoading(false);
     }
-  }, []);
-
-  const handleSearchInputChange = useCallback((value: string) => {
-    setExternalQuery(value);
-    setSearchDone(false);
-    if (externalSearchTimeoutRef.current) clearTimeout(externalSearchTimeoutRef.current);
-    if (!value.trim()) { setSearchResults([]); setSearchError(""); return; }
-    externalSearchTimeoutRef.current = setTimeout(() => handleExternalSearch(value), 350);
-  }, [handleExternalSearch]);
+  }, [externalQuery]);
 
   const changeSearchSource = useCallback((source: string) => {
     setSearchSource(source);
-    if (externalQuery.trim()) handleExternalSearch(externalQuery);
-  }, [externalQuery, handleExternalSearch]);
+  }, []);
 
   const addSearchResultToWatched = useCallback(async (result: MediaSearchResult) => {
     const key = `${result.source}:${result.source_id}`;
@@ -181,13 +173,6 @@ export function WatchedTab() {
       setAddingSearchIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
     }
   }, [addingSearchIds, showToast, startPolling, t]);
-
-  // Clear debounce timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (externalSearchTimeoutRef.current) clearTimeout(externalSearchTimeoutRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     localStorage.setItem("xplora-watched-view", viewMode);
@@ -878,19 +863,26 @@ export function WatchedTab() {
             </div>
           </div>
 
-          <div className="relative">
-            <input type="text" placeholder={t("watched.search_placeholder_external")}
-              value={externalQuery} onChange={(e) => handleSearchInputChange(e.target.value)}
-              className="input-field w-full h-10 text-sm pl-3 pr-10" />
-            {externalQuery && (
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {searchLoading && <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />}
-                <button className="text-muted-foreground hover:text-foreground p-0.5"
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input type="text" placeholder={t("watched.search_placeholder_external")}
+                value={externalQuery} onChange={(e) => setExternalQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                className="input-field w-full h-10 text-sm pl-3 pr-10" />
+              {externalQuery && (
+                <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
                   onClick={() => { setExternalQuery(""); setSearchResults([]); setSearchDone(false); setSearchError(""); }}>
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+            <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={handleSearch} disabled={searchLoading || !externalQuery.trim()}>
+              {searchLoading ? (
+                <><Loader2 size={13} className="animate-spin" />{t("manage.searching")}</>
+              ) : (
+                <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>{t("common.search")}</>
+              )}
+            </button>
           </div>
 
           {searchResults.length > 0 && (
