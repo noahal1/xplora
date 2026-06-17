@@ -8,7 +8,7 @@ import { SkeletonCard } from "./Skeleton";
 import { Modal } from "./Modal";
 import {
   Sparkles, Send, Percent, MessageSquare, Film,
-  Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star,
+  Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star, Plus, Loader2,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenreName, translateGenres } from "../utils/genre";
@@ -51,6 +51,7 @@ export function RecommendTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [modelUsed, setModelUsed] = useState("");
   const [sourceInfo, setSourceInfo] = useState("");
+  const [addingToWishlist, setAddingToWishlist] = useState<Record<number, boolean>>({});
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatProcessing, setIsChatProcessing] = useState(false);
@@ -123,6 +124,7 @@ export function RecommendTab() {
     setRecommendations([]);
     setChatMessages([]);
     setShowChat(false);
+    setAddingToWishlist({});
     const modelNames: Record<string, string> = { deepseek: "DeepSeek", openai: "OpenAI (GPT-4o)" };
     setModelUsed(modelNames[selectedModel] || selectedModel);
     setSourceInfo(t("recommend.source_info_loading", { count: filteredMovies.length }));
@@ -374,6 +376,19 @@ export function RecommendTab() {
     showToast(t("recommend.export_json_success"), "success");
   }, [recommendations, modelUsed, sourceInfo, showToast, t]);
 
+  const addToWishlist = useCallback(async (rec: Recommendation, idx: number) => {
+    if (addingToWishlist[idx]) return;
+    setAddingToWishlist((prev) => ({ ...prev, [idx]: true }));
+    try {
+      await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null });
+      showToast(t("wishlist.added_to_wishlist", { title: rec.title }), "success");
+    } catch (err: any) {
+      showToast(t("wishlist.add_failed", { message: err.message }), "error");
+    } finally {
+      setAddingToWishlist((prev) => ({ ...prev, [idx]: false }));
+    }
+  }, [addingToWishlist, showToast, t]);
+
   const handleExportScreenshot = useCallback(async () => {
     if (!resultsRef.current) return;
     try {
@@ -419,7 +434,7 @@ export function RecommendTab() {
               <p className="text-label mb-3 text-center" style={{ color: "var(--fg-dim)" }}>
                 {t("recommend.strategy_label")}
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {STRATEGIES.map((s) => {
                   const Icon = s.icon;
                   const isActive = strategy === s.id;
@@ -473,7 +488,7 @@ export function RecommendTab() {
             {/* ── Genre Filter ─────────────────────────── */}
             {uniqueGenres.length > 0 && (
               <div className="mb-5 pb-0.5">
-                <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+                <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-0.5" style={{ scrollbarWidth: "thin" }}>
                   <span className="text-xs text-muted-foreground mr-1 shrink-0">{t("manage.genre_filter")}</span>
                   <button className={`pill shrink-0 ${genreFilter === "all" ? "active" : ""}`}
                     onClick={() => setGenreFilter("all")}>{t("manage.media_type_all")}</button>
@@ -665,11 +680,11 @@ export function RecommendTab() {
       {/* === Results Section === */}
       {recommendations.length > 0 && (
         <section className="section-card" ref={resultsRef}>
-          <div className="section-header">
+          <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="text-heading" style={{ color: "var(--seed-fg)" }}>
               {t("recommend.results")}
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {modelUsed && <span className="badge">{modelUsed}</span>}
               <span className="badge">{t(`recommend.strategy_${strategy}`)}</span>
             </div>
@@ -714,7 +729,7 @@ export function RecommendTab() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-[590] truncate" style={{ color: "var(--seed-fg)" }}>
                           {rec.title}
                         </p>
@@ -736,11 +751,27 @@ export function RecommendTab() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Percent size={11} style={{ color: "var(--seed-primary)" }} />
-                    <span className="text-xs font-[590]" style={{ color: "var(--seed-primary)" }}>
-                      {Math.round(rec.confidence * 100)}
-                    </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Add to wishlist button */}
+                    <button
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-all disabled:opacity-50 hover:bg-accent"
+                      style={{ color: addingToWishlist[i] ? "var(--seed-primary)" : "var(--fg-dim)" }}
+                      disabled={addingToWishlist[i]}
+                      onClick={(e) => { e.stopPropagation(); addToWishlist(rec, i); }}
+                      title={t("wishlist.add")}
+                    >
+                      {addingToWishlist[i] ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Plus size={12} />
+                      )}
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <Percent size={11} style={{ color: "var(--seed-primary)" }} />
+                      <span className="text-xs font-[590]" style={{ color: "var(--seed-primary)" }}>
+                        {Math.round(rec.confidence * 100)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -749,7 +780,7 @@ export function RecommendTab() {
 
           {/* Export buttons */}
           {recommendations.length > 0 && (
-            <div className="flex items-center gap-2 mt-5 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mt-5 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
               <button
                 onClick={handleExportJSON}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
@@ -767,8 +798,8 @@ export function RecommendTab() {
                 {t("recommend.export_screenshot")}
               </button>
               <button
-                onClick={() => { setRecommendations([]); setShowChat(false); setChatMessages([]); }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ml-auto"
+                onClick={() => { setRecommendations([]); setShowChat(false); setChatMessages([]); setAddingToWishlist({}); }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all sm:ml-auto"
                 style={{ color: "var(--fg-muted)" }}
               >
                 <Sparkles size={12} />
@@ -802,8 +833,8 @@ export function RecommendTab() {
         )}
         {detailData && !detailLoading && !detailError && (
           <div className="space-y-5">
-            <div className="flex gap-4">
-              <div className="w-[100px] shrink-0">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <div className="w-[72px] sm:w-[100px] shrink-0">
                 <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
                   {detailData.poster_url ? (
                     <img src={detailData.poster_url} alt={detailData.title} className="w-full h-full object-cover"
@@ -820,7 +851,9 @@ export function RecommendTab() {
                 </div>
                 {detailData.genre && (
                   <div className="flex flex-wrap gap-1">
-                    {detailData.genre.split(" / ").map((g) => (
+                    {Array.from(
+                      new Set(detailData.genre.split(" / ").map((g) => g.trim()).filter(Boolean))
+                    ).map((g) => (
                       <Badge key={g} variant="secondary" className="text-[10px]">{translateGenreName(g)}</Badge>
                     ))}
                   </div>

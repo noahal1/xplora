@@ -98,7 +98,7 @@ export function AboutModal({ open, onClose }: Props) {
         {/* Links */}
         <div className="flex flex-wrap items-center justify-center gap-2">
           <a
-            href="https://github.com/noahang/xplora"
+            href="https://github.com/noahal1/xplora"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-accent"
@@ -109,7 +109,7 @@ export function AboutModal({ open, onClose }: Props) {
             <ExternalLink size={10} className="opacity-50" />
           </a>
           <a
-            href="https://github.com/noahang/xplora#readme"
+            href="https://github.com/noahal1/xplora#readme"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-accent"

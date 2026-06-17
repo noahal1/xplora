@@ -438,7 +438,20 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             if not any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean):
                 filtered.append(r)
 
-        return filtered
+        # Also deduplicate within the same batch — AI sometimes returns the same
+        # movie twice in one response (exact title or fuzzy match).
+        seen_titles: list[str] = []
+        deduped = []
+        for r in filtered:
+            title = r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "")
+            if not title:
+                deduped.append(r)
+                continue
+            if not any(_match_score(title, st) >= MATCH_THRESHOLD for st in seen_titles):
+                seen_titles.append(title)
+                deduped.append(r)
+
+        return deduped
 
     def get_recommendations(
         self,

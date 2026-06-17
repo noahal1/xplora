@@ -438,8 +438,10 @@ export function HistoryTab() {
                 </div>
                 {detailData.genre && (
                   <div className="flex flex-wrap gap-1">
-                    {detailData.genre.split(" / ").map((g) => (
-                      <Badge key={g} variant="secondary" className="text-[10px]">{translateGenreName(g.trim())}</Badge>
+                    {Array.from(
+                      new Set(detailData.genre.split(" / ").map((g) => g.trim()).filter(Boolean))
+                    ).map((g) => (
+                      <Badge key={g} variant="secondary" className="text-[10px]">{translateGenreName(g)}</Badge>
                     ))}
                   </div>
                 )}

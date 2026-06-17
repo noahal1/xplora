@@ -109,11 +109,20 @@ async def recommend(
     try:
         service = AIService(api_key=api_key, model_type=request.model)
         watched_titles = _extract_watched_titles(movies)
+        # Also exclude wishlist items
+        wishlist_items = db.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.status == "wish",
+                MediaItemRecord.user_id == current_user["id"],
+            )
+        ).all()
+        wishlist_titles = [item.title for item in wishlist_items if item.title]
+        all_excluded = list(set(watched_titles + wishlist_titles))
         taste_analysis = service._analyze_user_taste(movies)
         recommendations = service.get_recommendations(
             movies, request.count, request.strategy,
             request.strategy_params.model_dump() if request.strategy_params else None,
-            watched_titles=watched_titles,
+            watched_titles=all_excluded,
             taste_analysis=taste_analysis,
         )
         return RecommendationResponse(
@@ -131,17 +140,28 @@ async def recommend(
 async def recommend_stream(
     request: RecommendationRequest,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
 ):
     """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
     watched_titles = _extract_watched_titles(movies)
+    # Also exclude wishlist items so the AI doesn't recommend movies the user
+    # already plans to watch
+    wishlist_items = db.exec(
+        select(MediaItemRecord).where(
+            MediaItemRecord.status == "wish",
+            MediaItemRecord.user_id == current_user["id"],
+        )
+    ).all()
+    wishlist_titles = [item.title for item in wishlist_items if item.title]
+    all_excluded = list(set(watched_titles + wishlist_titles))
     return StreamingResponse(
         _stream_with_persistence(
             movies, request.count, request.model, api_key, current_user["id"],
             strategy=request.strategy,
             strategy_params=request.strategy_params.model_dump() if request.strategy_params else None,
-            watched_titles=watched_titles,
+            watched_titles=all_excluded,
         ),
         media_type="text/event-stream",
         headers={
@@ -156,12 +176,22 @@ async def recommend_stream(
 async def followup_stream(
     request: FollowUpRequest,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
 ):
     """SSE streaming endpoint for follow-up conversation."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
     service = AIService(api_key=api_key, model_type=request.model)
     watched_titles = _extract_watched_titles(movies)
+    # Also exclude wishlist items
+    wishlist_items = db.exec(
+        select(MediaItemRecord).where(
+            MediaItemRecord.status == "wish",
+            MediaItemRecord.user_id == current_user["id"],
+        )
+    ).all()
+    wishlist_titles = [item.title for item in wishlist_items if item.title]
+    all_excluded = list(set(watched_titles + wishlist_titles))
     taste_analysis = service._analyze_user_taste(movies)
     return StreamingResponse(
         service.get_followup_stream(
@@ -170,7 +200,7 @@ async def followup_stream(
             conversation=request.conversation,
             question=request.question,
             count=request.count,
-            watched_titles=watched_titles,
+            watched_titles=all_excluded,
             taste_analysis=taste_analysis,
         ),
         media_type="text/event-stream",

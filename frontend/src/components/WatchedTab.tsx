@@ -415,14 +415,14 @@ export function WatchedTab() {
       {/* === Movie List Section === */}
       {total > 0 && (
         <section className="section-card animate-slide-down">
-          <div className="section-header">
+          <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="section-title flex items-center gap-2">
               <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
               </svg>
               {t("watched.title")}
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-input)] p-0.5">
                 <button
                   className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
@@ -561,7 +561,7 @@ export function WatchedTab() {
           {/* Genre Filter */}
           {media.length > 0 && uniqueGenres.length > 0 && (
             <div className="mb-3 pb-0.5">
-              <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+              <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-0.5" style={{ scrollbarWidth: "thin" }}>
                 <span className="text-[11px] text-muted-foreground mr-0.5 shrink-0">{t("manage.genre_filter")}</span>
                 <button className={`pill shrink-0 ${genreFilter === "all" ? "active" : ""}`}
                   onClick={() => { setGenreFilter("all"); setCurrentPage(0); }}>{t("manage.media_type_all")}</button>

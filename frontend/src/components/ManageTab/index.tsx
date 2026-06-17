@@ -379,7 +379,7 @@ export function ManageTab() {
       {/* Genre Filter */}
       {mediaList.length > 0 && uniqueGenres.length > 0 && (
         <div className="mb-3 pb-0.5">
-          <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-0.5" style={{ scrollbarWidth: "thin" }}>
             <span className="text-xs text-muted-foreground mr-1 shrink-0">{t("manage.genre_filter")}</span>
             <button className={`pill shrink-0 ${genreFilter === "" ? "active" : ""}`}
               onClick={() => { setGenreFilter(""); setPage(0); setSelected(new Set()); }}>{t("manage.media_type_all")}</button>

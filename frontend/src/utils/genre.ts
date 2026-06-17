@@ -3,7 +3,7 @@
  * Covers all standard TMDB movie and TV genres.
  */
 
-const GENRE_EN_TO_ZH: Record<string, string> = {
+export const GENRE_EN_TO_ZH: Record<string, string> = {
   // Movie genres
   Action: "动作",
   Adventure: "冒险",
@@ -43,6 +43,7 @@ const GENRE_EN_TO_ZH: Record<string, string> = {
  */
 export function translateGenres(genreStr: string | null | undefined): string {
   if (!genreStr) return "";
+  const seen = new Set<string>();
   return genreStr
     .split("/")
     .map((g) => {
@@ -50,7 +51,11 @@ export function translateGenres(genreStr: string | null | undefined): string {
       if (!trimmed) return "";
       return GENRE_EN_TO_ZH[trimmed] || trimmed;
     })
-    .filter(Boolean)
+    .filter((g) => {
+      if (!g || seen.has(g.toLowerCase())) return false;
+      seen.add(g.toLowerCase());
+      return true;
+    })
     .join(" / ");
 }
 
