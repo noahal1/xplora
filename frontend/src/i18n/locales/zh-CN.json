@@ -499,6 +499,15 @@
     "updating": "更新中...",
     "up_to_date": "🎉 Xplora 已是最新版本"
   },
+  "about": {
+    "title": "关于 Xplora",
+    "tagline": "AI 驱动的电影管理与推荐系统",
+    "tech_stack": "技术栈",
+    "description": "Xplora 帮助你管理电影库，从 TMDB 自动刮削元数据，并基于你的观影记录获取个性化 AI 推荐。",
+    "docs": "文档",
+    "made_with": "用",
+    "license": "许可证"
+  },
   "detail_modal": {
     "loading": "加载电影详情...",
     "overview": "简介",

@@ -8,13 +8,16 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  Info,
 } from "lucide-react";
+import { AboutModal } from "./AboutModal";
 
 export function UserMenu() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
@@ -139,6 +142,20 @@ export function UserMenu() {
 
           <div style={{ height: "1px", background: "var(--border-subtle)" }} />
 
+          {/* About */}
+          <div className="py-1">
+            <MenuItem
+              icon={<Info size={14} />}
+              label={t("about.title")}
+              onClick={() => {
+                setOpen(false);
+                setAboutOpen(true);
+              }}
+            />
+          </div>
+
+          <div style={{ height: "1px", background: "var(--border-subtle)" }} />
+
           {/* Logout */}
           <div className="py-1">
             <MenuItem
@@ -150,6 +167,9 @@ export function UserMenu() {
           </div>
         </div>
       )}
+
+      {/* About Modal */}
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   );
 }

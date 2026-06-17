@@ -487,6 +487,15 @@
     "updating": "Updating...",
     "up_to_date": "🎉 Xplora is up to date"
   },
+  "about": {
+    "title": "About Xplora",
+    "tagline": "AI-powered movie management & recommendation system",
+    "tech_stack": "Tech Stack",
+    "description": "Xplora helps you manage your movie library, scrape metadata from TMDB, and get personalized AI recommendations based on your watch history.",
+    "docs": "Documentation",
+    "made_with": "Made with",
+    "license": "License"
+  },
   "detail_modal": {
     "loading": "Loading movie details...",
     "overview": "Overview",
