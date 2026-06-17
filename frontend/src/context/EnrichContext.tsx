@@ -82,8 +82,8 @@ export function EnrichProvider({ children }: { children: ReactNode }) {
         toast.dismiss("enrich-progress");
         if (data.total > 0) {
           const parts: string[] = [];
-          if (data.enriched > 0) parts.push(`🎬 ${data.enriched} 部更新成功`);
-          if (data.failed > 0) parts.push(`⚠️ ${data.failed} 部未匹配（可查看管理页筛选）`);
+          if (data.enriched > 0) parts.push(`${data.enriched} 部更新成功`);
+          if (data.failed > 0) parts.push(`${data.failed} 部未匹配（可查看管理页筛选）`);
           toast.success(parts.join("，") || "海报更新完成", {
             id: "enrich-progress",
           });

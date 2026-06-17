@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
 import { translateGenres } from "../../utils/genre";
+import { Film } from "lucide-react";
 
 interface RatingModalProps {
   open: boolean;
@@ -36,7 +37,7 @@ export function WishlistRatingModal({ open, movie, onClose, onConfirm }: RatingM
       {movie && (
         <div className="space-y-5 py-2">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg shrink-0">🎬</div>
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0"><Film size={18} style={{ color: "var(--seed-primary)" }} /></div>
             <div>
               <p className="text-sm font-semibold">{movie.title}</p>
               <div className="flex items-center gap-2 mt-0.5">

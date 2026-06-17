@@ -800,7 +800,7 @@ export function WatchedTab() {
               className="py-8 px-4 text-center cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
             >
-              <div className={`text-2xl mb-2 transition-transform ${isDragOver ? "scale-110" : ""}`}>📂</div>
+              <div className={`text-2xl mb-2 transition-transform ${isDragOver ? "scale-110" : ""}`}><Upload size={28} /></div>
               <p className={`text-sm font-medium ${isDragOver ? "text-primary" : ""}`}>{t("watched.drag_hint")}</p>
               <p className="text-xs text-muted-foreground mt-1 mb-3">{t("watched.import_json_or_csv")}</p>
               <input
@@ -844,7 +844,7 @@ export function WatchedTab() {
 
             {isDragOver && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/90 rounded-xl z-10 animate-overlay-fade">
-                <div className="text-4xl">📎</div>
+                <div className="text-4xl"><Upload size={36} /></div>
                 <div className="text-sm font-semibold text-primary">{t("watched.drop_release")}</div>
                 <span className="badge text-[10px]">JSON / CSV</span>
               </div>
@@ -925,7 +925,7 @@ export function WatchedTab() {
                 return (
                   <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm">
                     <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
-                      {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <span className="opacity-40">🎬</span>}
+                      {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <Film size={16} className="opacity-40" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <span className="font-medium truncate block">{r.title}</span>
@@ -1102,9 +1102,10 @@ const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle,
       {/* Poster */}
       <div className="aspect-[2/3] relative cursor-pointer overflow-hidden" onClick={() => onOpenDetail(movie)}>
         {movie.poster_url ? (
-          <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-4xl opacity-30 bg-muted/40">🎬</div>
+          <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />          ) : (
+          <div className="w-full h-full flex items-center justify-center text-4xl opacity-30 bg-muted/40">
+            <Film size={28} className="opacity-50" />
+          </div>
         )}
         {/* Gradient overlay for text readability */}
         <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />

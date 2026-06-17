@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
+import { Film } from "lucide-react";
+
 interface ProgressiveImageProps {
   src: string;
   alt: string;
@@ -92,8 +94,8 @@ export function ProgressiveImage({ src, alt, className = "", wrapperClassName = 
       )}
       {/* Fallback emoji on error */}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center text-lg opacity-40 bg-muted/60">
-          🎬
+        <div className="absolute inset-0 flex items-center justify-center" style={{ opacity: 0.4 }}>
+          <Film size={20} />
         </div>
       )}
     </div>

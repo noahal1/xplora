@@ -4,6 +4,7 @@ import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
 import { ProgressiveImage } from "../ProgressiveImage";
 import { translateGenreName } from "../../utils/genre";
+import { Film } from "lucide-react";
 
 interface DetailModalProps {
   open: boolean;
@@ -38,7 +39,7 @@ export function WishlistDetailModal({ open, movie, detailData, loading, error, o
               <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
                 {detailData.poster_url ? (
                   <ProgressiveImage src={detailData.poster_url} alt={detailData.title} className="w-full h-full object-cover" />
-                ) : <span className="text-3xl opacity-30">🎬</span>}
+                ) : <Film size={24} className="opacity-30" />}
               </div>
             </div>
             <div className="flex-1 min-w-0 space-y-2">
@@ -64,7 +65,7 @@ export function WishlistDetailModal({ open, movie, detailData, loading, error, o
                   </div>
                 )}
                 {detailData.ratings && Object.entries(detailData.ratings).map(([key, val]) => (
-                  <Badge key={key} variant="outline" className="text-[9px]">{key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "🍅" : key === "metacritic" ? "M" : key}: {val}</Badge>
+                  <Badge key={key} variant="outline" className="text-[9px]">{key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "RT" : key === "metacritic" ? "M" : key}: {val}</Badge>
                 ))}
               </div>
             </div>

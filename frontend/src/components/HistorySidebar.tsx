@@ -8,6 +8,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Modal } from "./Modal";
 import { formatDateTime } from "../utils/date";
+import { Brain, Bot } from "lucide-react";
 
 type TabType = "movies" | "sessions";
 
@@ -173,7 +174,7 @@ export function HistorySidebar() {
                 </Button>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground pb-2 border-b border-border">
-                <span>{detail.model === "deepseek" ? "🧠 DeepSeek" : "🤖 OpenAI"}</span>
+                <span>{detail.model === "deepseek" ? <><Brain size={14} />{" "}DeepSeek</> : <><Bot size={14} />{" "}OpenAI</>}</span>
                 <span className="w-1 h-1 rounded-full bg-border" />
                 <span>{t("history.recommendations", { count: detail.recommendations.length })}</span>
                 <span className="w-1 h-1 rounded-full bg-border" />
@@ -255,7 +256,7 @@ export function HistorySidebar() {
                   <div key={s.id} className="history-item group" onClick={() => viewSession(s.id)}>
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium truncate block">
-                        {s.model === "deepseek" ? "🧠" : "🤖"} {s.model === "deepseek" ? "DeepSeek" : "OpenAI"} · {t("history.recommendations", { count: s.recommendation_count })}
+                        {s.model === "deepseek" ? <Brain size={14} /> : <Bot size={14} />} {s.model === "deepseek" ? "DeepSeek" : "OpenAI"} · {t("history.recommendations", { count: s.recommendation_count })}
                       </span>
                       <span className="text-[11px] text-muted-foreground">{formatDateTime(s.created_at)} · {t("history.source_movies", { count: s.source_count })}</span>
                     </div>

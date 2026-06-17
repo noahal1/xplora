@@ -214,7 +214,7 @@ export function HistoryTab() {
             </button>
             <div className="flex items-center gap-2 ml-2">
               <span className="text-sm font-medium">
-                {detail.model === "deepseek" ? "🧠 DeepSeek" : "🤖 OpenAI"}
+                {detail.model === "deepseek" ? <><Brain size={14} /> DeepSeek</> : <><Bot size={14} /> OpenAI</>}
               </span>
               <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
               <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
@@ -426,7 +426,7 @@ export function HistoryTab() {
                 <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
                   {detailData.poster_url ? (
                     <ProgressiveImage src={detailData.poster_url} alt={detailData.title} className="w-full h-full object-cover" />
-                  ) : <span className="text-3xl opacity-30">🎬</span>}
+                  ) : <Film size={24} className="opacity-30" />}
                 </div>
               </div>
               <div className="flex-1 min-w-0 space-y-2">
@@ -454,7 +454,7 @@ export function HistoryTab() {
                     </div>
                   )}
                   {detailData.ratings && Object.entries(detailData.ratings).map(([key, val]) => (
-                    <Badge key={key} variant="outline" className="text-[9px]">{key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "🍅" : key === "metacritic" ? "M" : key}: {val}</Badge>
+                    <Badge key={key} variant="outline" className="text-[9px]">{key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "RT" : key === "metacritic" ? "M" : key}: {val}</Badge>
                   ))}
                 </div>
               </div>

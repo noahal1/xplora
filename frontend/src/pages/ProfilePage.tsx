@@ -10,7 +10,7 @@ import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { useNavigate } from "react-router-dom";
 import { useEnrich } from "../context/EnrichContext";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Moon, Sun } from "lucide-react";
 
 interface HealthStatus {
   status: string;
@@ -346,7 +346,7 @@ export function ProfilePage() {
                 theme === "dark" ? "translate-x-6" : "translate-x-0.5"
               } flex items-center justify-center text-[9px]`}
             >
-              {theme === "dark" ? "🌙" : "☀️"}
+              {theme === "dark" ? <Moon size={9} /> : <Sun size={9} />}
             </span>
           </button>
         </div>

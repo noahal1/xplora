@@ -8,7 +8,7 @@ import { SkeletonCard } from "./Skeleton";
 import { Modal } from "./Modal";
 import {
   Sparkles, Send, Percent, MessageSquare, Film,
-  Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star, Plus, Loader2,
+  Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star, Plus, Loader2, User,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenreName, translateGenres } from "../utils/genre";
@@ -867,7 +867,7 @@ export function RecommendTab() {
                     </div>
                   )}
                   {detailData.ratings && Object.entries(detailData.ratings).map(([key, val]) => (
-                    <Badge key={key} variant="outline" className="text-[9px]">{key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "🍅" : key === "metacritic" ? "M" : key}: {val}</Badge>
+                    <Badge key={key} variant="outline" className="text-[9px]">                    {key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "RT" : key === "metacritic" ? "M" : key}: {val}</Badge>
                   ))}
                 </div>
                 {/* Confidence & reason from recommendation */}
@@ -954,7 +954,7 @@ export function RecommendTab() {
               <div key={i} className={`flex gap-2 items-start max-w-[90%] ${msg.role === "user" ? "ml-auto flex-row-reverse" : ""}`}>
                 <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs"
                   style={{ background: msg.role === "user" ? "var(--accent-glow)" : "var(--bg-input)", border: "1px solid var(--border-subtle)" }}>
-                  {msg.role === "user" ? "👤" : "🧠"}
+                  {msg.role === "user" ? <User size={12} /> : <Brain size={12} />}
                 </div>
                 <div className="px-3 py-2 rounded-xl text-sm leading-relaxed break-words"
                   style={msg.role === "user"
@@ -968,7 +968,7 @@ export function RecommendTab() {
             {isChatProcessing && (
               <div className="flex gap-2 items-start max-w-[85%]">
                 <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs"
-                  style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}>🧠</div>
+                  style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}><Brain size={12} /></div>
                 <div className="px-3 py-2 rounded-xl" style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)" }}>
                   <span className="text-sm" style={{ color: "var(--fg-muted)" }}>{t("recommend.chat_thinking")}</span>
                 </div>

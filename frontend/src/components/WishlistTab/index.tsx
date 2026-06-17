@@ -497,7 +497,7 @@ export function WishlistTab() {
                     return (
                       <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm cursor-pointer" onClick={() => openDetail(r)}>
                         <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
-                          {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <span className="opacity-40">🎬</span>}
+                          {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <Film size={16} style={{ color: "var(--fg-dim)", opacity: 0.4 }} />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <span className="font-medium truncate block">{r.title}</span>
