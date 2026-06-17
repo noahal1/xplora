@@ -472,23 +472,50 @@ export function RecommendTab() {
 
             {/* ── Genre Filter ─────────────────────────── */}
             {uniqueGenres.length > 0 && (
-              <div className="flex items-start gap-1.5 mb-5 flex-wrap justify-start sm:justify-center pb-0.5">
-                <span className="text-xs text-muted-foreground mr-1 shrink-0 mt-0.5">{t("manage.genre_filter")}</span>
-                <button className={`pill ${genreFilter === "all" ? "active" : ""}`}
-                  onClick={() => setGenreFilter("all")}>{t("manage.media_type_all")}</button>
-                {/* First VISIBLE_GENRES pills — always visible */}
-                {uniqueGenres.slice(0, VISIBLE_GENRES).map((g) => (
-                  <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
-                    onClick={() => setGenreFilter(g)}>{translateGenreName(g)}</button>
-                ))}
+              <div className="mb-5 pb-0.5">
+                <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+                  <span className="text-xs text-muted-foreground mr-1 shrink-0">{t("manage.genre_filter")}</span>
+                  <button className={`pill shrink-0 ${genreFilter === "all" ? "active" : ""}`}
+                    onClick={() => setGenreFilter("all")}>{t("manage.media_type_all")}</button>
+                  {/* First VISIBLE_GENRES pills — always visible */}
+                  {uniqueGenres.slice(0, VISIBLE_GENRES).map((g) => (
+                    <button key={g} className={`pill shrink-0 ${genreFilter === g ? "active" : ""}`}
+                      onClick={() => setGenreFilter(g)}>{translateGenreName(g)}</button>
+                  ))}
+                  {/* More/Collapse button — always on the right side */}
+                  {uniqueGenres.length > VISIBLE_GENRES && (
+                    <button
+                      className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0 ml-auto"
+                      onClick={() => setShowAllGenres((v) => !v)}
+                    >
+                      {showAllGenres ? (
+                        <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
+                      ) : (
+                        <><span className="text-[10px]">▼</span> +{uniqueGenres.length - VISIBLE_GENRES} {t("manage.genre_more")}</>
+                      )}
+                    </button>
+                  )}
+                </div>
                 {/* Remaining pills — animated expand/collapse */}
                 {uniqueGenres.length > VISIBLE_GENRES && (
                   <div
-                    className="grid transition-all duration-300 ease-out-expo"
-                    style={{ gridTemplateRows: showAllGenres ? '1fr' : '0fr' }}
+                    className="grid"
+                    style={{
+                      gridTemplateRows: showAllGenres ? '1fr' : '0fr',
+                      transition: 'grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                    }}
                   >
                     <div className="overflow-hidden min-h-0">
-                      <div className="flex flex-wrap gap-1.5">
+                      <div
+                        className="flex flex-wrap gap-1.5 pt-1.5"
+                        style={{
+                          opacity: showAllGenres ? 1 : 0,
+                          transform: showAllGenres ? 'translateY(0)' : 'translateY(-6px)',
+                          transition: showAllGenres
+                            ? 'opacity 0.25s ease 0.05s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s'
+                            : 'opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                        }}
+                      >
                         {uniqueGenres.slice(VISIBLE_GENRES).map((g) => (
                           <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
                             onClick={() => setGenreFilter(g)}>{translateGenreName(g)}</button>
@@ -496,18 +523,6 @@ export function RecommendTab() {
                       </div>
                     </div>
                   </div>
-                )}
-                {uniqueGenres.length > VISIBLE_GENRES && (
-                  <button
-                    className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0"
-                    onClick={() => setShowAllGenres((v) => !v)}
-                  >
-                    {showAllGenres ? (
-                      <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
-                    ) : (
-                      <><span className="text-[10px]">▼</span> +{uniqueGenres.length - VISIBLE_GENRES} {t("manage.genre_more")}</>
-                    )}
-                  </button>
                 )}
               </div>
             )}

@@ -60,7 +60,7 @@ export function UpdateBanner() {
             {t("update.available", { latest: updateInfo.latest_version })}
           </span>
           <span className="text-muted-foreground shrink-0 hidden sm:inline">
-            · v{updateInfo.current_version} → v{updateInfo.latest_version}
+            · {updateInfo.current_version} → {updateInfo.latest_version}
           </span>
         </div>
 

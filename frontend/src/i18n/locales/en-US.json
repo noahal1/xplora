@@ -472,8 +472,8 @@
   "update": {
     "checking": "Checking for updates...",
     "check_now": "Check for Updates",
-    "up_to_date": "🎉 Xplora is up to date (v{{version}})",
-    "available": "🚀 New version v{{latest}} available",
+    "up_to_date": "🎉 Xplora is up to date ({{version}})",
+    "available": "🚀 New version {{latest}} available",
     "current": "Current version",
     "latest": "Latest version",
     "update_available": "Update Available",

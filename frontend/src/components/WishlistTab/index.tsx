@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { WishlistItem, MediaSearchResult, ExternalDetail, SortField } from "../../types";
 import * as api from "../../api";
@@ -369,13 +369,28 @@ export function WishlistTab() {
             <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" /></div>
           ) : (
             <>
-              <div className="space-y-1.5">
                 {items.length === 0 && filter.debouncedValue ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">
                     {mediaTypeFilter !== "all" ? t("manage.no_matching", { query: t(`manage.media_type_${mediaTypeFilter}`) }) : t("wishlist.no_matching", { query: filter.debouncedValue })}
                   </div>
-                ) : items.map((m) => (
-                  <div key={m.id} className="card card-lift p-3.5 flex items-center justify-between cursor-pointer group" onClick={() => setMarkingMovie(m)}>
+                ) : (
+                  <>
+                    {/* Mobile cards */}
+                    <div className="sm:hidden space-y-2.5">
+                      {items.map((m) => (
+                        <WishlistMobileCard
+                          key={m.id}
+                          item={m}
+                          onMarkWatched={setMarkingMovie}
+                          onDelete={deleteItem}
+                          onOpenDetail={setDetailSaved}
+                        />
+                      ))}
+                    </div>
+                    {/* Desktop cards */}
+                    <div className="max-sm:hidden space-y-1.5">
+                      {items.map((m) => (
+                        <div key={m.id} className="card card-lift p-3.5 flex items-center justify-between cursor-pointer group" onClick={() => setMarkingMovie(m)}>
                     <div className="flex items-center gap-3" style={{ cursor: m.poster_url ? 'pointer' : undefined }}
                       onClick={(e) => { e.stopPropagation(); setDetailSaved(m); }}>
                       <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
@@ -410,6 +425,7 @@ export function WishlistTab() {
                   </div>
                 ))}
               </div>
+              </>)}
               <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} info={t("watched.total_movies", { count: total })} />
             </>
           )}
@@ -619,3 +635,101 @@ export function WishlistTab() {
     </div>
   );
 }
+
+/* ── Memo-ized mobile card — compact card layout for small screens ── */
+const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMarkWatched, onDelete, onOpenDetail }: {
+  item: WishlistEntry;
+  onMarkWatched: (item: WishlistEntry) => void;
+  onDelete: (id: number) => void;
+  onOpenDetail: (item: WishlistEntry) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className="p-3 rounded-xl transition-all duration-200"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}
+    >
+      {/* Row 1: Poster + Title/Meta */}
+      <div className="flex items-start gap-2.5">
+        {/* Poster */}
+        <div
+          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer"
+          style={{ border: "1px solid var(--border-subtle)" }}
+          onClick={() => onOpenDetail(item)}
+        >
+          {item.poster_url ? (
+            <ProgressiveImage src={item.poster_url} alt={item.title} className="w-full h-full object-cover" />
+          ) : (
+            <Film size={16} className="text-muted-foreground/30" />
+          )}
+        </div>
+
+        {/* Title + Meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-sm truncate" onClick={() => onOpenDetail(item)}>{item.title}</span>
+                {item.media_type === "tv" && (
+                  <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 leading-none px-1.5 py-0 shrink-0">TV</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/80">
+                {item.year && <span>{item.year}</span>}
+                {item.genre && <span className="truncate">{translateGenres(item.genre)}</span>}
+                {item.season_number != null && (
+                  <Badge variant="outline" className="text-[9px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0">
+                    S{item.season_number}{item.episode_count != null && <span className="ml-0.5 opacity-70">· {item.episode_count}ep</span>}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <ChevronRight size={14} className="shrink-0 mt-0.5" style={{ color: "var(--fg-dim)" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Action buttons */}
+      <div className="flex items-center gap-1 mt-2.5 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+        <button
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-green hover:bg-green/10 shrink-0"
+          onClick={() => onMarkWatched(item)}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>{t("wishlist.mark_as_watched")}</span>
+        </button>
+        <button
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-sky hover:bg-sky/10"
+          onClick={() => onOpenDetail(item)}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+          </svg>
+          <span>{t("manage.detail")}</span>
+        </button>
+        <button
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
+          onClick={() => onDelete(item.id)}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          </svg>
+          <span>{t("watched.remove")}</span>
+        </button>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  const id = prev.item.id;
+  if (prev.item.title !== next.item.title) return false;
+  if (prev.item.year !== next.item.year) return false;
+  if (prev.item.genre !== next.item.genre) return false;
+  if (prev.item.poster_url !== next.item.poster_url) return false;
+  if (prev.item.media_type !== next.item.media_type) return false;
+  if (prev.item.season_number !== next.item.season_number) return false;
+  if (prev.item.episode_count !== next.item.episode_count) return false;
+  return true;
+});

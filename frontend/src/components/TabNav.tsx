@@ -48,7 +48,7 @@ export function TabNav() {
                 isActive ? "active" : ""
               }`}
             >
-              <Icon size={14} />
+              <Icon size={14} key={String(isActive)} className={isActive ? "animate-tab-icon-bounce" : ""} />
               <span>{tab.label}</span>
             </NavLink>
           );
@@ -77,7 +77,7 @@ export function TabNav() {
                   : "text-muted-foreground/60 hover:text-muted-foreground active:scale-95"
               }`}
             >
-              <Icon size={18} />
+              <Icon size={18} key={String(isActive)} className={isActive ? "animate-tab-icon-bounce" : ""} />
               <span className="text-[10px] font-medium leading-tight truncate max-w-full">
                 {tab.label}
               </span>

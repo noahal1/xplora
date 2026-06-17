@@ -294,7 +294,7 @@ export function ProfilePage() {
                 {user?.is_admin ? t("profile.admin") : t("profile.user")}
               </Badge>
               {health && (
-                <span className="text-[10px] text-muted-foreground">v{health.version}</span>
+                <span className="text-[10px] text-muted-foreground">{health.version}</span>
               )}
             </div>
           </div>

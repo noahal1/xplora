@@ -293,6 +293,25 @@
   to { transform: translateY(0); }
 }
 
+/* Page transition — directional slide in */
+@keyframes pageSlideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pageSlideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Tab icon active bounce */
+@keyframes tabIconBounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1.1); }
+}
+
 @keyframes savedConfirm {
   0% {
     color: var(--success);
@@ -856,6 +875,9 @@ input[type="number"].no-spinner {
    ============================================ */
 @theme {
   --animate-bottom-nav-enter: bottomNavEnter 0.3s var(--ease-out-expo);
+  --animate-page-slide-in-right: pageSlideInRight 0.4s var(--ease-out-expo);
+  --animate-page-slide-in-left: pageSlideInLeft 0.4s var(--ease-out-expo);
+  --animate-tab-icon-bounce: tabIconBounce 0.45s var(--ease-spring) forwards;
 }
 
 /* ============================================
@@ -893,6 +915,17 @@ input[type="number"].no-spinner {
   body {
     overflow-x: hidden;
   }
+}
+
+/* ============================================
+   Hide scrollbar utility (for mobile scroll areas)
+   ============================================ */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* ============================================

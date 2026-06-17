@@ -76,7 +76,7 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
               {t("update.current")}
             </span>
             <span className="text-xl font-bold font-mono" style={{ color: "var(--fg-muted)" }}>
-              v{updateInfo.current_version}
+              {updateInfo.current_version}
             </span>
           </div>
 
@@ -98,7 +98,7 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
               {t("update.latest")}
             </span>
             <span className={`text-xl font-bold font-mono ${updateInfo.update_available ? "text-amber-500" : "text-green"}`}>
-              v{updateInfo.latest_version || "—"}
+              {updateInfo.latest_version || "—"}
             </span>
           </div>
         </div>

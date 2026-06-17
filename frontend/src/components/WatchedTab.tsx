@@ -10,7 +10,7 @@ import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
 import { ProgressiveImage } from "./ProgressiveImage";
 import { DetailModal } from "./ManageTab/DetailModal";
-import { Upload, List, LayoutGrid, Loader2, Film } from "lucide-react";
+import { Upload, List, LayoutGrid, Loader2, Film, ChevronRight } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenres, translateGenreName } from "../utils/genre";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
@@ -560,23 +560,47 @@ export function WatchedTab() {
 
           {/* Genre Filter */}
           {media.length > 0 && uniqueGenres.length > 0 && (
-            <div className="flex items-start gap-1.5 mb-3 flex-wrap pb-0.5">
-              <span className="text-[11px] text-muted-foreground mr-0.5 mt-0.5">{t("manage.genre_filter")}</span>
-              <button className={`pill ${genreFilter === "all" ? "active" : ""}`}
-                onClick={() => { setGenreFilter("all"); setCurrentPage(0); }}>{t("manage.media_type_all")}</button>
-              {/* First 6 pills — always visible */}
-              {uniqueGenres.slice(0, 6).map((g) => (
-                <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
-                  onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
-              ))}
+            <div className="mb-3 pb-0.5">
+              <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+                <span className="text-[11px] text-muted-foreground mr-0.5 shrink-0">{t("manage.genre_filter")}</span>
+                <button className={`pill shrink-0 ${genreFilter === "all" ? "active" : ""}`}
+                  onClick={() => { setGenreFilter("all"); setCurrentPage(0); }}>{t("manage.media_type_all")}</button>
+                {/* First 6 pills — always visible */}
+                {uniqueGenres.slice(0, 6).map((g) => (
+                  <button key={g} className={`pill shrink-0 ${genreFilter === g ? "active" : ""}`}
+                    onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
+                ))}
+                {/* More/Collapse button — always on the right side */}
+                {uniqueGenres.length > 6 && (
+                  <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0 ml-auto"
+                    onClick={() => setShowAllGenres((v) => !v)}>
+                    {showAllGenres ? (
+                      <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
+                    ) : (
+                      <><span className="text-[10px]">▼</span> +{uniqueGenres.length - 6} {t("manage.genre_more")}</>
+                    )}
+                  </button>
+                )}
+              </div>
               {/* Remaining pills — animated expand/collapse */}
               {uniqueGenres.length > 6 && (
                 <div
-                  className="grid transition-all duration-300 ease-out-expo"
-                  style={{ gridTemplateRows: showAllGenres ? '1fr' : '0fr' }}
+                  className="grid"
+                  style={{
+                    gridTemplateRows: showAllGenres ? '1fr' : '0fr',
+                    transition: 'grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
                 >
-                  <div className="overflow-hidden min-h-0">
-                    <div className="flex flex-wrap gap-1.5">
+                  <div className="overflow-hidden min-h-0">                      <div
+                      className="flex flex-wrap gap-1.5 pt-1.5"
+                      style={{
+                        opacity: showAllGenres ? 1 : 0,
+                        transform: showAllGenres ? 'translateY(0)' : 'translateY(-6px)',
+                        transition: showAllGenres
+                          ? 'opacity 0.25s ease 0.05s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s'
+                          : 'opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      }}
+                    >
                       {uniqueGenres.slice(6).map((g) => (
                         <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
                           onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
@@ -584,16 +608,6 @@ export function WatchedTab() {
                     </div>
                   </div>
                 </div>
-              )}
-              {uniqueGenres.length > 6 && (
-                <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0"
-                  onClick={() => setShowAllGenres((v) => !v)}>
-                  {showAllGenres ? (
-                    <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
-                  ) : (
-                    <><span className="text-[10px]">▼</span> +{uniqueGenres.length - 6} {t("manage.genre_more")}</>
-                  )}
-                </button>
               )}
             </div>
           )}
@@ -658,19 +672,36 @@ export function WatchedTab() {
                   ))}
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  {media.map((m) => (
-                    <MovieListItem
-                      key={m.id}
-                      movie={m}
-                      isSelected={selectedIds.has(m.id)}
-                      onToggle={toggleSelection}
-                      onRemove={removeMovie}
-                      onSaveRating={handleSaveRating}
-                      onOpenDetail={setDetailMovie}
-                    />
-                  ))}
-                </div>
+                <>
+                  {/* Mobile cards */}
+                  <div className="sm:hidden space-y-2.5">
+                    {media.map((m) => (
+                      <WatchedMobileCard
+                        key={m.id}
+                        movie={m}
+                        isSelected={selectedIds.has(m.id)}
+                        onToggle={toggleSelection}
+                        onRemove={removeMovie}
+                        onSaveRating={handleSaveRating}
+                        onOpenDetail={setDetailMovie}
+                      />
+                    ))}
+                  </div>
+                  {/* Desktop list */}
+                  <div className="max-sm:hidden space-y-1.5">
+                    {media.map((m) => (
+                      <MovieListItem
+                        key={m.id}
+                        movie={m}
+                        isSelected={selectedIds.has(m.id)}
+                        onToggle={toggleSelection}
+                        onRemove={removeMovie}
+                        onSaveRating={handleSaveRating}
+                        onOpenDetail={setDetailMovie}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
 
               {/* Pagination */}
@@ -1239,5 +1270,147 @@ const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle,
       </div>
     </div>
   );
+});
+
+/* ── Memo-ized mobile card — compact card layout for small screens ── */
+const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
+  movie: MediaDetail;
+  isSelected: boolean;
+  onToggle: (id: number) => void;
+  onRemove: (id: number) => void;
+  onSaveRating: (id: number, rating: number) => Promise<void>;
+  onOpenDetail: (movie: MediaDetail) => void;
+}) {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const [localSlider, setLocalSlider] = useState(movie.rating);
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => { setEditing(false); setLocalSlider(movie.rating); setJustSaved(false); }, [movie.id, movie.rating]);
+
+  const handleStartEdit = useCallback(() => {
+    setLocalSlider(movie.rating);
+    setEditing(true);
+  }, [movie.rating]);
+
+  const handleSave = useCallback(() => {
+    setEditing(false);
+    setJustSaved(true);
+    setTimeout(() => setJustSaved(false), 1500);
+    onSaveRating(movie.id, localSlider);
+  }, [movie.id, localSlider, onSaveRating]);
+
+  const handleCancel = useCallback(() => setEditing(false), []);
+
+  return (
+    <div
+      className={`p-3 rounded-xl transition-all duration-200 ${isSelected ? "ring-1 ring-primary/40" : ""}`}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}
+    >
+      {/* Row 1: Checkbox + Poster + Title/Meta */}
+      <div className="flex items-start gap-2.5">
+        <input type="checkbox"
+          className="shrink-0 w-5 h-5 accent-primary cursor-pointer mt-1"
+          checked={isSelected} onChange={() => onToggle(movie.id)} />
+
+        {/* Poster */}
+        <div
+          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer"
+          style={{ border: "1px solid var(--border-subtle)" }}
+          onClick={() => onOpenDetail(movie)}
+        >
+          {movie.poster_url ? (
+            <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
+          ) : (
+            <Film size={16} className="text-muted-foreground/30" />
+          )}
+        </div>
+
+        {/* Title + Meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-sm truncate" onClick={() => onOpenDetail(movie)}>{movie.title}</span>
+                {movie.media_type === "tv" && (
+                  <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 leading-none px-1.5 py-0 shrink-0">TV</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/80">
+                {movie.year && <span>{movie.year}</span>}
+                {movie.genre && <span className="truncate">{translateGenres(movie.genre)}</span>}
+                {movie.runtime && <span>{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
+              </div>
+              {movie.director && (
+                <p className="text-[11px] text-muted-foreground/50 mt-0.5 truncate">{movie.director}</p>
+              )}
+            </div>
+            <ChevronRight size={14} className="shrink-0 mt-0.5" style={{ color: "var(--fg-dim)" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Rating + Actions */}
+      <div className="flex items-center gap-1 mt-2.5 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+        {/* Rating */}
+        {editing ? (
+          <div className="flex items-center gap-1.5 px-2 py-1" onClick={(e) => e.stopPropagation()}>
+            <input type="range" min={0} max={10} step={0.5} value={localSlider}
+              onChange={(e) => { setLocalSlider(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
+              onMouseUp={handleSave} onTouchEnd={handleSave}
+              onBlur={handleSave}
+              onKeyDown={(e) => { if (e.key === "Escape") handleCancel(); if (e.key === "Enter") handleSave(); }}
+              className={SLIDER_RANGE_CLASS_LIST} autoFocus />
+            <span className="text-amber font-semibold min-w-[28px] text-center text-sm count-badge" key={localSlider}>
+              {localSlider.toFixed(1)}
+            </span>
+          </div>
+        ) : (
+          <span
+            className={`inline-flex items-center gap-1 cursor-pointer transition-all duration-200 px-2 py-1 rounded-lg hover:bg-amber/10 shrink-0 ${justSaved ? 'text-green' : ''}`}
+            onClick={handleStartEdit} title={t("watched.click_to_edit")}>
+            <span className="text-amber text-base leading-none">★</span>
+            {justSaved && <span className="text-green text-[10px]">✓</span>}
+            <span className="font-bold text-sm">{movie.rating.toFixed(1)}</span>
+          </span>
+        )}
+        <span className="w-[1px] h-4 bg-border/50 shrink-0" />
+        {/* Detail */}
+        <button
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-sky hover:bg-sky/10"
+          onClick={() => onOpenDetail(movie)}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+          </svg>
+          <span>{t("manage.detail")}</span>
+        </button>
+        {/* Remove */}
+        <button
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
+          onClick={() => onRemove(movie.id)}
+        >
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+          </svg>
+          <span>{t("watched.remove")}</span>
+        </button>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  const id = prev.movie.id;
+  if (prev.movie.title !== next.movie.title) return false;
+  if (prev.movie.rating !== next.movie.rating) return false;
+  if (prev.movie.year !== next.movie.year) return false;
+  if (prev.movie.genre !== next.movie.genre) return false;
+  if (prev.movie.poster_url !== next.movie.poster_url) return false;
+  if (prev.movie.media_type !== next.movie.media_type) return false;
+  if (prev.movie.season_number !== next.movie.season_number) return false;
+  if (prev.movie.episode_count !== next.movie.episode_count) return false;
+  if (prev.movie.runtime !== next.movie.runtime) return false;
+  if (prev.movie.director !== next.movie.director) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  return true;
 });
 

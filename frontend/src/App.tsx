@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -39,6 +39,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function MainApp() {
   const location = useLocation();
+  const prevPathRef = useRef(location.pathname);
+
+  // Tab order for directional animation
+  const tabOrder = ["/watched", "/wishlist", "/recommend", "/manage", "/history"];
+
+  // Determine navigation direction
+  const prevPath = prevPathRef.current;
+  const currentTabIndex = tabOrder.indexOf(location.pathname);
+  const prevTabIndex = tabOrder.indexOf(prevPath);
+
+  // Going forward = content slides in from right; going back = slides in from left
+  const goingForward =
+    prevTabIndex === -1 || currentTabIndex >= prevTabIndex;
+  const pageAnimClass = goingForward
+    ? "animate-page-slide-in-right"
+    : "animate-page-slide-in-left";
+
+  // Update previous path AFTER render
+  useEffect(() => {
+    prevPathRef.current = location.pathname;
+  }, [location.pathname]);
 
   // Reset scroll to top on every route change
   useEffect(() => {
@@ -62,7 +83,8 @@ function MainApp() {
           <EnrichBanner />
           <TabNav />
           <div className="flex flex-col gap-3 sm:gap-6 py-3 sm:py-6">
-            <div className="animate-fade-in">
+            {/* Re-key on pathname to re-trigger entrance animation on every tab switch */}
+            <div key={location.pathname} className={pageAnimClass}>
               <Suspense fallback={
                 <div className="flex items-center justify-center py-16">
                   <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
@@ -70,11 +92,11 @@ function MainApp() {
               }>
                 <Routes>
                   <Route path="/" element={<Navigate to="/watched" replace />} />
-                  <Route path="/watched" element={<WatchedTab key="watched" />} />
-                  <Route path="/wishlist" element={<WishlistTab key="wishlist" />} />
-                  <Route path="/recommend" element={<RecommendTab key="recommend" />} />
-                  <Route path="/manage" element={<ManageTab key="manage" />} />
-                  <Route path="/history" element={<HistoryTab key="history" />} />
+                  <Route path="/watched" element={<WatchedTab />} />
+                  <Route path="/wishlist" element={<WishlistTab />} />
+                  <Route path="/recommend" element={<RecommendTab />} />
+                  <Route path="/manage" element={<ManageTab />} />
+                  <Route path="/history" element={<HistoryTab />} />
                 </Routes>
               </Suspense>
             </div>
