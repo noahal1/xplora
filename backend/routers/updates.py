@@ -75,8 +75,6 @@ def trigger_update(current_user: dict = Depends(get_current_user)):
         )
 
 
-@router.get("/check")
-
 
 def _semver_tuple(v: str) -> tuple:
     """Parse a semver string like '2.0.0' or 'dawn-1.2.0' into a comparable tuple."""
