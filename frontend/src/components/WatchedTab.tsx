@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaImport, MediaDetail, MediaSearchResult, SortField } from "../types";
+import type { MediaImport, MediaDetail, MediaSearchResult } from "../types";
 import { parseCSV, parseMovieData } from "../utils/csv";
 import * as api from "../api";
 import { useToast } from "../context/ToastContext";
@@ -15,9 +15,14 @@ import { Badge } from "./ui/badge";
 import { translateGenres } from "../utils/genre";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
+import { useEnrichReload } from "../hooks/useEnrichReload";
 import { usePagination } from "../hooks/usePagination";
 import { useSort } from "../hooks/useSort";
 import { GenreFilter } from "./GenreFilter";
+import { MediaTypeFilter } from "./MediaTypeFilter";
+import { SortControls } from "./SortControls";
+import { SearchInput } from "./SearchInput";
+import { SearchSourceSelector } from "./SearchSourceSelector";
 
 const SLIDER_BASE_CLASS = "h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
 const SLIDER_RANGE_CLASS = `${SLIDER_BASE_CLASS} w-14 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3`;
@@ -119,13 +124,7 @@ export function WatchedTab() {
   }, [currentPage, search.debouncedValue, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, reloadTrigger, loadMovies]);
 
   // Auto-refresh when background enrichment completes
-  useEffect(() => {
-    const handler = () => {
-      setReloadTrigger((n) => n + 1);
-    };
-    window.addEventListener("enrich-done", handler);
-    return () => window.removeEventListener("enrich-done", handler);
-  }, []);
+  useEnrichReload(() => setReloadTrigger((n) => n + 1));
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -453,26 +452,13 @@ export function WatchedTab() {
 
           {/* Search + Import */}
           <div className="flex items-center gap-2 mb-3">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                placeholder={t("watched.search_placeholder")}
-                value={search.input}
-                onChange={(e) => search.setInput(e.target.value)}
-                className="input-field pl-3 pr-8 py-2 h-auto text-sm"
-              />
-              {search.debouncedValue && (
-                <button
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={search.clear}
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 6 6 18" />
-                    <path d="m6 6 12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
+            <SearchInput
+              value={search.input}
+              onChange={search.setInput}
+              onClear={search.clear}
+              placeholder={t("watched.search_placeholder")}
+              showClear={!!search.debouncedValue}
+            />
             <button
               onClick={() => setImportModalOpen(true)}
               className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
@@ -493,27 +479,11 @@ export function WatchedTab() {
             </button>
           </div>
 
-          {/* Sort Controls */}
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
-            <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.sort")}</span>
-            {[
-              { field: "created_at" as SortField, label: t("manage.sort_import_time") },
-              { field: "title" as SortField, label: t("manage.sort_title") },
-              { field: "rating" as SortField, label: t("manage.sort_rating") },
-              { field: "year" as SortField, label: t("manage.sort_year") },
-            ].map((opt) => (
-              <button
-                key={opt.field}
-                className={`pill ${sortField === opt.field ? "active" : ""}`}
-                onClick={() => handleSortToggle(opt.field)}
-              >
-                {opt.label}{" "}
-                {sortField === opt.field && (
-                  <span className="text-[10px]">{sortDir === "asc" ? "↑" : "↓"}</span>
-                )}
-              </button>
-            ))}
-          </div>
+          <SortControls
+            field={sortField}
+            dir={sortDir}
+            onSort={handleSortToggle}
+          />
 
           {/* Rating Filters */}
           <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
@@ -537,26 +507,10 @@ export function WatchedTab() {
             ))}
           </div>
 
-          {/* Media Type Filter */}
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
-            <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.media_type")}</span>
-            {[
-              { value: "all", label: t("manage.media_type_all") },
-              { value: "movie", label: t("manage.media_type_movie") },
-              { value: "tv", label: t("manage.media_type_tv") },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                className={`pill ${mediaTypeFilter === opt.value ? "active" : ""}`}
-                onClick={() => {
-                  setMediaTypeFilter(opt.value);
-                  setCurrentPage(0);
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <MediaTypeFilter
+            selected={mediaTypeFilter}
+            onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
+          />
 
           {/* Genre Filter */}
           <GenreFilter
@@ -837,14 +791,10 @@ export function WatchedTab() {
         onClose={() => setSearchModalOpen(false)}
         title={t("watched.search_title")}
       >
-        <div className="space-y-3">
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
-              {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
-                <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
-              ))}
-            </div>
+        <div className="space-y-3">            <SearchSourceSelector
+              selected={searchSource}
+              onSelect={changeSearchSource}
+            />
           </div>
 
           <div className="flex items-center gap-2">

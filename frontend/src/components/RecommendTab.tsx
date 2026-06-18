@@ -14,6 +14,7 @@ import { Badge } from "./ui/badge";
 import { translateGenres } from "../utils/genre";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { GenreFilter } from "./GenreFilter";
+import { MediaTypeFilter } from "./MediaTypeFilter";
 
 const VISIBLE_GENRES = 6;
 
@@ -467,23 +468,11 @@ export function RecommendTab() {
               </div>
             </div>
 
-            {/* ── Media Type Filter ─────────────────────── */}
-            <div className="flex items-center gap-1.5 mb-3 flex-wrap justify-start sm:justify-center pb-0.5">
-              <span className="text-xs text-muted-foreground mr-1">{t("manage.media_type")}</span>
-              {[
-                { value: "all", label: t("manage.media_type_all") },
-                { value: "movie", label: t("manage.media_type_movie") },
-                { value: "tv", label: t("manage.media_type_tv") },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  className={`pill ${mediaTypeFilter === opt.value ? "active" : ""}`}
-                  onClick={() => setMediaTypeFilter(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <MediaTypeFilter
+              selected={mediaTypeFilter}
+              onSelect={setMediaTypeFilter}
+              className="justify-start sm:justify-center"
+            />
 
             {/* ── Genre Filter ─────────────────────────── */}
             <GenreFilter

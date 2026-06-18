@@ -10,10 +10,16 @@ import { SkeletonTable } from "../Skeleton";
 import { translateGenres } from "../../utils/genre";
 import { Modal } from "../Modal";
 import { GenreFilter } from "../GenreFilter";
+import { MediaTypeFilter } from "../MediaTypeFilter";
+import { SortControls } from "../SortControls";
+import { StatusFilter } from "../StatusFilter";
+import { SearchInput } from "../SearchInput";
+import { ScrapeSourceFilter } from "../ScrapeSourceFilter";
 import { Film, Upload, Plus, Search, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, AlertCircle, Star, X, Info, ChevronRight, Check } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../../hooks/useGenreExtractor";
 import { useSort } from "../../hooks/useSort";
+import { useEnrichReload } from "../../hooks/useEnrichReload";
 
 import { SearchImportModal } from "./SearchImportModal";
 import { DetailModal } from "./DetailModal";
@@ -113,17 +119,7 @@ export function ManageTab() {
   }, [fetchData]);
 
   // Auto-refresh when background enrichment completes
-  useEffect(() => {
-    const handler = () => { fetchData(); };
-    window.addEventListener("enrich-done", handler);
-    return () => window.removeEventListener("enrich-done", handler);
-  }, [fetchData]);
-
-  const handleSortClick = useCallback((field: SortField) => {
-    handleSort(field);
-    setPage(0);
-    setSelected(new Set());
-  }, [handleSort]);
+  useEnrichReload(() => { fetchData(); });
 
   useEffect(() => {
     if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && selected.size < mediaList.length;
@@ -331,15 +327,13 @@ export function ManageTab() {
 
       {/* ── Search & bulk actions ───────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-3">
-        <div className="relative flex-1">
-          <input type="text" placeholder={t("manage.search_placeholder")} value={search.input}
-            onChange={(e) => { search.setInput(e.target.value); setPage(0); setSelected(new Set()); }}
-            className="input-field pl-3 pr-8 py-2 h-auto text-sm" />
-          {search.debouncedValue && (
-            <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => { search.clear(); setPage(0); setSelected(new Set()); }}><X size={14} /></button>
-          )}
-        </div>
+        <SearchInput
+          value={search.input}
+          onChange={(v) => { search.setInput(v); setPage(0); setSelected(new Set()); }}
+          onClear={() => { search.clear(); setPage(0); setSelected(new Set()); }}
+          placeholder={t("manage.search_placeholder")}
+          showClear={!!search.debouncedValue}
+        />
         <div className="flex gap-1.5 shrink-0 w-full sm:w-auto">
           <button className={`btn btn-xs gap-1.5 transition-all flex-1 sm:flex-none justify-center ${selected.size > 0 ? "btn-destructive" : "btn-ghost opacity-50"}`}
             disabled={selected.size === 0} onClick={confirmDeleteSelected}
@@ -353,28 +347,18 @@ export function ManageTab() {
         </div>
       </div>
 
-      {/* ── Filters ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 mb-2 flex-wrap pb-0.5">
-        <span className="text-xs text-muted-foreground mr-1">{t("manage.filter")}</span>
-        {[{ value: "", label: t("manage.filter_all") }, { value: "watched", label: t("manage.filter_watched") }, { value: "wish", label: t("manage.filter_wish") }].map((opt) => (
-          <button key={opt.value} className={`pill ${statusFilter === opt.value ? "active" : ""}`}
-            onClick={() => { setStatusFilter(opt.value); setErrorFilter(false); setPage(0); setSelected(new Set()); }}>{opt.label}</button>
-        ))}
-        <span className="w-[1px] h-3.5 bg-border mx-0.5" />
-        <button className={`pill ${errorFilter ? "active text-destructive border-destructive/30" : ""}`}
-          onClick={() => { setErrorFilter(!errorFilter); setStatusFilter(""); setPage(0); setSelected(new Set()); }}>
-          <AlertCircle size={11} className="mr-1" />{t("manage.filter_errors")}
-        </button>
-      </div>
+      <StatusFilter
+        status={statusFilter}
+        error={errorFilter}
+        onStatusChange={(v) => { setStatusFilter(v); setErrorFilter(false); setPage(0); setSelected(new Set()); }}
+        onErrorToggle={() => { setErrorFilter((v) => !v); setStatusFilter(""); setPage(0); setSelected(new Set()); }}
+      />
 
-      {/* Media Type Filter */}
-      <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
-        <span className="text-xs text-muted-foreground mr-1">{t("manage.media_type")}</span>
-        {[{ value: "", label: t("manage.media_type_all") }, { value: "movie", label: t("manage.media_type_movie") }, { value: "tv", label: t("manage.media_type_tv") }].map((opt) => (
-          <button key={opt.value} className={`pill ${mediaTypeFilter === opt.value ? "active" : ""}`}
-            onClick={() => { setMediaTypeFilter(opt.value); setPage(0); setSelected(new Set()); }}>{opt.label}</button>
-        ))}
-      </div>
+      <MediaTypeFilter
+        selected={mediaTypeFilter}
+        allValue=""
+        onSelect={(v) => { setMediaTypeFilter(v); setPage(0); setSelected(new Set()); }}
+      />
 
       {/* Genre Filter */}
       <GenreFilter
@@ -385,26 +369,16 @@ export function ManageTab() {
         onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
       />
 
-      {/* ── Sort bar ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 mb-3.5 flex-wrap pb-0.5">
-        <span className="text-xs text-muted-foreground mr-1">{t("manage.sort")}</span>
-        {([{ field: "created_at" as SortField, label: t("manage.sort_import_time") },
-          { field: "title" as SortField, label: t("manage.sort_title") },
-          { field: "rating" as SortField, label: t("manage.sort_rating") },
-          { field: "year" as SortField, label: t("manage.sort_year") }]).map((s) => (
-          <button key={s.field} className={`pill ${sortField === s.field ? "active" : ""}`}
-            onClick={() => handleSortClick(s.field)}>{s.label} <SortArrow field={s.field} /></button>
-        ))}
-      </div>
+      <SortControls
+        field={sortField}
+        dir={sortDir}
+        onSort={(f) => { handleSort(f); setPage(0); setSelected(new Set()); }}
+      />
 
-      {/* ── Scrape source selector ──────────────────────────────── */}
-      <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5 max-sm:hidden">
-        <span className="text-xs text-muted-foreground mr-1">{t("manage.scrape_source")}</span>
-        {[{ value: "tmdb", label: "TMDB" }, { value: "tvmaze", label: "TVmaze" }].map((opt) => (
-          <button key={opt.value} className={`pill ${enrichSource === opt.value ? "active" : ""}`}
-            onClick={() => setEnrichSource(opt.value)}>{opt.label}</button>
-        ))}
-      </div>
+      <ScrapeSourceFilter
+        selected={enrichSource}
+        onSelect={setEnrichSource}
+      />
 
       {/* ── Loading ─────────────────────────────────────────────── */}
       {loading && <SkeletonTable rows={6} />}

@@ -2,7 +2,6 @@
 
 import json
 import re
-import subprocess
 import time
 from datetime import datetime, timezone
 
@@ -22,57 +21,61 @@ _CACHE_TIME: float = 0.0
 _CACHE_TTL = 7200  
 GITHUB_API_URL = "https://api.github.com/repos/noahal1/xplora/releases/latest"
 WATCHTOWER_CONTAINER = "watchtower"
+DOCKER_SOCKET_PATH = "/var/run/docker.sock"
+
+# ── Docker Socket HTTP client ──────────────────────────────────────
+
+
+def _docker_signal(container: str, signal: str) -> dict:
+    """Send a signal to a Docker container via the Docker Engine API over Unix socket.
+
+    Uses httpx with a Unix socket transport so no Docker CLI is needed —
+    the Docker socket must be mounted at /var/run/docker.sock.
+
+    Returns {"ok": True} on success, or {"ok": False, "error": <message>} on failure.
+    """
+    transport = httpx.HTTPTransport(uds=DOCKER_SOCKET_PATH)
+    try:
+        with httpx.Client(transport=transport, timeout=10.0) as client:
+            resp = client.post(
+                f"http://localhost/containers/{container}/kill?signal={signal}",
+            )
+        if resp.status_code == 204:
+            return {"ok": True}
+        if resp.status_code == 404:
+            return {"ok": False, "error": f"未检测到 {container} 容器，请确认容器正在运行"}
+        body = resp.text.strip() or f"Docker API returned {resp.status_code}"
+        return {"ok": False, "error": body}
+    except httpx.ConnectError:
+        return {"ok": False, "error": "无法连接 Docker 套接字，请确认 /var/run/docker.sock 已挂载"}
+    except httpx.TimeoutException:
+        return {"ok": False, "error": "向 Docker 发送信号超时"}
 
 
 @router.post("/trigger")
 def trigger_update(current_user: dict = Depends(get_current_user)):
     """Manually trigger watchtower to check for updates immediately.
 
-    Sends SIGHUP to the watchtower container, which causes it to
-    run its update cycle right away instead of waiting for the
-    normal polling interval.
+    Sends SIGHUP to the watchtower container via the Docker Engine API
+    (Unix socket).  This causes watchtower to run its update cycle
+    right away instead of waiting for the normal polling interval.
 
     Requires:
-      - Docker socket mounted to the xplora container
-      - docker CLI installed in the container
-      - watchtower container running and labeled
+      - Docker socket mounted to the xplora container at /var/run/docker.sock
+      - watchtower container running with the appropriate label
 
     Returns 503 if docker/watchtower is unavailable.
     """
-    try:
-        result = subprocess.run(
-            ["docker", "kill", "-s", "HUP", WATCHTOWER_CONTAINER],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            return {
-                "status": "triggered",
-                "message": f"已向 {WATCHTOWER_CONTAINER} 发送更新信号，将在数秒内检测并拉取新镜像",
-            }
-        error_msg = result.stderr.strip() or f"docker kill returned {result.returncode}"
-        raise RuntimeError(error_msg)
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=503,
-            detail="Docker CLI 未安装，无法触发手动更新",
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(
-            status_code=504,
-            detail="向 Docker 发送信号超时",
-        )
-    except RuntimeError as e:
-        if "No such container" in str(e):
-            raise HTTPException(
-                status_code=503,
-                detail=f"未检测到 {WATCHTOWER_CONTAINER} 容器，请确认 watchtower 正在运行",
-            )
-        raise HTTPException(
-            status_code=503,
-            detail=f"触发更新失败: {e}",
-        )
+    result = _docker_signal(WATCHTOWER_CONTAINER, "HUP")
+    if result["ok"]:
+        return {
+            "status": "triggered",
+            "message": f"已向 {WATCHTOWER_CONTAINER} 发送更新信号，将在数秒内检测并拉取新镜像",
+        }
+    raise HTTPException(
+        status_code=503,
+        detail=result["error"],
+    )
 
 
 

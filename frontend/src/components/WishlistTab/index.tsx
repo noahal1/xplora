@@ -12,10 +12,15 @@ import { GenreInput } from "../GenreInput";
 import { ProgressiveImage } from "../ProgressiveImage";
 import { DetailModal } from "../ManageTab/DetailModal";
 import { Film, ChevronRight, Loader2 } from "lucide-react";
+import { MediaTypeFilter } from "../MediaTypeFilter";
+import { SortControls } from "../SortControls";
+import { SearchInput } from "../SearchInput";
+import { SearchSourceSelector } from "../SearchSourceSelector";
 import { Modal } from "../Modal";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { usePagination } from "../../hooks/usePagination";
 import { useSort } from "../../hooks/useSort";
+import { useEnrichReload } from "../../hooks/useEnrichReload";
 
 import { WishlistDetailModal } from "./DetailModal";
 import { WishlistRatingModal } from "./RatingModal";
@@ -138,11 +143,7 @@ export function WishlistTab() {
 
 
   // Auto-refresh when background enrichment completes
-  useEffect(() => {
-    const handler = () => setReloadTrigger((n) => n + 1);
-    window.addEventListener("enrich-done", handler);
-    return () => window.removeEventListener("enrich-done", handler);
-  }, []);
+  useEnrichReload(() => setReloadTrigger((n) => n + 1));
 
   const refreshWishlist = useCallback(() => { setCurrentPage(0); search.clear(); setReloadTrigger((n) => n + 1); }, []);
 
@@ -328,43 +329,24 @@ export function WishlistTab() {
               <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: total })}</span>
             </div>
           </div>
-          <div className="relative flex-1 mb-2">
-            <input type="text" id="wishlist-filter" placeholder={t("wishlist.filter_placeholder")} value={filter.input} onChange={(e) => filter.setInput(e.target.value)}
-              className="input-field pl-3 pr-8 py-2 h-auto text-sm" />
-            {filter.debouncedValue && <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => { filter.clear(); setMediaTypeFilter("all"); setCurrentPage(0); }}>
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-            </button>}
-          </div>
-          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-            <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.sort")}</span>
-            {[{ field: "created_at" as SortField, label: t("manage.sort_import_time") }, { field: "title" as SortField, label: t("manage.sort_title") }, { field: "rating" as SortField, label: t("manage.sort_rating") }, { field: "year" as SortField, label: t("manage.sort_year") }].map((opt) => (
-              <button key={opt.field} className={`pill ${sortField === opt.field ? "active" : ""}`}
-                onClick={() => { handleSortToggle(opt.field); setCurrentPage(0); }}>
-                {opt.label} {sortField === opt.field && <span className="text-[10px]">{sortDir === "asc" ? "↑" : "↓"}</span>}
-              </button>
-            ))}
-          </div>
-          {/* Media Type Filter */}
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
-            <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.media_type")}</span>
-            {[
-              { value: "all", label: t("manage.media_type_all") },
-              { value: "movie", label: t("manage.media_type_movie") },
-              { value: "tv", label: t("manage.media_type_tv") },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                className={`pill ${mediaTypeFilter === opt.value ? "active" : ""}`}
-                onClick={() => {
-                  setMediaTypeFilter(opt.value);
-                  setCurrentPage(0);
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <SearchInput
+            value={filter.input}
+            onChange={filter.setInput}
+            onClear={() => { filter.clear(); setMediaTypeFilter("all"); setCurrentPage(0); }}
+            placeholder={t("wishlist.filter_placeholder")}
+            showClear={!!filter.debouncedValue}
+            className="mb-2"
+            id="wishlist-filter"
+          />
+          <SortControls
+            field={sortField}
+            dir={sortDir}
+            onSort={(f) => { handleSortToggle(f); setCurrentPage(0); }}
+          />
+          <MediaTypeFilter
+            selected={mediaTypeFilter}
+            onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
+          />
           {loading ? (
             <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" /></div>
           ) : (
@@ -440,12 +422,10 @@ export function WishlistTab() {
       >
         <div className="space-y-3">
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}>
-              {[{ value: "auto", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
-                <button key={opt.value} className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${searchSource === opt.value ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => changeSearchSource(opt.value)}>{opt.label}</button>
-              ))}
-            </div>
+            <SearchSourceSelector
+              selected={searchSource}
+              onSelect={changeSearchSource}
+            />
           </div>
 
           <div className="flex items-center gap-2">

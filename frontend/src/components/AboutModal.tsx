@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Modal } from "./Modal";
-import { Globe, Heart, ExternalLink, Film } from "lucide-react";
+import { Logo } from "./Logo";
+import { Globe, Heart, ExternalLink } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -39,10 +40,9 @@ export function AboutModal({ open, onClose }: Props) {
       <div className="flex flex-col items-center text-center py-2 space-y-5">
         {/* Logo + Version */}
         <div>
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl mx-auto mb-3" style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}>
-            <Film size={28} style={{ color: "var(--seed-primary)" }} />
+          <div className="flex items-center justify-center mx-auto mb-3" style={{ width: "140px", height: "48px" }}>
+            <Logo className="h-full w-auto" />
           </div>
-          <h2 className="text-xl font-bold text-foreground">Xplora</h2>
           <p className="text-xs text-muted-foreground mt-1">
             {t("about.tagline")}
           </p>
