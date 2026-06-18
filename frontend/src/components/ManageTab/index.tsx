@@ -21,6 +21,7 @@ import { useGenreExtractor } from "../../hooks/useGenreExtractor";
 import { useSort } from "../../hooks/useSort";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
 
+import { EmptyState } from "../EmptyState";
 import { SearchImportModal } from "./SearchImportModal";
 import { DetailModal } from "./DetailModal";
 import { RematchModal } from "./RematchModal";
@@ -394,12 +395,28 @@ export function ManageTab() {
 
       {/* ── Empty ──────────────────────────────────────────────── */}
       {!loading && !error && mediaList.length === 0 && (
-        <div className="empty-state">
-          <Film size={40} className="mb-3 opacity-40" />
-          <p className="text-sm font-medium">{search.debouncedValue ? t("manage.no_matching", { query: search.debouncedValue }) : t("manage.no_movies")}</p>
-          {search.debouncedValue && <p className="text-xs mt-1 text-muted-foreground">{t("manage.try_other")}</p>}
-          {!search.debouncedValue && <button className="btn btn-primary btn-sm mt-4 gap-1.5" onClick={openSearchDialog}><Plus size={13} />{t("manage.add_movie")}</button>}
-        </div>
+        <EmptyState
+          icon={<Film size={40} />}
+          hasActiveFilters={!!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter || errorFilter)}
+          searchQuery={search.debouncedValue}
+          onClearFilters={() => {
+            search.clear();
+            setStatusFilter("");
+            setErrorFilter(false);
+            setMediaTypeFilter("");
+            setGenreFilter("");
+            setPage(0);
+            setSelected(new Set());
+          }}
+          noMatchKey={search.debouncedValue ? "manage.no_matching" : "watched.no_match"}
+          noMatchSubtextKey={search.debouncedValue ? "manage.try_other" : undefined}
+          noDataKey="manage.no_movies"
+          noDataActions={
+            <button className="btn btn-primary btn-sm gap-1.5" onClick={openSearchDialog}>
+              <Plus size={13} />{t("manage.add_movie")}
+            </button>
+          }
+        />
       )}
 
       {/* ── Table (desktop) ────────────────────────────────────── */}

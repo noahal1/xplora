@@ -8,7 +8,7 @@ from typing import Optional
 from openai import OpenAI, APIError, APITimeoutError, RateLimitError, AuthenticationError
 
 from models import MediaRating, MediaRecommendation
-from scraper.match import normalize, normalize_unicode, remove_special_chars, title_words
+from scraper.match import normalize, normalize_unicode, remove_special_chars, title_words, has_cjk
 from config_manager import get_api_key as get_config_api_key
 from movie_search import search_movies as search_external_movies
 
@@ -429,17 +429,50 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             union = words_a | words_b
             return len(intersection) / len(union)
 
+        # Cache: CJK title -> English title (from TMDB), avoids repeated API calls
+        # across retry attempts when the same title appears again.
+        _cjk_en_cache: dict[str, str | None] = {}
+
+        def _resolve_en_title(cjk_title: str) -> str | None:
+            """Resolve a CJK movie title to its English original via TMDB."""
+            if cjk_title in _cjk_en_cache:
+                return _cjk_en_cache[cjk_title]
+            try:
+                tmdb_results = search_external_movies(cjk_title, "tmdb")
+                for result in tmdb_results:
+                    en_title = result.get("original_title") or result.get("title", "")
+                    if en_title and en_title != cjk_title:
+                        _cjk_en_cache[cjk_title] = en_title
+                        return en_title
+                _cjk_en_cache[cjk_title] = None
+            except Exception:
+                _cjk_en_cache[cjk_title] = None
+            return None
+
+        def _is_watched(title: str) -> bool:
+            """Check if a title (possibly CJK) matches any watched title."""
+            # Step 1: Try fuzzy match directly
+            if any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean):
+                return True
+            # Step 2: If title has CJK, search TMDB for English original and retry
+            if has_cjk(title):
+                en_title = _resolve_en_title(title)
+                if en_title and en_title != title:
+                    return any(_match_score(en_title, wt) >= MATCH_THRESHOLD for wt in watched_clean)
+            return False
+
         filtered = []
         for r in recs:
             title = r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "")
             if not title:
                 filtered.append(r)
                 continue
-            if not any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean):
+            if not _is_watched(title):
                 filtered.append(r)
 
         # Also deduplicate within the same batch — AI sometimes returns the same
         # movie twice in one response (exact title or fuzzy match).
+        # CJK titles are resolved via cache if already queried above.
         seen_titles: list[str] = []
         deduped = []
         for r in filtered:
@@ -447,7 +480,13 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             if not title:
                 deduped.append(r)
                 continue
+            # Check against seen titles; for CJK, also check English equivalent
             if not any(_match_score(title, st) >= MATCH_THRESHOLD for st in seen_titles):
+                # Also check CJK seen titles via their English names
+                if has_cjk(title):
+                    en_title = _resolve_en_title(title)
+                    if en_title and any(_match_score(st, en_title) >= MATCH_THRESHOLD for st in seen_titles):
+                        continue  # CJK duplicate of an already-seen English title
                 seen_titles.append(title)
                 deduped.append(r)
 

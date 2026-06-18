@@ -38,8 +38,7 @@ export function GenreFilter({
 
   return (
     <div className="mb-3 pb-0.5">
-      {/* First row — always-visible pills */}
-      <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-0.5" style={{ scrollbarWidth: "thin" }}>
+      <div className="flex items-center gap-1.5 flex-wrap pb-0.5">
         <span className="text-xs text-muted-foreground mr-1 shrink-0">
           {t("manage.genre_filter")}
         </span>
@@ -49,7 +48,7 @@ export function GenreFilter({
         >
           {t("manage.media_type_all")}
         </button>
-        {genres.slice(0, visibleCount).map((g) => (
+        {genres.slice(0, showAll ? genres.length : visibleCount).map((g) => (
           <button
             key={g}
             className={`pill shrink-0 ${selected === g ? "active" : ""}`}
@@ -71,21 +70,6 @@ export function GenreFilter({
           </button>
         )}
       </div>
-
-      {/* Remaining pills — conditionally rendered with entry animation */}
-      {hasMore && showAll && (
-        <div className="flex flex-wrap gap-1.5 pt-1.5 animate-slide-down">
-          {genres.slice(visibleCount).map((g) => (
-            <button
-              key={g}
-              className={`pill ${selected === g ? "active" : ""}`}
-              onClick={() => onSelect(g)}
-            >
-              {translateGenreName(g)}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

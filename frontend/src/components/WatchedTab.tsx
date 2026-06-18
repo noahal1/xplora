@@ -18,6 +18,7 @@ import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { useEnrichReload } from "../hooks/useEnrichReload";
 import { usePagination } from "../hooks/usePagination";
 import { useSort } from "../hooks/useSort";
+import { EmptyState } from "./EmptyState";
 import { GenreFilter } from "./GenreFilter";
 import { MediaTypeFilter } from "./MediaTypeFilter";
 import { SortControls } from "./SortControls";
@@ -626,51 +627,39 @@ export function WatchedTab() {
       {/* === Empty State === */}
       {total === 0 && !loading && (
         <section className="section-card">
-          <div className="empty-state">
-            <svg className="w-10 h-10 mb-3 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
-            </svg>
-            {search.debouncedValue || ratingFilter !== "all" ? (
-              <>
-                <p className="text-sm font-medium">{t("watched.no_match")}</p>
-                <button
-                  className="btn btn-ghost btn-sm mt-3"
-                  onClick={() => {
-                    search.clear();
-                    setRatingFilter("all");
-                    setMediaTypeFilter("all");
-                    setGenreFilter("all");
-                    setCurrentPage(0);
-                  }}
-                >
-                  {t("watched.clear_filters")}
+          <EmptyState
+            icon={
+              <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
+              </svg>
+            }
+            hasActiveFilters={!!(search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all")}
+            searchQuery={search.debouncedValue}
+            onClearFilters={() => {
+              search.clear();
+              setRatingFilter("all");
+              setMediaTypeFilter("all");
+              setGenreFilter("all");
+              setCurrentPage(0);
+            }}
+            noMatchKey="watched.no_match"
+            noDataKey="watched.no_movies"
+            noDataSubtextKey="watched.no_movies_hint"
+            noDataActions={
+              <div className="flex items-center gap-2">
+                <button className="btn btn-ghost btn-sm" onClick={() => setImportModalOpen(true)}>
+                  <Upload size={14} />
+                  {t("watched.import_title")}
                 </button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-medium">{t("watched.no_movies")}</p>
-                <p className="text-xs mt-1">{t("watched.no_movies_hint")}</p>
-                <div className="flex items-center gap-2 mt-3">
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setImportModalOpen(true)}
-                  >
-                    <Upload size={14} />
-                    {t("watched.import_title")}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setSearchModalOpen(true)}
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-                    </svg>
-                    {t("watched.search_title")}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSearchModalOpen(true)}>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                  </svg>
+                  {t("watched.search_title")}
+                </button>
+              </div>
+            }
+          />
         </section>
       )}
 
