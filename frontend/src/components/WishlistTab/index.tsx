@@ -22,6 +22,7 @@ import { usePagination } from "../../hooks/usePagination";
 import { useSort } from "../../hooks/useSort";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
 
+import { EmptyState } from "../EmptyState";
 import { WishlistDetailModal } from "./DetailModal";
 import { WishlistRatingModal } from "./RatingModal";
 
@@ -60,7 +61,6 @@ export function WishlistTab() {
   const [loading, setLoading] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
-  const search = useDebouncedSearch("", 300);
   const filter = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
   const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, 30);
@@ -136,16 +136,16 @@ export function WishlistTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadWishlist(currentPage, search.debouncedValue, sortField, sortDir, mediaTypeFilter, controller.signal);
+    loadWishlist(currentPage, filter.debouncedValue, sortField, sortDir, mediaTypeFilter, controller.signal);
     return () => controller.abort();
-  }, [currentPage, search.debouncedValue, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
+  }, [currentPage, filter.debouncedValue, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
 
 
 
   // Auto-refresh when background enrichment completes
   useEnrichReload(() => setReloadTrigger((n) => n + 1));
 
-  const refreshWishlist = useCallback(() => { setCurrentPage(0); search.clear(); setReloadTrigger((n) => n + 1); }, []);
+  const refreshWishlist = useCallback(() => { setCurrentPage(0); filter.clear(); setReloadTrigger((n) => n + 1); }, []);
 
   // ── Search results sort (memoised to avoid re-filter/sort on every render) ──
 
@@ -300,7 +300,7 @@ export function WishlistTab() {
     <div className="space-y-5">
 
       {/* === Wishlist Section === */}
-      {total > 0 && (
+      {(total > 0 || filter.debouncedValue || mediaTypeFilter !== "all" || loading) && (
         <section className="section-card animate-slide-down">
           <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="section-title flex items-center gap-2">
@@ -351,10 +351,18 @@ export function WishlistTab() {
             <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" /></div>
           ) : (
             <>
-                {items.length === 0 && filter.debouncedValue ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">
-                    {mediaTypeFilter !== "all" ? t("manage.no_matching", { query: t(`manage.media_type_${mediaTypeFilter}`) }) : t("wishlist.no_matching", { query: filter.debouncedValue })}
-                  </div>
+                {items.length === 0 && (filter.debouncedValue || mediaTypeFilter !== "all") ? (
+                  <EmptyState
+                    hasActiveFilters
+                    searchQuery={filter.debouncedValue}
+                    onClearFilters={() => {
+                      filter.clear();
+                      setMediaTypeFilter("all");
+                      setCurrentPage(0);
+                    }}
+                    noMatchKey={filter.debouncedValue ? "wishlist.no_matching" : "watched.no_match"}
+                    noDataKey="wishlist.no_items"
+                  />
                 ) : (
                   <>
                     {/* Mobile cards */}
@@ -582,34 +590,32 @@ export function WishlistTab() {
       {/* === Rating Modal === */}
       <WishlistRatingModal open={markingMovie !== null} movie={markingMovie} onClose={() => setMarkingMovie(null)} onConfirm={confirmMarkAsWatched} />
 
-      {/* Empty State */}
-      {total === 0 && !loading && (
+      {/* Empty State (no items, no filters) */}
+      {total === 0 && !filter.debouncedValue && mediaTypeFilter === "all" && !loading && (
         <section className="section-card">
-          <div className="empty-state">
-            <svg className="w-10 h-10 mb-3 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-            <p className="text-sm font-medium">{t("wishlist.no_items")}</p>
-            <p className="text-xs mt-1">{t("wishlist.no_items_hint")}</p>
-            <div className="flex items-center gap-2 mt-3">
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => setSearchModalOpen(true)}
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-                </svg>
-                {t("wishlist.search_movies")}
-              </button>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => setAddModalOpen(true)}
-              >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                {t("wishlist.manual_add")}
-              </button>
-            </div>
-          </div>
+          <EmptyState
+            icon={
+              <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            }
+            noDataKey="wishlist.no_items"
+            noDataSubtextKey="wishlist.no_items_hint"
+            noDataActions={
+              <div className="flex items-center gap-2">
+                <button className="btn btn-ghost btn-sm" onClick={() => setSearchModalOpen(true)}>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                  </svg>
+                  {t("wishlist.search_movies")}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setAddModalOpen(true)}>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  {t("wishlist.manual_add")}
+                </button>
+              </div>
+            }
+          />
         </section>
       )}
     </div>

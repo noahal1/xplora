@@ -31,6 +31,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
     if (open && movie && movie.id !== prevMovieIdRef.current) {
       prevMovieIdRef.current = movie.id;
       setForm({
+        title: movie.title,
         overview: movie.overview ?? "",
         director: movie.director ?? "",
         actors: movie.actors ?? "",
@@ -55,8 +56,10 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
     setSaving(true);
     try {
       const isMovie = form.media_type === "movie";
+      const updatedTitle = (form.title || "").trim();
+      if (!updatedTitle) { showToast(t("manage.title_required", "标题不能为空"), "error"); return; }
       const updated = await api.updateMedia(movie.id, {
-        title: movie.title,
+        title: updatedTitle,
         rating: movie.rating,
         year: form.year !== undefined ? form.year : movie.year,
         genre: movie.genre,
@@ -76,6 +79,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       });
       // Merge updated fields into local form and movie for immediate feedback
       setForm({
+        title: updated.title,
         overview: updated.overview ?? "",
         director: updated.director ?? "",
         actors: updated.actors ?? "",
@@ -88,6 +92,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       });
       // Optimistically update the movie object so view mode shows new data immediately
       Object.assign(movie, {
+        title: updated.title,
         overview: updated.overview,
         director: updated.director,
         actors: updated.actors,
@@ -110,6 +115,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
 
   const startEditing = useCallback(() => {
     if (!movie) return;      setForm({
+        title: movie.title,
         overview: movie.overview ?? "",
         director: movie.director ?? "",
         actors: movie.actors ?? "",
@@ -133,7 +139,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
 
   return (
     <Modal open={open} onClose={handleClose}
-      title={editing ? t("detail_modal.edit_title") : movie.title}
+      title={editing ? (form.title || t("detail_modal.edit_title")) : movie.title}
       description={editing ? undefined : description}
       footer={editing ? (
         <div className="flex items-center gap-2 w-full justify-end">
@@ -150,6 +156,13 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       {editing ? (
         /* ── Edit Mode ──────────────────────────────────── */
         <div className="space-y-4">
+          {/* ── Title ────────────────────────────────── */}
+          <EditField label={t("manage.col_title")}>
+            <input type="text" className="input-field w-full text-sm px-3 py-2 font-medium"
+              value={form.title ?? ""}
+              onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
+              placeholder={t("manage.col_title")} />
+          </EditField>
           {/* ── Media Type Toggle ──────────────────────── */}
           <div>
             <p className="text-xs text-muted-foreground font-medium mb-1.5 uppercase tracking-wider">{t("manage.media_type")}</p>

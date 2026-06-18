@@ -66,7 +66,7 @@ export function RecommendTab() {
   const loadMoviesFromDB = useCallback(async () => {
     setLoadingMovies(true);
     try {
-      const data = await api.listMedia({ page: 0, page_size: 500, status: "watched" });
+      const data = await api.listMedia({ page: 0, page_size: 10000, status: "watched" });
       setMovies(
         data.media.map((m, i) => ({
           id: i,

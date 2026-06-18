@@ -408,12 +408,14 @@ export function WatchedTab() {
 
   // ── Render ──
 
+  const hasActiveFilters = !!(search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all");
+
   return (
     <div className="space-y-5">
 
 
       {/* === Movie List Section === */}
-      {total > 0 && (
+      {(total > 0 || hasActiveFilters || loading) && (
         <section className="section-card animate-slide-down">
           <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="section-title flex items-center gap-2">
@@ -561,10 +563,20 @@ export function WatchedTab() {
               )}
 
               {/* Movie List / Grid */}
-              {media.length === 0 && (search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all") ? (
-                <div className="text-center py-6 text-muted-foreground text-sm">
-                  {t("watched.no_match")}
-                </div>
+              {media.length === 0 ? (
+                <EmptyState
+                  hasActiveFilters
+                  searchQuery={search.debouncedValue}
+                  onClearFilters={() => {
+                    search.clear();
+                    setRatingFilter("all");
+                    setMediaTypeFilter("all");
+                    setGenreFilter("all");
+                    setCurrentPage(0);
+                  }}
+                  noMatchKey="watched.no_match"
+                  noDataKey="watched.no_movies"
+                />
               ) : viewMode === "grid" ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                   {media.map((m) => (
@@ -624,8 +636,8 @@ export function WatchedTab() {
         </section>
       )}
 
-      {/* === Empty State === */}
-      {total === 0 && !loading && (
+      {/* === Empty State (no movies at all, no filters) === */}
+      {total === 0 && !hasActiveFilters && !loading && (
         <section className="section-card">
           <EmptyState
             icon={
@@ -633,16 +645,6 @@ export function WatchedTab() {
                 <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
               </svg>
             }
-            hasActiveFilters={!!(search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all")}
-            searchQuery={search.debouncedValue}
-            onClearFilters={() => {
-              search.clear();
-              setRatingFilter("all");
-              setMediaTypeFilter("all");
-              setGenreFilter("all");
-              setCurrentPage(0);
-            }}
-            noMatchKey="watched.no_match"
             noDataKey="watched.no_movies"
             noDataSubtextKey="watched.no_movies_hint"
             noDataActions={

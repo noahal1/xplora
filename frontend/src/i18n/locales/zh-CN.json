@@ -291,6 +291,7 @@
     "rematch_success": "已更新为「{{title}}」的元数据",
     "rematch_failed": "匹配失败：{{message}}",
     "rematch_select": "选择",
+    "rematch_overwrite": "覆盖",
     "rematch_current": "✓ 当前",
     "scrape_source": "刮削源：",
     "media_type": "类型：",

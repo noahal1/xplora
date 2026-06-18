@@ -43,6 +43,11 @@ def _get_all_excluded_titles(db: Session, user_id: int) -> list[str]:
     Unlike ``_extract_watched_titles`` which only returns titles from the
     request payload (may be filtered by genre/media_type), this queries
     every item so the exclusion list is complete.
+
+    NOTE: This query is intentionally genre-agnostic — it excludes ALL
+    watched/wishlisted movies regardless of the recommendation strategy.
+    The genre/media_type filter on the frontend only affects the taste
+    analysis (which movies the AI sees as examples), NOT the exclusion.
     """
     rows = db.exec(
         select(MediaItemRecord).where(

@@ -289,6 +289,8 @@ export function ManageTab() {
 
   const VISIBLE_GENRES = 6;
 
+  const hasActiveFilters = !!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter || errorFilter);
+
   const SortArrow = ({ field }: { field: SortField }) => {
     return (
       <span className="text-[11px] ml-1 transition-opacity" style={{ opacity: sortField === field ? 1 : 0.25 }}>
@@ -393,11 +395,23 @@ export function ManageTab() {
         </div>
       )}
 
-      {/* ── Empty ──────────────────────────────────────────────── */}
-      {!loading && !error && mediaList.length === 0 && (
+      {/* ── Empty (no data, no filters) ───────────────────────── */}
+      {!loading && !error && mediaList.length === 0 && !hasActiveFilters && (
         <EmptyState
           icon={<Film size={40} />}
-          hasActiveFilters={!!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter || errorFilter)}
+          noDataKey="manage.no_movies"
+          noDataActions={
+            <button className="btn btn-primary btn-sm gap-1.5" onClick={openSearchDialog}>
+              <Plus size={13} />{t("manage.add_movie")}
+            </button>
+          }
+        />
+      )}
+
+      {/* ── Empty (filters active, no match) ──────────────────── */}
+      {!loading && !error && mediaList.length === 0 && hasActiveFilters && (
+        <EmptyState
+          hasActiveFilters
           searchQuery={search.debouncedValue}
           onClearFilters={() => {
             search.clear();
@@ -411,11 +425,6 @@ export function ManageTab() {
           noMatchKey={search.debouncedValue ? "manage.no_matching" : "watched.no_match"}
           noMatchSubtextKey={search.debouncedValue ? "manage.try_other" : undefined}
           noDataKey="manage.no_movies"
-          noDataActions={
-            <button className="btn btn-primary btn-sm gap-1.5" onClick={openSearchDialog}>
-              <Plus size={13} />{t("manage.add_movie")}
-            </button>
-          }
         />
       )}
 
@@ -683,10 +692,7 @@ const ManageTableRow = memo(function ManageTableRow({
           )}
           <button className="text-muted-foreground hover:text-sky px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors hover:bg-sky/10"
             onClick={() => onSetDetailMovie(movie)} title={t("manage.detail")}><InfoIcon size={14} /></button>
-          <button className="text-muted-foreground hover:text-foreground px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors hover:bg-accent"
-            onClick={() => onStartInlineEdit(movie.id, "title")} title={t("common.edit")}>
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-          </button>
+
           <button className={`px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors ${movie.scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
             onClick={() => onSetRematchMovie(movie)} title={movie.scrape_error ? t("manage.rematch_error_hint") : t("manage.rematch")}>
             <Search size={14} />
@@ -943,13 +949,7 @@ const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelected, enr
           label={t("manage.detail")}
           onClick={() => onSetDetailMovie(movie)}
         />
-        <MobileActionBtn
-          icon={
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-          }
-          label={t("common.edit")}
-          onClick={() => onStartInlineEdit(movie.id, "title")}
-        />
+
         <MobileActionBtn
           icon={<Search size={13} />}
           label={t("manage.rematch")}

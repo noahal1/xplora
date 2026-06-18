@@ -268,12 +268,18 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                           {result.source.toUpperCase()}
                         </Badge>
                       </div>
-                      {!isCurrentMatch && (
-                        <button className={`btn btn-xs gap-1 shrink-0 transition-all duration-150 ${isFocused ? "btn-primary" : "btn-ghost border border-border/50 hover:border-primary/30"}`}
-                          onClick={(e) => { e.stopPropagation(); handleSelectRematch(result); }}>
-                          <Check size={11} />{t("manage.rematch_select")}
-                        </button>
-                      )}
+                      <button className={`btn btn-xs gap-1 shrink-0 transition-all duration-150 ${
+                        isCurrentMatch
+                          ? "btn-ghost border border-amber/30 hover:border-amber/50 text-amber hover:text-amber bg-amber/[0.04]"
+                          : isFocused ? "btn-primary" : "btn-ghost border border-border/50 hover:border-primary/30"
+                      }`}
+                        onClick={(e) => { e.stopPropagation(); handleSelectRematch(result); }}
+                        title={isCurrentMatch ? t("manage.rematch_overwrite") : ""}
+                      >
+                        <RefreshCw size={10} className={isCurrentMatch ? "" : "hidden"} />
+                        <Check size={11} className={isCurrentMatch ? "hidden" : ""} />
+                        {isCurrentMatch ? t("manage.rematch_overwrite") : t("manage.rematch_select")}
+                      </button>
                     </div>
                   );
                 })}

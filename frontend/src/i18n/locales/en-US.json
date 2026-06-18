@@ -288,6 +288,7 @@
     "rematch_success": "Updated with \"{{title}}\"",
     "rematch_failed": "Match failed: {{message}}",
     "rematch_select": "Select",
+    "rematch_overwrite": "Re-scrape",
     "rematch_current": "✓ Current",
     "media_type": "Type:",
     "media_type_all": "All",
