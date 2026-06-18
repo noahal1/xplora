@@ -134,8 +134,7 @@
     "json_parse_failed": "JSON parse failed: {{message}}",
     "enter_title": "Please enter a movie title",
     "source_auto": "Auto",
-    "source_tmdb": "TMDB",
-    "source_omdb": "OMDb"
+    "source_tmdb": "TMDB"
   },
   "wishlist_mark_modal": {
     "title": "Mark \"{{title}}\" as Watched",
@@ -157,6 +156,7 @@
     "results": "Recommendations",
     "source_info_loading": "Based on {{count}} watched movies, AI is analyzing...",
     "source_info_done": "Based on {{count}} watched movies, here are {{recs}} recommendations for you",
+    "source_info_filtered": " ({{count}} already watched filtered out)",
     "loading_movies": "Loading watched movies...",
     "analyzing": "AI is analyzing your watch history...",
     "no_results": "No recommendations received, please try again",
@@ -457,7 +457,6 @@
   "search_source": {
     "auto": "Auto",
     "tmdb": "TMDB",
-    "omdb": "OMDb",
     "tvmaze": "TVmaze"
   },
   "pagination": {

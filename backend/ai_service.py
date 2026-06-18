@@ -40,6 +40,7 @@ STRATEGY_TEMPERATURES = {
 
 DEFAULT_TEMPERATURE = 0.7
 MAX_TOKENS = 3000  # Increased from 2000 for Chinese responses
+MAX_API_RETRIES = 10  # Hard cap on total retries per request to prevent excessive API calls
 
 
 class AIService:
@@ -501,24 +502,30 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
     ) -> list[MediaRecommendation]:
-        """Generate movie recommendations (non-streaming) with retry.
+        """Generate movie recommendations (non-streaming) with dynamic retry.
 
-        If the fuzzy dedup filter removes some recommendations, this retries
-        up to ``MAX_RETRIES`` times — each time asking the AI to recommend
-        different movies — until the requested ``count`` is met.
+        If the fuzzy dedup filter removes some recommendations (because they
+        are already watched/wishlisted), this retries with dynamic retry count
+        based on the requested amount — each time asking the AI to recommend
+        different movies and requesting extra to compensate for filtering losses
+        — until the requested ``count`` is met.
         """
-        MAX_RETRIES = 3
+        max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
         all_excluded = list(watched_titles or [])
         all_recs: list[MediaRecommendation] = []
+        total_filtered = 0
 
-        for attempt in range(MAX_RETRIES):
+        for attempt in range(max_retries):
             remaining = count - len(all_recs)
             if remaining <= 0:
                 break
 
+            # Scale up request on retry to compensate for filtering losses
+            request_count = min(remaining * 2, 10) if attempt > 0 else remaining
+
             prompt = self._build_prompt(
-                movies, remaining, strategy, strategy_params,
+                movies, request_count, strategy, strategy_params,
                 watched_titles=all_excluded, taste_analysis=taste_analysis,
                 exclude_titles=all_excluded,
                 retry_attempt=attempt,
@@ -560,7 +567,10 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     raise
                 break
 
+            before_filter = len(new_recs)
             new_recs = self._filter_watched(new_recs, all_excluded)
+            total_filtered += before_filter - len(new_recs)
+
             if not new_recs:
                 # Don't break — retry with retry_hint might help the AI avoid
                 # watched movies on the next attempt
@@ -568,6 +578,10 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
             all_recs.extend(new_recs)
             all_excluded.extend(r.title for r in new_recs)
+
+        if total_filtered > 0:
+            print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
+                  f"({len(all_recs[:count])}/{count} final)")
 
         all_recs = self._resolve_posters(all_recs)
         return all_recs[:count]
@@ -689,25 +703,29 @@ Format 2 - For explanation or other questions:
         """Generator that yields SSE-formatted events for follow-up conversation.
 
         If the response includes recommendations and the fuzzy dedup filter
-        removes some, retries up to ``MAX_RETRIES`` times to fill the gap.
+        removes some, retries with dynamic retry count to fill the gap.
         """
-        MAX_RETRIES = 3
+        max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get("taste", DEFAULT_TEMPERATURE)
         all_excluded = list(watched_titles or [])
         all_recs: list[dict] = []
         response_message: str | None = None
+        total_filtered = 0
 
         # Yield start event
         start_data = json.dumps({"model": self.model_type})
         yield f"event: start\ndata: {start_data}\n\n"
 
-        for attempt in range(MAX_RETRIES):
+        for attempt in range(max_retries):
             remaining = count - len(all_recs)
             if remaining <= 0:
                 break
 
+            # Scale up request on retry to compensate for filtering losses
+            request_count = min(remaining * 2, 10) if attempt > 0 else remaining
+
             prompt = self._build_followup_prompt(
-                movies, previous_recommendations, conversation, question, remaining,
+                movies, previous_recommendations, conversation, question, request_count,
                 watched_titles=all_excluded,
                 taste_analysis=taste_analysis,
                 exclude_titles=all_excluded,
@@ -777,13 +795,21 @@ Format 2 - For explanation or other questions:
             if not new_recs:
                 break
 
+            before_filter = len(new_recs)
             new_recs = self._filter_watched(new_recs, all_excluded)
+            total_filtered += before_filter - len(new_recs)
+
             if not new_recs:
-                break
+                # filtered all — continue retrying instead of breaking
+                continue
 
             response_message = data.get("message", "")
             all_recs.extend(new_recs)
             all_excluded.extend(r.get("title", "") for r in new_recs)
+
+        if total_filtered > 0:
+            print(f"[FollowUp] Filtered out {total_filtered} already-watched titles "
+                  f"({len(all_recs[:count])}/{count} final)")
 
         # Resolve poster URLs from TMDB
         all_recs = self._resolve_posters(all_recs)
@@ -808,28 +834,32 @@ Format 2 - For explanation or other questions:
         """Generator that yields SSE-formatted events as recommendations are streamed.
 
         If the fuzzy dedup filter removes some recommendations, this retries
-        up to ``MAX_RETRIES`` times — each time asking the AI to recommend
-        different movies — until the requested ``count`` is met.  Chunk events
-        from each retry attempt are forwarded to the frontend for progress
-        indication, but all recommendations are yielded after all retries
-        complete, followed by a single ``done`` event.
+        with dynamic retry count based on the requested amount — each time
+        asking the AI to recommend different movies — until the requested
+        ``count`` is met.  Chunk events from each retry attempt are forwarded
+        to the frontend for progress indication, but all recommendations are
+        yielded after all retries complete, followed by a single ``done`` event.
         """
-        MAX_RETRIES = 3
+        max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
         all_excluded = list(watched_titles or [])
         all_recs: list[dict] = []
+        total_filtered = 0
 
         # Yield start event
         start_data = json.dumps({"model": self.model_type, "source_count": len(movies)})
         yield f"event: start\ndata: {start_data}\n\n"
 
-        for attempt in range(MAX_RETRIES):
+        for attempt in range(max_retries):
             remaining = count - len(all_recs)
             if remaining <= 0:
                 break
 
+            # Scale up request on retry to compensate for filtering losses
+            request_count = min(remaining * 2, 10) if attempt > 0 else remaining
+
             prompt = self._build_prompt(
-                movies, remaining, strategy, strategy_params,
+                movies, request_count, strategy, strategy_params,
                 watched_titles=all_excluded, taste_analysis=taste_analysis,
                 exclude_titles=all_excluded,
                 retry_attempt=attempt,
@@ -890,12 +920,20 @@ Format 2 - For explanation or other questions:
                 continue
 
             new_recs = self._filter_watched(new_recs, all_excluded)
+            before_filter = len(new_recs)
+            new_recs = self._filter_watched(new_recs, all_excluded)
+            total_filtered += before_filter - len(new_recs)
+
             if not new_recs:
                 # Don't break — retry with retry_hint might help
                 continue
 
             all_recs.extend(new_recs)
             all_excluded.extend(r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "") for r in new_recs)
+
+        if total_filtered > 0:
+            print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
+                  f"({len(all_recs[:count])}/{count} final)")
 
         # Resolve poster URLs from TMDB before yielding
         all_recs = self._resolve_posters(all_recs)
@@ -919,10 +957,11 @@ Format 2 - For explanation or other questions:
             })
             yield f"event: recommendation\ndata: {rec_data}\n\n"
 
-        # Yield done event
+        # Yield done event — include filtered_count for frontend display
         done_data = json.dumps({
             "model_used": self.model_type,
             "source_count": len(movies),
             "total": len(all_recs[:count]),
+            "filtered_count": total_filtered,
         })
         yield f"event: done\ndata: {done_data}\n\n"

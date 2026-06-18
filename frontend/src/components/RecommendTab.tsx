@@ -203,7 +203,11 @@ export function RecommendTab() {
                 break;
               }
               case "done":
-                setSourceInfo(t("recommend.source_info_done", { count: data.source_count, recs: recs.length }));
+                let infoMsg = t("recommend.source_info_done", { count: data.source_count, recs: recs.length });
+                if (data.filtered_count > 0) {
+                  infoMsg += t("recommend.source_info_filtered", { count: data.filtered_count });
+                }
+                setSourceInfo(infoMsg);
                 break;
               case "error":
                 throw new Error(data.message);

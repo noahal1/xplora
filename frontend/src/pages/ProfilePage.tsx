@@ -85,13 +85,20 @@ export function ProfilePage() {
     setSavingKeys(true);
     try {
       const token = localStorage.getItem("xplora-token");
+      // Only send non-empty keys — don't overwrite other keys with empty strings
+      const filledKeys: Record<string, string> = {};
+      for (const [key, val] of Object.entries(editKeys)) {
+        if (val.trim()) {
+          filledKeys[key] = val.trim();
+        }
+      }
       const res = await fetch("/api/admin/config", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ api_keys: editKeys }),
+        body: JSON.stringify({ api_keys: filledKeys }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: t("profile.api_save_failed", { message: "" }) }));

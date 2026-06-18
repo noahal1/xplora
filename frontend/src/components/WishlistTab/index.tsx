@@ -470,7 +470,7 @@ export function WishlistTab() {
                 ))}
                 <span className="w-[1px] h-3.5 bg-border mx-1" />
                 <span className="text-[11px] text-muted-foreground mr-0.5">{t("manage.filter")}</span>
-                {[{ value: "", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "omdb", label: t("search_source.omdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
+                {[{ value: "", label: t("search_source.auto") }, { value: "tmdb", label: t("search_source.tmdb") }, { value: "tvmaze", label: t("search_source.tvmaze") }].map((opt) => (
                   <button key={opt.value} className={`pill ${searchSourceFilter === opt.value ? "active" : ""}`} onClick={() => setSearchSourceFilter(opt.value)}>{opt.label}</button>
                 ))}
               </div>

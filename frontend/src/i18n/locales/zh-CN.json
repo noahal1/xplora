@@ -135,7 +135,6 @@
     "enter_title": "请输入电影名称",
     "source_auto": "智能",
     "source_tmdb": "TMDB",
-    "source_omdb": "OMDb",
     "movie_count": "共 {{count}} 部电影"
   },
   "wishlist_mark_modal": {
@@ -159,6 +158,7 @@
     "results": "推荐结果",
     "source_info_loading": "基于 {{count}} 部已看过的电影，AI 正在为你分析...",
     "source_info_done": "基于 {{count}} 部已看过的电影，为你推荐以下 {{recs}} 部电影",
+    "source_info_filtered": "（已过滤 {{count}} 部已看过的电影）",
     "loading_movies": "加载已看过的电影数据...",
     "analyzing": "AI 正在分析你的观影记录...",
     "no_results": "未获取到推荐结果，请重试",
@@ -469,7 +469,6 @@
   "search_source": {
     "auto": "智能",
     "tmdb": "TMDB",
-    "omdb": "OMDb",
     "tvmaze": "TVmaze"
   },
   "pagination": {

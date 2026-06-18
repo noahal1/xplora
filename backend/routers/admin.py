@@ -180,7 +180,10 @@ async def update_config(
     for key_name in API_KEY_NAMES:
         if key_name in api_keys:
             value = api_keys[key_name]
-            set_config_api_key(key_name, value.strip() if value else "")
+            if value and value.strip():
+                set_config_api_key(key_name, value.strip())
+            # NOTE: skipping empty keys intentionally — do NOT clear keys
+            # that the user didn't touch in the frontend form
 
     log_operation(_admin["id"], _admin["username"], "update_config", "更新 API Key 配置", db=db)
     return {"status": "ok", "api_keys": get_config_status()}

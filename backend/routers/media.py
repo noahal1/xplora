@@ -507,11 +507,11 @@ async def delete_all_media_endpoint(
 @router.get("/media/search")
 async def search_media(
     q: str = Query(..., min_length=1, description="Search query"),
-    source: str = Query("auto", pattern="^(tmdb|omdb|tvmaze|auto)$", description="Data source: tmdb, omdb, tvmaze, or auto"),
+    source: str = Query("auto", pattern="^(tmdb|tvmaze|auto)$", description="Data source: tmdb, tvmaze, or auto"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """Search for movies/TV via external sources (TMDB / OMDb / TVmaze)."""
+    """Search for movies/TV via external sources (TMDB / TVmaze)."""
     try:
         results = search_external_movies(q, source)
         log_operation(current_user["id"], current_user["username"], "search", f"搜索: {q} (来源: {source})", db=db)
@@ -539,8 +539,8 @@ async def rematch_media(
     media_type = request.get("media_type", "movie")
     if not source or not source_id:
         raise HTTPException(status_code=400, detail="需要提供 source 和 source_id")
-    if source not in ("tmdb", "omdb", "tvmaze"):
-        raise HTTPException(status_code=400, detail="source 只能是 tmdb、omdb 或 tvmaze")
+    if source not in ("tmdb", "tvmaze"):
+        raise HTTPException(status_code=400, detail="source 只能是 tmdb 或 tvmaze")
 
     media_item = get_media_for_user(media_id, current_user["id"], db=db)
     if not media_item:
@@ -602,7 +602,7 @@ async def rematch_media(
 
 @router.get("/media/detail")
 async def media_detail(
-    source: str = Query(..., pattern="^(tmdb|omdb)$", description="Data source: tmdb or omdb"),
+    source: str = Query(..., pattern="^(tmdb|tvmaze)$", description="Data source: tmdb or tvmaze"),
     source_id: str = Query(..., min_length=1, description="Media ID from the source"),
     media_type: str = Query("movie", pattern="^(movie|tv)$", description="Media type: movie or tv"),
     current_user: dict = Depends(get_current_user),

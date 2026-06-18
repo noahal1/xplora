@@ -61,31 +61,6 @@ def search_tmdb_tv(title: str) -> Optional[list[dict]]:
         return None
 
 
-def search_omdb(title: str, media_type: str = "movie") -> Optional[list[dict]]:
-    """Search OMDb and return raw results list.
-
-    Returns ``None`` if OMDb API key is not configured or the
-    search request fails.
-
-    Args:
-        title: Search query.
-        media_type: ``"movie"``, ``"series"``, or ``"episode"``.
-    """
-    omdb_key = get_config_api_key("omdb")
-    if not omdb_key:
-        logger.debug("OMDb key not configured — skipping OMDb search")
-        return None
-
-    from movie_search import search_omdb
-
-    try:
-        results = search_omdb(title, omdb_key, media_type=media_type)
-        return [r.to_dict() for r in results]
-    except RuntimeError as e:
-        logger.warning("OMDb search failed for '%s': %s", title, e)
-        return None
-
-
 def search_tvmaze(title: str) -> Optional[list[dict]]:
     """Search TVmaze and return raw results list.
 
@@ -159,7 +134,6 @@ def _get_search_variants(title: str) -> list[str]:
     return variants
 
 
-_OMDB_PREFERRED = {"director", "actors", "awards", "country", "imdb_id", "ratings"}
 _TVMAZE_PREFERRED = {"network", "status", "thetvdb_id"}
 
 
@@ -245,8 +219,6 @@ def _merge_into(collected: dict, new: dict, source: str):
     Priority rules:
     - TMDB: base (core fields like poster, overview, runtime, genre),
       never overwritten by others
-    - OMDb: preferred for ``director``, ``actors``, ``awards``, ``country``,
-      ``imdb_id``, ``ratings`` (overwrites TMDB)
     - TVmaze: fills gaps for ``network``, ``status``, ``thetvdb_id``
     - TVmaze: also fills ``imdb_id`` / ``country`` if not already set
     """
@@ -254,8 +226,6 @@ def _merge_into(collected: dict, new: dict, source: str):
         if value is None or key in ("source", "source_id", "media_type"):
             continue
         if key not in collected:
-            collected[key] = value
-        elif source == "omdb" and key in _OMDB_PREFERRED:
             collected[key] = value
         elif source == "tvmaze" and key in _TVMAZE_PREFERRED:
             collected[key] = value
@@ -306,15 +276,14 @@ def _try_source(
 
 
 def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
-    """Scrape movie metadata from TMDB, OMDb, and TVmaze.
+    """Scrape movie metadata from TMDB, TVmaze.
 
     Collects results from ALL sources and merges them with field-level
     priorities to build the most complete metadata possible.
 
     Merge priorities:
     - TMDB: core fields (poster, overview, runtime, genre, rating)
-    - OMDb: preferred for director, actors, awards, country, imdb_id
-    - TVmaze: fills network, status, thetvdb_id
+    - TVmaze: fills network, status, thetvdb_id, imdb_id, country
 
     For all sources, if the title contains ``" / "`` (e.g. ``"千与千寻 / Spirited Away"``)
     or season markers (``第四季`` / ``Season 4``), each part is tried separately.
@@ -323,10 +292,9 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
     or ``None`` if no match found in any source.
     """
     tmdb_key = get_config_api_key("tmdb")
-    omdb_key = get_config_api_key("omdb")
 
-    if not tmdb_key and not omdb_key:
-        logger.warning("No TMDB/OMDb API keys configured — will only use TVmaze")
+    if not tmdb_key:
+        logger.warning("No TMDB API key configured — will only use TVmaze")
 
     # Parse season number from title (e.g., "黑袍纠察队 第四季" → 4)
     season_number = extract_season_number(title)
@@ -347,7 +315,7 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
         variant_pinyins[v] = to_pinyin(v) if has_cjk(v) else None
 
     # ── Parallel search across all sources ─────────────────────────
-    # All source searches (TMDB movie/TV, OMDb movie/series, TVmaze)
+    # All source searches (TMDB movie/TV, TVmaze)
     # are independent — they make HTTP requests to different APIs.
     # Running them concurrently (with connection reuse) massively
     # reduces wall-clock time vs. the original serial loop.
@@ -371,25 +339,14 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
                 title, year, title_variants, variant_pinyins, "tmdb",
                 "tv", season_number,
             )
-        if omdb_key:
-            futures["omdb_movie"] = pool.submit(
-                _try_source, lambda t: search_omdb(t, media_type="movie"),
-                title, year, title_variants, variant_pinyins, "omdb",
-            )
-        if omdb_key:
-            futures["omdb_series"] = pool.submit(
-                _try_source, lambda t: search_omdb(t, media_type="series"),
-                title, year, title_variants, variant_pinyins, "omdb",
-            )
         futures["tvmaze"] = pool.submit(
             _try_source, search_tvmaze,
             title, year, title_variants, variant_pinyins, "tvmaze",
         )
 
         # Collect results in merge-priority order:
-        # TMDB first (base fields), then OMDb (overwrites specific),
-        # then TVmaze (fills gaps)
-        for name in ("tmdb_movie", "tmdb_tv", "omdb_movie", "omdb_series", "tvmaze"):
+        # TMDB first (base fields), then TVmaze (fills gaps)
+        for name in ("tmdb_movie", "tmdb_tv", "tvmaze"):
             fut = futures.get(name)
             if not fut:
                 continue
@@ -418,13 +375,6 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
                     "TMDB TV merged for '%s' — media_type=%s%s",
                     title, detail.get("media_type"),
                     f", season={season_number}" if season_number else "",
-                )
-            elif name.startswith("omdb"):
-                _merge_into(collected, detail, "omdb")
-                logger.info(
-                    "OMDb %s merged for '%s'",
-                    "movie" if name == "omdb_movie" else "series",
-                    title,
                 )
             elif name == "tvmaze":
                 _merge_into(collected, detail, "tvmaze")

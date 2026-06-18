@@ -244,12 +244,9 @@ async def async_background_cache_posters(user_id: int, movies: list[tuple[int, s
 def _get_failure_reason(title: str, year: Optional[int]) -> str:
     """Generate a human-readable error message for why scraping failed."""
     tmdb_key = get_config_api_key("tmdb")
-    omdb_key = get_config_api_key("omdb")
     sources_tried = []
     if tmdb_key:
         sources_tried.append("TMDB")
-    if omdb_key:
-        sources_tried.append("OMDb")
     # TVmaze is free and always tried
     sources_tried.append("TVmaze")
     sources_str = " / ".join(sources_tried)
