@@ -33,6 +33,33 @@ def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
     return [m.title for m in movies if m.title]
 
 
+def _get_all_excluded_titles(db: Session, user_id: int) -> list[str]:
+    """Query ALL watched + wishlist titles from the DB in a single query.
+
+    Returns a deduplicated list of movie titles that the AI should exclude:
+    - Watched movies (already seen)
+    - Wishlist movies (already planning to watch)
+
+    Unlike ``_extract_watched_titles`` which only returns titles from the
+    request payload (may be filtered by genre/media_type), this queries
+    every item so the exclusion list is complete.
+    """
+    rows = db.exec(
+        select(MediaItemRecord).where(
+            MediaItemRecord.status.in_(["watched", "wish"]),
+            MediaItemRecord.user_id == user_id,
+        )
+    ).all()
+    # Deduplicate by title (user could theoretically have same title in both lists)
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in rows:
+        if item.title and item.title not in seen:
+            seen.add(item.title)
+            result.append(item.title)
+    return result
+
+
 # ── Helper: stream with persistence ─────────────────────────────────
 # Note: _stream_with_persistence is a generator used inside StreamingResponse,
 # which lives longer than the request scope. It manages its own DB session
@@ -108,16 +135,8 @@ async def recommend(
     api_key = get_api_key(request.model)
     try:
         service = AIService(api_key=api_key, model_type=request.model)
-        watched_titles = _extract_watched_titles(movies)
-        # Also exclude wishlist items
-        wishlist_items = db.exec(
-            select(MediaItemRecord).where(
-                MediaItemRecord.status == "wish",
-                MediaItemRecord.user_id == current_user["id"],
-            )
-        ).all()
-        wishlist_titles = [item.title for item in wishlist_items if item.title]
-        all_excluded = list(set(watched_titles + wishlist_titles))
+        # Single DB query for all watched + wishlist titles
+        all_excluded = _get_all_excluded_titles(db, current_user["id"])
         taste_analysis = service._analyze_user_taste(movies)
         recommendations = service.get_recommendations(
             movies, request.count, request.strategy,
@@ -145,17 +164,8 @@ async def recommend_stream(
     """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
-    watched_titles = _extract_watched_titles(movies)
-    # Also exclude wishlist items so the AI doesn't recommend movies the user
-    # already plans to watch
-    wishlist_items = db.exec(
-        select(MediaItemRecord).where(
-            MediaItemRecord.status == "wish",
-            MediaItemRecord.user_id == current_user["id"],
-        )
-    ).all()
-    wishlist_titles = [item.title for item in wishlist_items if item.title]
-    all_excluded = list(set(watched_titles + wishlist_titles))
+    # Single DB query for all watched + wishlist titles
+    all_excluded = _get_all_excluded_titles(db, current_user["id"])
     return StreamingResponse(
         _stream_with_persistence(
             movies, request.count, request.model, api_key, current_user["id"],
@@ -182,16 +192,8 @@ async def followup_stream(
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
     service = AIService(api_key=api_key, model_type=request.model)
-    watched_titles = _extract_watched_titles(movies)
-    # Also exclude wishlist items
-    wishlist_items = db.exec(
-        select(MediaItemRecord).where(
-            MediaItemRecord.status == "wish",
-            MediaItemRecord.user_id == current_user["id"],
-        )
-    ).all()
-    wishlist_titles = [item.title for item in wishlist_items if item.title]
-    all_excluded = list(set(watched_titles + wishlist_titles))
+    # Single DB query for all watched + wishlist titles
+    all_excluded = _get_all_excluded_titles(db, current_user["id"])
     taste_analysis = service._analyze_user_taste(movies)
     return StreamingResponse(
         service.get_followup_stream(

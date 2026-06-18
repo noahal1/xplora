@@ -7,8 +7,9 @@ import { useEnrich } from "../../context/EnrichContext";
 import { Badge } from "../ui/badge";
 import { Pagination } from "../Pagination";
 import { SkeletonTable } from "../Skeleton";
-import { translateGenres, translateGenreName } from "../../utils/genre";
+import { translateGenres } from "../../utils/genre";
 import { Modal } from "../Modal";
+import { GenreFilter } from "../GenreFilter";
 import { Film, Upload, Plus, Search, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, AlertCircle, Star, X, Info, ChevronRight, Check } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../../hooks/useGenreExtractor";
@@ -46,7 +47,6 @@ export function ManageTab() {
   const [errorFilter, setErrorFilter] = useState(false);
   const [mediaTypeFilter, setMediaTypeFilter] = useState("");
   const [genreFilter, setGenreFilter] = useState("");
-  const [showAllGenres, setShowAllGenres] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const [editingCell, setEditingCell] = useState<{ movieId: number; field: string } | null>(null);
@@ -377,59 +377,13 @@ export function ManageTab() {
       </div>
 
       {/* Genre Filter */}
-      {mediaList.length > 0 && uniqueGenres.length > 0 && (
-        <div className="mb-3 pb-0.5">
-          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-0.5" style={{ scrollbarWidth: "thin" }}>
-            <span className="text-xs text-muted-foreground mr-1 shrink-0">{t("manage.genre_filter")}</span>
-            <button className={`pill shrink-0 ${genreFilter === "" ? "active" : ""}`}
-              onClick={() => { setGenreFilter(""); setPage(0); setSelected(new Set()); }}>{t("manage.media_type_all")}</button>
-            {/* First VISIBLE_GENRES pills — always visible */}
-            {uniqueGenres.slice(0, VISIBLE_GENRES).map((g) => (
-              <button key={g} className={`pill shrink-0 ${genreFilter === g ? "active" : ""}`}
-                onClick={() => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}>{translateGenreName(g)}</button>
-            ))}
-            {/* More/Collapse button — always on the right side */}
-            {uniqueGenres.length > VISIBLE_GENRES && (
-              <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0 ml-auto"
-                onClick={() => setShowAllGenres((v) => !v)}>
-                {showAllGenres ? (
-                  <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
-                ) : (
-                  <><span className="text-[10px]">▼</span> +{uniqueGenres.length - VISIBLE_GENRES} {t("manage.genre_more")}</>
-                )}
-              </button>
-            )}
-          </div>
-          {/* Remaining pills — animated expand/collapse */}
-          {uniqueGenres.length > VISIBLE_GENRES && (
-            <div
-              className="grid"
-              style={{
-                gridTemplateRows: showAllGenres ? '1fr' : '0fr',
-                transition: 'grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-              }}
-            >
-              <div className="overflow-hidden min-h-0">
-                <div
-                  className="flex flex-wrap gap-1.5 pt-1.5"
-                  style={{
-                    opacity: showAllGenres ? 1 : 0,
-                    transform: showAllGenres ? 'translateY(0)' : 'translateY(-6px)',
-                    transition: showAllGenres
-                      ? 'opacity 0.25s ease 0.05s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s'
-                      : 'opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                  }}
-                >
-                  {uniqueGenres.slice(VISIBLE_GENRES).map((g) => (
-                    <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
-                      onClick={() => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}>{translateGenreName(g)}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <GenreFilter
+        genres={uniqueGenres}
+        selected={genreFilter}
+        allValue=""
+        visibleCount={VISIBLE_GENRES}
+        onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
+      />
 
       {/* ── Sort bar ────────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 mb-3.5 flex-wrap pb-0.5">

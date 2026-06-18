@@ -48,10 +48,50 @@ def _safe_int(value: str | None, default: int) -> int:
         return default
 
 
+# ---- Project root (where .env lives) ----
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _resolve_sqlite_path(url: str) -> str:
+    """Resolve the filesystem path from a ``sqlite:///...`` URL.
+
+    On Windows, ``sqlite:///data/xplora.db`` would normally resolve
+    to the drive-root path ``C:/data/xplora.db``, which may not be
+    writable (e.g. Microsoft Store Python sandbox). This function
+    detects that case and instead resolves such paths relative to
+    the project root, placing the DB at ``<project>/data/xplora.db``.
+
+    On Unix the path is left as-is (absolute).
+    """
+    file_path = url.removeprefix("sqlite://")
+    if os.name == "nt" and file_path.startswith("/"):
+        # Windows: treat leading / as relative to project root
+        relative = file_path.lstrip("/")
+        return str((PROJECT_ROOT / relative).resolve())
+    return file_path
+
+
+def _resolve_sqlite_url(url: str) -> str:
+    """Resolve a ``sqlite:///...`` URL to one with an absolute filesystem path.
+
+    On Windows, converts ``sqlite:///data/xplora.db`` (which would
+    resolve to drive root ``C:/data/xplora.db``) to a project-relative
+    URL like ``sqlite:///C:/Users/.../data/xplora.db`` so SQLAlchemy
+    can find the database file inside the project directory.
+
+    On Unix, returns the URL unchanged.
+    """
+    file_path = _resolve_sqlite_path(url)
+    # Normalise backslashes to forward slashes for URL format
+    normalised = file_path.replace("\\", "/")
+    return f"sqlite:///{normalised}"
+
+
 # ---- Database URL ----
 
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(PROJECT_ROOT / ".env")
 
 MASTER_DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
@@ -78,7 +118,7 @@ USE_PER_USER_DBS = _is_sqlite(MASTER_DATABASE_URL)
 def _get_master_db_dir() -> str:
     """Get the directory containing the master DB file."""
     if _is_sqlite(MASTER_DATABASE_URL):
-        file_path = MASTER_DATABASE_URL.removeprefix("sqlite://")
+        file_path = _resolve_sqlite_path(MASTER_DATABASE_URL)
         return os.path.dirname(os.path.abspath(file_path))
     return os.getenv("DATA_DIR", "data")
 
@@ -91,7 +131,9 @@ def get_user_database_path(user_id: int) -> str:
 
 def get_user_database_url(user_id: int) -> str:
     """Compute the SQLite URL for a user's database."""
-    return f"sqlite:///{get_user_database_path(user_id)}"
+    path = get_user_database_path(user_id)
+    normalised = path.replace("\\", "/")
+    return f"sqlite:///{normalised}"
 
 
 # ---- Engine Factory ----
@@ -99,7 +141,7 @@ def get_user_database_url(user_id: int) -> str:
 
 def _ensure_sqlite_dir(url: str):
     """Create the parent directory for a SQLite database file if it doesn't exist."""
-    file_path = url.removeprefix("sqlite://")
+    file_path = _resolve_sqlite_path(url)
     if file_path:
         db_dir = os.path.dirname(file_path)
         if db_dir:
@@ -108,9 +150,10 @@ def _ensure_sqlite_dir(url: str):
 
 def _create_sqlite_engine(url: str):
     """Create a SQLite engine with WAL mode and foreign keys enabled."""
+    resolved_url = _resolve_sqlite_url(url)
     _ensure_sqlite_dir(url)
     engine = build_engine(
-        url,
+        resolved_url,
         echo=False,
         connect_args={"check_same_thread": False, "timeout": 5},
     )

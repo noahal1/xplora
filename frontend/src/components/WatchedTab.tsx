@@ -12,11 +12,12 @@ import { ProgressiveImage } from "./ProgressiveImage";
 import { DetailModal } from "./ManageTab/DetailModal";
 import { Upload, List, LayoutGrid, Loader2, Film, ChevronRight } from "lucide-react";
 import { Badge } from "./ui/badge";
-import { translateGenres, translateGenreName } from "../utils/genre";
+import { translateGenres } from "../utils/genre";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { usePagination } from "../hooks/usePagination";
 import { useSort } from "../hooks/useSort";
+import { GenreFilter } from "./GenreFilter";
 
 const SLIDER_BASE_CLASS = "h-1 sm:h-1 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none max-sm:[&::-webkit-slider-thumb]:w-6 max-sm:[&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out active:[&::-webkit-slider-thumb]:scale-125 max-sm:h-2";
 const SLIDER_RANGE_CLASS = `${SLIDER_BASE_CLASS} w-14 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3`;
@@ -36,7 +37,6 @@ export function WatchedTab() {
   const [ratingFilter, setRatingFilter] = useState("all");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
   const [genreFilter, setGenreFilter] = useState("all");
-  const [showAllGenres, setShowAllGenres] = useState(false);
 
   const search = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
@@ -559,58 +559,11 @@ export function WatchedTab() {
           </div>
 
           {/* Genre Filter */}
-          {media.length > 0 && uniqueGenres.length > 0 && (
-            <div className="mb-3 pb-0.5">
-              <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto pb-0.5" style={{ scrollbarWidth: "thin" }}>
-                <span className="text-[11px] text-muted-foreground mr-0.5 shrink-0">{t("manage.genre_filter")}</span>
-                <button className={`pill shrink-0 ${genreFilter === "all" ? "active" : ""}`}
-                  onClick={() => { setGenreFilter("all"); setCurrentPage(0); }}>{t("manage.media_type_all")}</button>
-                {/* First 6 pills — always visible */}
-                {uniqueGenres.slice(0, 6).map((g) => (
-                  <button key={g} className={`pill shrink-0 ${genreFilter === g ? "active" : ""}`}
-                    onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
-                ))}
-                {/* More/Collapse button — always on the right side */}
-                {uniqueGenres.length > 6 && (
-                  <button className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0 ml-auto"
-                    onClick={() => setShowAllGenres((v) => !v)}>
-                    {showAllGenres ? (
-                      <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
-                    ) : (
-                      <><span className="text-[10px]">▼</span> +{uniqueGenres.length - 6} {t("manage.genre_more")}</>
-                    )}
-                  </button>
-                )}
-              </div>
-              {/* Remaining pills — animated expand/collapse */}
-              {uniqueGenres.length > 6 && (
-                <div
-                  className="grid"
-                  style={{
-                    gridTemplateRows: showAllGenres ? '1fr' : '0fr',
-                    transition: 'grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-                  }}
-                >
-                  <div className="overflow-hidden min-h-0">                      <div
-                      className="flex flex-wrap gap-1.5 pt-1.5"
-                      style={{
-                        opacity: showAllGenres ? 1 : 0,
-                        transform: showAllGenres ? 'translateY(0)' : 'translateY(-6px)',
-                        transition: showAllGenres
-                          ? 'opacity 0.25s ease 0.05s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s'
-                          : 'opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                      }}
-                    >
-                      {uniqueGenres.slice(6).map((g) => (
-                        <button key={g} className={`pill ${genreFilter === g ? "active" : ""}`}
-                          onClick={() => { setGenreFilter(g); setCurrentPage(0); }}>{translateGenreName(g)}</button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <GenreFilter
+            genres={uniqueGenres}
+            selected={genreFilter}
+            onSelect={(g) => { setGenreFilter(g); setCurrentPage(0); }}
+          />
 
           {/* Loading state */}
           {loading ? (
