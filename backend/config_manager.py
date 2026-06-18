@@ -8,7 +8,14 @@ Priority: config.json > environment variable.
 import os
 import json
 
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+# Config file path for API keys configured via the frontend UI.
+# In Docker, override via XPLORA_CONFIG_FILE=/app/data/config.json
+# to persist keys across container updates (/app/data is a volume).
+# Locally, defaults to backend/config.json (same dir as this file).
+CONFIG_FILE = os.getenv(
+    "XPLORA_CONFIG_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
+)
 
 # All configurable API keys: short name -> env var name
 API_KEY_NAMES: dict[str, str] = {

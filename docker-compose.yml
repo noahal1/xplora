@@ -15,6 +15,9 @@ services:
     environment:
       # SQLite database file path (inside the container)
       - DATABASE_URL=sqlite:////app/data/xplora.db
+      # API key config file — stored in persisted volume so UI
+      # configured keys survive container updates
+      - XPLORA_CONFIG_FILE=/app/data/config.json
       # --- API Keys (optional, uncomment and fill in as needed) ---
       # - DEEPSEEK_API_KEY=sk-your-deepseek-key
       # - OPENAI_API_KEY=sk-your-openai-key

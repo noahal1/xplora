@@ -791,11 +791,11 @@ export function WatchedTab() {
         onClose={() => setSearchModalOpen(false)}
         title={t("watched.search_title")}
       >
-        <div className="space-y-3">            <SearchSourceSelector
-              selected={searchSource}
-              onSelect={changeSearchSource}
-            />
-          </div>
+        <div className="space-y-3">
+          <SearchSourceSelector
+            selected={searchSource}
+            onSelect={changeSearchSource}
+          />
 
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
