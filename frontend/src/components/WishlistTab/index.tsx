@@ -47,7 +47,7 @@ interface WishlistEntry {
   series_poster_url?: string | null;
 }
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 16;
 
 export function WishlistTab() {
   const { t } = useTranslation();

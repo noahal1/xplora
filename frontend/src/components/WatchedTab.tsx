@@ -29,7 +29,7 @@ const SLIDER_BASE_CLASS = "h-1 sm:h-1 appearance-none rounded-full bg-border acc
 const SLIDER_RANGE_CLASS = `${SLIDER_BASE_CLASS} w-14 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3`;
 const SLIDER_RANGE_CLASS_LIST = `${SLIDER_BASE_CLASS} w-20 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5`;
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 16;
 
 export function WatchedTab() {
   const { t } = useTranslation();

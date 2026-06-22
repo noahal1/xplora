@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Film, BookmarkPlus, Sparkles, Library, History } from "lucide-react";
+import { Film, BookmarkPlus, Sparkles, Library } from "lucide-react";
 import { useMemo } from "react";
 
 export function TabNav() {
@@ -12,7 +12,6 @@ export function TabNav() {
     { id: "wishlist", label: t("tabs.wishlist"), icon: BookmarkPlus },
     { id: "recommend", label: t("tabs.recommend"), icon: Sparkles },
     { id: "manage", label: t("tabs.manage"), icon: Library },
-    { id: "history", label: t("tabs.history"), icon: History },
   ], [t]);
 
   // Compute active index for sliding indicator

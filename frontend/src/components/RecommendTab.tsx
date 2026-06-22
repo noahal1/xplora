@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaItem, Recommendation, ChatMessage, ExternalDetail } from "../types";
+import type { MediaItem, Recommendation, ChatMessage, ExternalDetail, DBSession, DBSessionDetail } from "../types";
 import * as api from "../api";
 import { exportJSON, exportScreenshot } from "../utils/export";
 import { useToast } from "../context/ToastContext";
@@ -9,9 +9,11 @@ import { Modal } from "./Modal";
 import {
   Sparkles, Send, Percent, MessageSquare, Film,
   Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star, Plus, Loader2, User,
+  History, Trash2, ChevronRight, Clock, ChevronDown,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenres } from "../utils/genre";
+import { formatDateTime } from "../utils/date";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { GenreFilter } from "./GenreFilter";
 import { MediaTypeFilter } from "./MediaTypeFilter";
@@ -62,6 +64,17 @@ export function RecommendTab() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
 
+  /* ── History / past sessions ───────────────────────────── */
+  const [sessions, setSessions] = useState<DBSession[]>([]);
+  const [sessionsTotal, setSessionsTotal] = useState(0);
+  const [sessionsPage, setSessionsPage] = useState(0);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<DBSessionDetail | null>(null);
+  const [selectedSessionLoading, setSelectedSessionLoading] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [sessionPosterMap, setSessionPosterMap] = useState<Record<number, string | null>>({});
+  const [addingFromSession, setAddingFromSession] = useState<Record<number, boolean>>({});
+
   // Load watched movies from DB on mount
   const loadMoviesFromDB = useCallback(async () => {
     setLoadingMovies(true);
@@ -84,7 +97,77 @@ export function RecommendTab() {
 
   useEffect(() => {
     loadMoviesFromDB();
+    loadSessions(0);
   }, [loadMoviesFromDB]);
+
+  /* ── History: load sessions ─────────────────────────────── */
+  const loadSessions = useCallback(async (p: number = 0) => {
+    setSessionsLoading(true);
+    try {
+      const data = await api.listSessions({ page: p, page_size: 10 });
+      setSessions(data.sessions);
+      setSessionsTotal(data.total);
+      setSessionsPage(p);
+    } catch {} finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  const viewSession = useCallback(async (id: number) => {
+    setSelectedSessionLoading(true);
+    setSelectedSession(null);
+    setSessionPosterMap({});
+    try {
+      const data = await api.getSessionDetail(id);
+      setSelectedSession(data);
+      // Resolve posters in the background
+      const posterMap: Record<number, string | null> = {};
+      await Promise.allSettled(
+        data.recommendations.map(async (rec, idx) => {
+          try {
+            const searchData = await api.searchMedia(rec.title, "tmdb");
+            const matches = searchData.results ?? [];
+            const yearMatch = rec.year
+              ? matches.find((m) => m.year === rec.year && m.poster_url)
+              : undefined;
+            const fallback = matches.find((m) => m.poster_url);
+            const match = yearMatch ?? fallback ?? matches[0];
+            if (match?.poster_url) posterMap[idx] = match.poster_url;
+          } catch {}
+        })
+      );
+      setSessionPosterMap(posterMap);
+    } catch {} finally {
+      setSelectedSessionLoading(false);
+    }
+  }, []);
+
+  const confirmDeleteSession = useCallback(async () => {
+    if (deleteTargetId === null) return;
+    const id = deleteTargetId;
+    setDeleteTargetId(null);
+    try {
+      await api.deleteSession(id);
+      if (selectedSession?.id === id) setSelectedSession(null);
+      showToast(t("history.deleted"), "success");
+      loadSessions(sessionsPage);
+    } catch (err: any) {
+      showToast(t("history.delete_failed", { message: err.message }), "error");
+    }
+  }, [deleteTargetId, selectedSession, sessionsPage, loadSessions, showToast, t]);
+
+  const addRecToWishlist = useCallback(async (rec: Recommendation, idx: number) => {
+    if (addingFromSession[idx]) return;
+    setAddingFromSession((prev) => ({ ...prev, [idx]: true }));
+    try {
+      await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null });
+      showToast(t("wishlist.added_to_wishlist", { title: rec.title }), "success");
+    } catch (err: any) {
+      showToast(t("wishlist.add_failed", { message: err.message }), "error");
+    } finally {
+      setAddingFromSession((prev) => ({ ...prev, [idx]: false }));
+    }
+  }, [addingFromSession, showToast, t]);
 
   /* ── Build strategy params ──────────────────────────────── */
   const getStrategyParams = useCallback(() => {
@@ -883,6 +966,227 @@ export function RecommendTab() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* === Recommendation History Section === */}
+      {!selectedSession && (
+        <section className="section-card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}
+              >
+                <History size={15} style={{ color: "var(--seed-primary)" }} />
+              </div>
+              <h2 className="text-sm font-[590]" style={{ color: "var(--seed-fg)" }}>
+                {t("history.title")}
+              </h2>
+              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                {t("history.session_count", { count: sessionsTotal })}
+              </span>
+            </div>
+            {sessionsTotal > 10 && (
+              <div className="flex items-center gap-1">
+                <button className="page-btn" disabled={sessionsPage <= 0} onClick={() => loadSessions(sessionsPage - 1)}>‹</button>
+                <span className="text-xs px-1" style={{ color: "var(--fg-muted)" }}>{sessionsPage + 1}/{Math.ceil(sessionsTotal / 10)}</span>
+                <button className="page-btn" disabled={sessionsPage >= Math.ceil(sessionsTotal / 10) - 1} onClick={() => loadSessions(sessionsPage + 1)}>›</button>
+              </div>
+            )}
+          </div>
+
+          {sessionsLoading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+            </div>
+          )}
+
+          {!sessionsLoading && sessions.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <History size={20} className="opacity-30 mb-2" />
+              <p className="text-xs">{t("history.no_sessions_hint")}</p>
+            </div>
+          )}
+
+          {!sessionsLoading && sessions.length > 0 && (
+            <div className="space-y-2">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="card card-lift p-3 flex items-center justify-between cursor-pointer"
+                  onClick={() => viewSession(s.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-12 rounded shrink-0 flex items-center justify-center"
+                      style={{
+                        background: s.model === "deepseek" ? "var(--accent-glow)" : "rgba(16, 185, 129, 0.1)",
+                        border: `1px solid ${s.model === "deepseek" ? "var(--primary-20)" : "rgba(16, 185, 129, 0.2)"}`,
+                      }}
+                    >
+                      {s.model === "deepseek" ? (
+                        <Brain size={14} style={{ color: "var(--seed-primary)" }} />
+                      ) : (
+                        <Bot size={14} style={{ color: "#10b981" }} />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-[510]">
+                          {s.model === "deepseek" ? "DeepSeek" : "OpenAI"}
+                        </span>
+                        <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
+                        <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                          <Clock size={10} className="inline mr-0.5" />
+                          {formatDateTime(s.created_at)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                          <span className="font-medium" style={{ color: "var(--seed-primary)" }}>{s.recommendation_count}</span>
+                          {' '}{t("history.recommendations", { count: s.recommendation_count })}
+                        </span>
+                        <span className="text-xs" style={{ color: "var(--fg-dim)" }}>
+                          {t("history.source_movies", { count: s.source_count })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      className="text-muted-foreground hover:text-destructive p-1.5 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTargetId(s.id); }}
+                      title={t("common.delete")}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                    <ChevronRight size={14} style={{ color: "var(--fg-dim)" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* === Session Detail View === */}
+      {selectedSession && (
+        <section className="section-card">
+          {/* Back + session info */}
+          <div className="flex items-start sm:items-center gap-2 pb-4 mb-4 flex-wrap" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+            <button
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all hover:bg-accent"
+              style={{ color: "var(--fg-muted)" }}
+              onClick={() => { setSelectedSession(null); setSessionPosterMap({}); setAddingFromSession({}); }}
+            >
+              <ChevronRight size={14} className="rotate-180" />
+              {t("common.back")}
+            </button>
+            <div className="flex items-center gap-2 ml-2 flex-wrap">
+              <span className="text-sm font-medium">
+                {selectedSession.model === "deepseek" ? <><Brain size={14} className="inline mr-1" />DeepSeek</> : <><Bot size={14} className="inline mr-1" />OpenAI</>}
+              </span>
+              <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
+              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                <Clock size={10} className="inline mr-0.5" />
+                {formatDateTime(selectedSession.created_at)}
+              </span>
+              <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
+              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                {t("history.source_movies", { count: selectedSession.source_count })}
+              </span>
+            </div>
+          </div>
+
+          {selectedSessionLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {selectedSession.recommendations.map((rec, i) => (
+                <div
+                  key={i}
+                  className="card card-lift p-3.5 flex items-center justify-between cursor-pointer animate-slide-up"
+                  style={{ animationDelay: `${i * 0.06}s`, animationFillMode: "both" }}
+                  onClick={() => setDetailRec(rec)}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center border border-border">
+                      {sessionPosterMap[i] ? (
+                        <img src={sessionPosterMap[i]!} alt={rec.title} className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      ) : (
+                        <Film size={14} className="opacity-40" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-[510] truncate" style={{ color: "var(--seed-fg)" }}>{rec.title}</span>
+                        {rec.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{rec.year}</span>}
+                        {rec.genre && <span className="badge text-[10px]">{translateGenres(rec.genre)}</span>}
+                        <span
+                          className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                          style={{
+                            color: rec.confidence >= 0.7 ? "var(--seed-primary)" : "var(--fg-muted)",
+                            background: rec.confidence >= 0.7 ? "var(--accent-glow)" : "var(--bg-input)",
+                            border: `1px solid ${rec.confidence >= 0.7 ? "var(--primary-20)" : "var(--border-subtle)"}`,
+                          }}
+                        >
+                          <Percent size={8} />{Math.round(rec.confidence * 100)}
+                        </span>
+                      </div>
+                      <p className="text-xs mt-1 leading-relaxed line-clamp-2" style={{ color: "var(--fg-secondary)" }}>{rec.reason}</p>
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-xs shrink-0 ml-3 transition-all disabled:opacity-50"
+                    style={{
+                      background: "var(--accent-glow)",
+                      color: "var(--seed-primary)",
+                      border: "1px solid var(--primary-20)",
+                    }}
+                    disabled={addingFromSession[i]}
+                    onClick={(e) => { e.stopPropagation(); addRecToWishlist(rec, i); }}
+                    title={t("wishlist.add")}
+                  >
+                    {addingFromSession[i] ? (
+                      <div className="w-3 h-3 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+                    ) : (
+                      <Plus size={12} />
+                    )}
+                    <span className="text-[11px] font-medium">{t("wishlist.add")}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Delete Session Confirmation Modal */}
+      <Modal
+        open={deleteTargetId !== null}
+        onClose={() => setDeleteTargetId(null)}
+        title={t("common.delete")}
+        footer={
+          <div className="flex items-center gap-2 w-full justify-end">
+            <button className="btn btn-ghost btn-sm" onClick={() => setDeleteTargetId(null)}>
+              {t("common.cancel")}
+            </button>
+            <button
+              className="btn btn-sm"
+              style={{ background: "var(--destructive)", color: "#fff", borderColor: "transparent" }}
+              onClick={confirmDeleteSession}
+            >
+              {t("common.delete")}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+          {t("history.delete_session_confirm")}
+        </p>
       </Modal>
 
       {/* === Chat Area — aligns with design === */}

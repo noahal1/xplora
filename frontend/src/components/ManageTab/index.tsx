@@ -28,7 +28,7 @@ import { RematchModal } from "./RematchModal";
 import { MarkWatchedModal } from "./MarkWatchedModal";
 import { GenreEditModal } from "./GenreEditModal";
 
-const MANAGE_PAGE_SIZE = 15;
+const MANAGE_PAGE_SIZE = 16;
 
 /* ── Delete confirmation type ─────────────────────────────────── */
 type DeleteAction =
