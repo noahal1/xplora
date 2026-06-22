@@ -33,8 +33,8 @@ export function SortControls({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
-      <span className="text-[11px] text-muted-foreground mr-0.5">
+    <div className="flex items-center gap-1 mb-2 sm:mb-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar pb-0.5">
+      <span className="text-[11px] text-muted-foreground mr-0.5 max-sm:hidden">
         {label ?? t("manage.sort")}
       </span>
       {DEFAULT_SORT_OPTIONS.map((opt) => {

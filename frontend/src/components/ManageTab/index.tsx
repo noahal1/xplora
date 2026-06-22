@@ -15,7 +15,7 @@ import { SortControls } from "../SortControls";
 import { StatusFilter } from "../StatusFilter";
 import { SearchInput } from "../SearchInput";
 import { ScrapeSourceFilter } from "../ScrapeSourceFilter";
-import { Film, Upload, Plus, Search, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, AlertCircle, Star, X, Info, ChevronRight, Check } from "lucide-react";
+import { Film, Upload, Plus, Search, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, AlertCircle, Star, X, Info, ChevronRight, Check, ChevronDown } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../../hooks/useGenreExtractor";
 import { useSort } from "../../hooks/useSort";
@@ -56,6 +56,7 @@ export function ManageTab() {
   const [genreFilter, setGenreFilter] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
+  const [filtersExpanded, setFiltersExpanded] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 640);
   const [editingCell, setEditingCell] = useState<{ movieId: number; field: string } | null>(null);
   const [sliderValue, setSliderValue] = useState(7);
   const [genreDialogMovie, setGenreDialogMovie] = useState<MediaDetail | null>(null);
@@ -350,38 +351,72 @@ export function ManageTab() {
         </div>
       </div>
 
-      <StatusFilter
-        status={statusFilter}
-        error={errorFilter}
-        onStatusChange={(v) => { setStatusFilter(v); setErrorFilter(false); setPage(0); setSelected(new Set()); }}
-        onErrorToggle={() => { setErrorFilter((v) => !v); setStatusFilter(""); setPage(0); setSelected(new Set()); }}
-      />
+      {/* ── Filter toggle (mobile only) ──────────────────── */}
+      <div className="sm:hidden flex items-center gap-2 mb-2">
+        <button
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all w-full justify-between"
+          style={{
+            background: filtersExpanded ? "var(--accent-glow)" : "var(--bg-input)",
+            border: `1px solid ${filtersExpanded ? "var(--primary-20)" : "var(--border-subtle)"}`,
+          }}
+          onClick={() => setFiltersExpanded((v) => !v)}
+        >
+          <div className="flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="20" y2="12" /><line x1="12" y1="18" x2="20" y2="18" />
+            </svg>
+            <span>{filtersExpanded ? t("manage.filter_collapse") : t("manage.filter_expand")}</span>
+          </div>
+          <ChevronDown
+            size={14}
+            className="transition-transform duration-200"
+            style={{ transform: filtersExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          />
+        </button>
+      </div>
 
-      <MediaTypeFilter
-        selected={mediaTypeFilter}
-        allValue=""
-        onSelect={(v) => { setMediaTypeFilter(v); setPage(0); setSelected(new Set()); }}
-      />
+      {/* ── Filters: collapsible on mobile ────────────────── */}
+      {/* Always render on desktop (sm:block), toggle on mobile via hidden/block */}
+      <div className={`sm:block ${filtersExpanded ? 'max-sm:block max-sm:animate-slide-down' : 'max-sm:hidden'}`}>
+        <div className="flex flex-col gap-0 sm:gap-0">
+          {/* Row 1: Status + MediaType (inline on mobile) */}
+          <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+            <div className="max-sm:[&>*]:mb-0 shrink-0">
+              <StatusFilter
+                status={statusFilter}
+                error={errorFilter}
+                onStatusChange={(v) => { setStatusFilter(v); setErrorFilter(false); setPage(0); setSelected(new Set()); }}
+                onErrorToggle={() => { setErrorFilter((v) => !v); setStatusFilter(""); setPage(0); setSelected(new Set()); }}
+              />
+            </div>
+            <MediaTypeFilter
+              selected={mediaTypeFilter}
+              allValue=""
+              onSelect={(v) => { setMediaTypeFilter(v); setPage(0); setSelected(new Set()); }}
+            />
+          </div>
 
-      {/* Genre Filter */}
-      <GenreFilter
-        genres={uniqueGenres}
-        selected={genreFilter}
-        allValue=""
-        visibleCount={VISIBLE_GENRES}
-        onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
-      />
+          {/* Row 2: Sort + Genre + ScrapeSource */}
+          <SortControls
+            field={sortField}
+            dir={sortDir}
+            onSort={(f) => { handleSort(f); setPage(0); setSelected(new Set()); }}
+          />
 
-      <SortControls
-        field={sortField}
-        dir={sortDir}
-        onSort={(f) => { handleSort(f); setPage(0); setSelected(new Set()); }}
-      />
+          <GenreFilter
+            genres={uniqueGenres}
+            selected={genreFilter}
+            allValue=""
+            visibleCount={VISIBLE_GENRES}
+            onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
+          />
 
-      <ScrapeSourceFilter
-        selected={enrichSource}
-        onSelect={setEnrichSource}
-      />
+          <ScrapeSourceFilter
+            selected={enrichSource}
+            onSelect={setEnrichSource}
+          />
+        </div>
+      </div>
 
       {/* ── Loading ─────────────────────────────────────────────── */}
       {loading && <SkeletonTable rows={6} />}

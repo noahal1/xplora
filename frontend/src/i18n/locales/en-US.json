@@ -297,7 +297,9 @@
     "scrape_source": "Scrape source:",
     "genre_filter": "Genre:",
     "genre_more": "more",
-    "genre_collapse": "Collapse"
+    "genre_collapse": "Collapse",
+    "filter_expand": "Show Filters",
+    "filter_collapse": "Hide Filters"
   },
   "history": {
     "trigger": "History",

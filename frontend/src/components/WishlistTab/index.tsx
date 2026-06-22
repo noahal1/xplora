@@ -11,7 +11,7 @@ import { Pagination } from "../Pagination";
 import { GenreInput } from "../GenreInput";
 import { ProgressiveImage } from "../ProgressiveImage";
 import { DetailModal } from "../ManageTab/DetailModal";
-import { Film, ChevronRight, Loader2 } from "lucide-react";
+import { Film, ChevronRight, Loader2, ChevronDown } from "lucide-react";
 import { MediaTypeFilter } from "../MediaTypeFilter";
 import { SortControls } from "../SortControls";
 import { SearchInput } from "../SearchInput";
@@ -58,6 +58,7 @@ export function WishlistTab() {
   const [items, setItems] = useState<WishlistEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
+  const [filtersExpanded, setFiltersExpanded] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 640);
   const [loading, setLoading] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
@@ -338,15 +339,46 @@ export function WishlistTab() {
             className="mb-2"
             id="wishlist-filter"
           />
-          <SortControls
-            field={sortField}
-            dir={sortDir}
-            onSort={(f) => { handleSortToggle(f); setCurrentPage(0); }}
-          />
-          <MediaTypeFilter
-            selected={mediaTypeFilter}
-            onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
-          />
+          {/* ── Filter toggle (mobile only) ──────────────── */}
+          <div className="sm:hidden flex items-center gap-2 mb-2">
+            <button
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all w-full justify-between"
+              style={{
+                background: filtersExpanded ? "var(--accent-glow)" : "var(--bg-input)",
+                border: `1px solid ${filtersExpanded ? "var(--primary-20)" : "var(--border-subtle)"}`,
+              }}
+              onClick={() => setFiltersExpanded((v) => !v)}
+            >
+              <div className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="20" y2="12" /><line x1="12" y1="18" x2="20" y2="18" />
+                </svg>
+                <span>{filtersExpanded ? t("manage.filter_collapse") : t("manage.filter_expand")}</span>
+              </div>
+              <ChevronDown
+                size={14}
+                className="transition-transform duration-200"
+                style={{ transform: filtersExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              />
+            </button>
+          </div>
+
+          {/* ── Filters: collapsible on mobile ───────────── */}
+          <div className={`sm:block ${filtersExpanded ? 'max-sm:block max-sm:animate-slide-down' : 'max-sm:hidden'}`}>
+            <div className="flex flex-col gap-0 sm:gap-0">
+              <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+                <SortControls
+                  field={sortField}
+                  dir={sortDir}
+                  onSort={(f) => { handleSortToggle(f); setCurrentPage(0); }}
+                />
+                <MediaTypeFilter
+                  selected={mediaTypeFilter}
+                  onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
+                />
+              </div>
+            </div>
+          </div>
           {loading ? (
             <div className="flex items-center justify-center py-10"><div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" /></div>
           ) : (

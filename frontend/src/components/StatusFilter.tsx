@@ -27,8 +27,8 @@ export function StatusFilter({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center gap-1.5 mb-2 flex-wrap pb-0.5">
-      <span className="text-xs text-muted-foreground mr-1">
+    <div className="flex items-center gap-1 mb-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar pb-0.5">
+      <span className="text-xs text-muted-foreground mr-1 max-sm:hidden">
         {t("manage.filter")}
       </span>
       {STATUS_OPTIONS.map((opt) => (

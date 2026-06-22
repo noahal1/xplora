@@ -300,7 +300,9 @@
     "media_type_tv": "📺 剧集",
     "genre_filter": "类型筛选：",
     "genre_more": "更多",
-    "genre_collapse": "收起"
+    "genre_collapse": "收起",
+    "filter_expand": "展开筛选",
+    "filter_collapse": "收起筛选"
   },
   "history": {
     "trigger": "历史",

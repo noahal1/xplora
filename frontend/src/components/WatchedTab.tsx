@@ -10,7 +10,7 @@ import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
 import { ProgressiveImage } from "./ProgressiveImage";
 import { DetailModal } from "./ManageTab/DetailModal";
-import { Upload, List, LayoutGrid, Loader2, Film, ChevronRight } from "lucide-react";
+import { Upload, List, LayoutGrid, Loader2, Film, ChevronRight, ChevronDown } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenres } from "../utils/genre";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
@@ -52,6 +52,7 @@ export function WatchedTab() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
+  const [filtersExpanded, setFiltersExpanded] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 640);
   const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
   const [showSampleModal, setShowSampleModal] = useState(false);
   const [jsonText, setJsonText] = useState("");
@@ -482,45 +483,74 @@ export function WatchedTab() {
             </button>
           </div>
 
-          <SortControls
-            field={sortField}
-            dir={sortDir}
-            onSort={handleSortToggle}
-          />
-
-          {/* Rating Filters */}
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap pb-0.5">
-            {[
-              { value: "all", label: t("watched.filter_all") },
-              { value: "8-10", label: t("watched.filter_8_10") },
-              { value: "6-8", label: t("watched.filter_6_8") },
-              { value: "4-6", label: t("watched.filter_4_6") },
-              { value: "0-4", label: t("watched.filter_0_4") },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                className={`pill ${ratingFilter === opt.value ? "active" : ""}`}
-                onClick={() => {
-                  setRatingFilter(opt.value);
-                  setCurrentPage(0);
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
+          {/* ── Filter toggle (mobile only) ──────────────── */}
+          <div className="sm:hidden flex items-center gap-2 mb-2">
+            <button
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all w-full justify-between"
+              style={{
+                background: filtersExpanded ? "var(--accent-glow)" : "var(--bg-input)",
+                border: `1px solid ${filtersExpanded ? "var(--primary-20)" : "var(--border-subtle)"}`,
+              }}
+              onClick={() => setFiltersExpanded((v) => !v)}
+            >
+              <div className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="20" y2="12" /><line x1="12" y1="18" x2="20" y2="18" />
+                </svg>
+                <span>{filtersExpanded ? t("manage.filter_collapse") : t("manage.filter_expand")}</span>
+              </div>
+              <ChevronDown
+                size={14}
+                className="transition-transform duration-200"
+                style={{ transform: filtersExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+              />
+            </button>
           </div>
 
-          <MediaTypeFilter
-            selected={mediaTypeFilter}
-            onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
-          />
+          {/* ── Filters: collapsible on mobile ───────────── */}
+          <div className={`sm:block ${filtersExpanded ? 'max-sm:block max-sm:animate-slide-down' : 'max-sm:hidden'}`}>
+            <div className="flex flex-col gap-0 sm:gap-0">
+              {/* Row 1: Sort + Rating (inline on mobile) */}
+              <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+                <SortControls
+                  field={sortField}
+                  dir={sortDir}
+                  onSort={handleSortToggle}
+                />
+                <div className="flex items-center gap-1 mb-2 sm:mb-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar pb-0.5 shrink-0">
+                  {[
+                    { value: "all", label: t("watched.filter_all") },
+                    { value: "8-10", label: t("watched.filter_8_10") },
+                    { value: "6-8", label: t("watched.filter_6_8") },
+                    { value: "4-6", label: t("watched.filter_4_6") },
+                    { value: "0-4", label: t("watched.filter_0_4") },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      className={`pill ${ratingFilter === opt.value ? "active" : ""}`}
+                      onClick={() => {
+                        setRatingFilter(opt.value);
+                        setCurrentPage(0);
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          {/* Genre Filter */}
-          <GenreFilter
-            genres={uniqueGenres}
-            selected={genreFilter}
-            onSelect={(g) => { setGenreFilter(g); setCurrentPage(0); }}
-          />
+              <MediaTypeFilter
+                selected={mediaTypeFilter}
+                onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
+              />
+
+              <GenreFilter
+                genres={uniqueGenres}
+                selected={genreFilter}
+                onSelect={(g) => { setGenreFilter(g); setCurrentPage(0); }}
+              />
+            </div>
+          </div>
 
           {/* Loading state */}
           {loading ? (

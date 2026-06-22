@@ -892,10 +892,10 @@ input[type="number"].no-spinner {
     overscroll-behavior: contain;
   }
 
-  /* Larger touch targets for pill/filter buttons */
+  /* Pill/filter buttons — keep same size for better fit on mobile */
   .pill {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.7rem;
   }
 
   /* Larger touch targets for pagination buttons */

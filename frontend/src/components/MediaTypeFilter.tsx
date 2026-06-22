@@ -29,8 +29,8 @@ export function MediaTypeFilter({
   const { t } = useTranslation();
 
   return (
-    <div className={`flex items-center gap-1.5 mb-3 flex-wrap pb-0.5 ${className}`}>
-      <span className="text-xs text-muted-foreground mr-1">
+    <div className={`flex items-center gap-1 mb-2 sm:mb-3 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar pb-0.5 ${className}`}>
+      <span className="text-xs text-muted-foreground mr-1 max-sm:hidden">
         {t("manage.media_type")}
       </span>
       {MEDIA_TYPES.map((opt) => {
