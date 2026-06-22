@@ -1,5 +1,6 @@
 """Media item CRUD operations (user-scoped)."""
 
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Optional, Any
 
@@ -635,6 +636,324 @@ def delete_media(media_id: int, user_id: int, db: Optional[Session] = None) -> b
     except Exception:
         session.rollback()
         raise
+    finally:
+        if close_db:
+            session.close()
+
+
+# ── Top 10 customization ────────────────────────────────────────
+
+
+def get_top_rated(
+    user_id: int,
+    db: Optional[Session] = None,
+) -> list[dict]:
+    """Return top rated watched movies for the current user.
+
+    Sorted by sort_order first (if set), then by rating descending.
+    Pinned items float to top. Hidden items excluded.
+    Returns up to 30 items.
+    """
+    session, close_db = _resolve_db(db)
+    try:
+        records = session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.status == "watched",
+                MediaItemRecord.hidden_from_top == False,
+            )
+        ).all()
+
+        # Sort: order by sort_order (non-null first), then by rating desc
+        def sort_key(r: MediaItemRecord):
+            return (
+                0 if r.sort_order is not None else 1,  # items with sort_order first
+                r.sort_order or 0,                      # then by sort_order
+                -r.rating,                              # then by rating desc
+                -(r.created_at.timestamp() if r.created_at else 0),
+            )
+
+        sorted_records = sorted(records, key=sort_key)[:30]
+        return [_media_to_dict(r) for r in sorted_records]
+    finally:
+        if close_db:
+            session.close()
+
+
+def reorder_top_rated(
+    user_id: int,
+    ordered_ids: list[int],
+    db: Optional[Session] = None,
+) -> None:
+    """Update sort_order for items based on their position in ordered_ids.
+
+    Items not in the list get sort_order set to None.
+    """
+    session, close_db = _resolve_db(db)
+    try:
+        # Reset all existing sort_orders for this user
+        all_records = session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.sort_order.isnot(None),
+            )
+        ).all()
+        for r in all_records:
+            r.sort_order = None
+
+        # Set new sort_order based on position
+        for i, media_id in enumerate(ordered_ids):
+            record = session.exec(
+                select(MediaItemRecord).where(
+                    MediaItemRecord.id == media_id,
+                    MediaItemRecord.user_id == user_id,
+                )
+            ).first()
+            if record:
+                record.sort_order = i
+                record.pinned = True
+                record.hidden_from_top = False
+
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if close_db:
+            session.close()
+
+
+def toggle_pin(media_id: int, user_id: int, db: Optional[Session] = None) -> Optional[MediaItemRecord]:
+    """Toggle the pinned status of a media item."""
+    session, close_db = _resolve_db(db)
+    try:
+        record = session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
+            )
+        ).first()
+        if not record:
+            return None
+        record.pinned = not record.pinned
+        if record.pinned:
+            record.hidden_from_top = False
+            # Clear sort_order when pinning via toggle (user manually pinned)
+            record.sort_order = None
+        session.commit()
+        return record
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if close_db:
+            session.close()
+
+
+def toggle_hide(media_id: int, user_id: int, db: Optional[Session] = None) -> Optional[MediaItemRecord]:
+    """Toggle the hidden_from_top status of a media item."""
+    session, close_db = _resolve_db(db)
+    try:
+        record = session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
+            )
+        ).first()
+        if not record:
+            return None
+        record.hidden_from_top = not record.hidden_from_top
+        if record.hidden_from_top:
+            record.pinned = False
+            record.sort_order = None
+        session.commit()
+        return record
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if close_db:
+            session.close()
+
+
+def _media_to_dict(r: MediaItemRecord) -> dict:
+    """Serialize a MediaItemRecord to a dict for API responses."""
+    return {
+        "id": r.id,
+        "title": r.title,
+        "rating": r.rating,
+        "year": r.year,
+        "genre": r.genre,
+        "status": r.status,
+        "media_type": r.media_type or "movie",
+        "poster_url": r.poster_url,
+        "overview": r.overview,
+        "director": r.director,
+        "actors": r.actors,
+        "runtime": r.runtime,
+        "imdb_id": r.imdb_id,
+        "tmdb_id": r.tmdb_id,
+        "country": r.country,
+        "awards": r.awards,
+        "tagline": r.tagline,
+        "scrape_error": r.scrape_error,
+        "season_number": r.season_number,
+        "episode_count": r.episode_count,
+        "pinned": r.pinned,
+        "hidden_from_top": r.hidden_from_top,
+        "sort_order": r.sort_order,
+        "created_at": r.created_at.isoformat() if r.created_at else "",
+    }
+
+
+def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
+    """Return aggregated statistics for a user's media library.
+
+    Returns a dict with:
+    - total_watched / total_wishlist / total
+    - rating_distribution: list of {range, count}
+    - year_distribution: list of {year, count}
+    - genre_distribution: list of {genre, count}
+    - media_type_distribution: list of {type, count}
+    - monthly_trend: list of {month, count}
+    - avg_rating, top_rated, recent_additions
+    """
+    session, close_db = _resolve_db(db)
+    try:
+        # Fetch ALL media for this user
+        records = session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.user_id == user_id
+            ).order_by(MediaItemRecord.created_at.desc())
+        ).all()
+
+        total = len(records)
+        watched = [r for r in records if r.status == "watched"]
+        wishlist = [r for r in records if r.status == "wish"]
+
+        # ── Rating distribution (watched only) ────────────────
+        rating_buckets = [0] * 5  # 0-2, 2-4, 4-6, 6-8, 8-10
+        for r in watched:
+            bucket = min(int(r.rating // 2), 4)
+            rating_buckets[bucket] += 1
+        rating_distribution = [
+            {"range": f"{i*2}-{i*2+2}", "count": rating_buckets[i]}
+            for i in range(5)
+        ]
+
+        # ── Year distribution ─────────────────────────────────
+        year_counter: Counter = Counter()
+        for r in records:
+            if r.year:
+                year_counter[r.year] += 1
+        year_distribution = [
+            {"year": y, "count": c}
+            for y, c in sorted(year_counter.items(), reverse=True)
+        ]
+
+        # ── Decade distribution ───────────────────────────────
+        decade_counter: Counter = Counter()
+        for r in records:
+            if r.year:
+                decade = (r.year // 10) * 10
+                decade_counter[decade] += 1
+        decade_distribution = [
+            {"decade": f"{d}s", "count": c}
+            for d, c in sorted(decade_counter.items(), reverse=True)
+        ]
+
+        # ── Genre distribution (split by " / ") ───────────────
+        genre_counter: Counter = Counter()
+        for r in records:
+            if r.genre:
+                for g in r.genre.split(" / "):
+                    g = g.strip()
+                    if g:
+                        genre_counter[g] += 1
+        genre_distribution = [
+            {"genre": g, "count": c}
+            for g, c in genre_counter.most_common()
+        ]
+
+        # ── Media type distribution ───────────────────────────
+        type_counter: Counter = Counter()
+        for r in records:
+            type_counter[r.media_type or "movie"] += 1
+        media_type_distribution = [
+            {"type": t, "count": c}
+            for t, c in type_counter.most_common()
+        ]
+
+        # ── Monthly trend (by created_at) ─────────────────────
+        month_counter: Counter = Counter()
+        for r in records:
+            key = r.created_at.strftime("%Y-%m")
+            month_counter[key] += 1
+        monthly_trend = [
+            {"month": m, "count": c}
+            for m, c in sorted(month_counter.items())
+        ]
+
+        # ── Top rated (watched, rating >= 8) ──────────────────
+        top_rated = sorted(
+            [r for r in watched if r.rating >= 8],
+            key=lambda x: x.rating,
+            reverse=True,
+        )[:10]
+
+        # ── Avg rating ────────────────────────────────────────
+        avg_rating = (
+            round(sum(r.rating for r in watched) / len(watched), 1)
+            if watched else 0
+        )
+
+        # ── Recent additions ──────────────────────────────────
+        recent = records[:10]
+
+        return {
+            "total": total,
+            "total_watched": len(watched),
+            "total_wishlist": len(wishlist),
+            "avg_rating": avg_rating,
+            "rating_distribution": rating_distribution,
+            "year_distribution": year_distribution,
+            "decade_distribution": decade_distribution,
+            "genre_distribution": genre_distribution,
+            "media_type_distribution": media_type_distribution,
+            "monthly_trend": monthly_trend,
+            "top_rated": [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "rating": r.rating,
+                    "year": r.year,
+                    "genre": r.genre,
+                    "status": r.status,
+                    "media_type": r.media_type or "movie",
+                    "poster_url": r.poster_url,
+                    "overview": r.overview,
+                    "director": r.director,
+                    "actors": r.actors,
+                    "runtime": r.runtime,
+                    "imdb_id": r.imdb_id,
+                    "tmdb_id": r.tmdb_id,
+                    "country": r.country,
+                    "awards": r.awards,
+                    "tagline": r.tagline,
+                    "scrape_error": r.scrape_error,
+                    "season_number": r.season_number,
+                    "episode_count": r.episode_count,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in top_rated
+            ],
+            "recent_additions": [
+                {
+                    "title": r.title,
+                    "status": r.status,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in recent
+            ],
+        }
     finally:
         if close_db:
             session.close()

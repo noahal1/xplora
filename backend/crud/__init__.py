@@ -29,6 +29,11 @@ from crud.media import (
     get_external_poster_media_ids,
     get_enrich_progress,
     delete_media,
+    get_media_stats,
+    get_top_rated,
+    toggle_pin,
+    toggle_hide,
+    reorder_top_rated,
 )
 
 from crud.sessions import (
@@ -70,6 +75,11 @@ __all__ = [
     "get_external_poster_media_ids",
     "get_enrich_progress",
     "delete_media",
+    "get_media_stats",
+    "get_top_rated",
+    "toggle_pin",
+    "toggle_hide",
+    "reorder_top_rated",
     # Sessions
     "save_session",
     "get_sessions",

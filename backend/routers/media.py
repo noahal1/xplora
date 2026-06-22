@@ -33,13 +33,90 @@ from crud import (
     enrich_media_metadata as db_enrich_media_metadata,
     clear_scrape_error as db_clear_scrape_error,
     set_scrape_error as db_set_scrape_error,
+    get_media_stats,
+    get_top_rated,
+    toggle_pin,
+    toggle_hide,
+    reorder_top_rated,
     log_operation,
 )
 from movie_search import search_movies as search_external_movies, get_movie_detail as get_external_movie_detail
 from scraper import async_background_enrich_movies, async_background_cache_posters
 from poster_cache import download_and_cache_poster
 
+
 router = APIRouter(prefix="/api", tags=["media"])
+
+
+# ── Stats ───────────────────────────────────────────────────────────
+
+
+@router.get("/media/stats")
+async def media_stats(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Return aggregated statistics for the current user's media library."""
+    return get_media_stats(current_user["id"], db=db)
+
+
+# ── Top Rated ────────────────────────────────────────────────────────
+
+
+@router.get("/top-rated")
+async def top_rated_list(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Return top rated watched movies with pin/hide status."""
+    return get_top_rated(current_user["id"], db=db)
+
+
+@router.post("/top-rated/{media_id}/toggle-pin")
+async def top_rated_toggle_pin(
+    media_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Toggle the pinned status of a media item in the top rated list."""
+    record = toggle_pin(media_id, current_user["id"], db=db)
+    if not record:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    log_operation(current_user["id"], current_user["username"], "toggle_pin", f"置顶切换: {record.title}", db=db)
+    return {"id": record.id, "pinned": record.pinned}
+
+
+@router.post("/top-rated/{media_id}/toggle-hide")
+async def top_rated_toggle_hide(
+    media_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Toggle the hidden status of a media item in the top rated list."""
+    record = toggle_hide(media_id, current_user["id"], db=db)
+    if not record:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    log_operation(current_user["id"], current_user["username"], "toggle_hide", f"隐藏切换: {record.title}", db=db)
+    return {"id": record.id, "hidden_from_top": record.hidden_from_top}
+
+
+@router.post("/top-rated/reorder")
+async def top_rated_reorder(
+    request: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Reorder the top rated list.
+
+    Accepts ``{"ordered_ids": [3, 1, 5, ...]}`` where the array
+    specifies the new order of media item IDs.
+    """
+    ordered_ids = request.get("ordered_ids", [])
+    if not isinstance(ordered_ids, list) or len(ordered_ids) == 0:
+        raise HTTPException(status_code=400, detail="请提供有序的 ID 列表")
+    reorder_top_rated(current_user["id"], ordered_ids, db=db)
+    log_operation(current_user["id"], current_user["username"], "reorder_top_rated", f"排行榜重排: {len(ordered_ids)} 项", db=db)
+    return {"status": "ok", "count": len(ordered_ids)}
 
 
 # ── Media CRUD ──────────────────────────────────────────────────────

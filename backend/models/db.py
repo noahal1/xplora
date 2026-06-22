@@ -62,6 +62,11 @@ class MediaItemRecord(SQLModel, table=True):
     episode_count: Optional[int] = Field(default=None, nullable=True)
     series_poster_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
 
+    # === Top 10 customization ===
+    pinned: bool = Field(default=False, nullable=False)
+    hidden_from_top: bool = Field(default=False, nullable=False)
+    sort_order: Optional[int] = Field(default=None, nullable=True)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)

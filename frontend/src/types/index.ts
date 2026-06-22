@@ -65,6 +65,9 @@ export interface MediaDetail {
   awards: string | null;
   tagline: string | null;
   scrape_error: string | null;
+  pinned?: boolean;
+  hidden_from_top?: boolean;
+  sort_order?: number | null;
   tv_series_id: string | null;
   season_number: number | null;
   episode_count: number | null;
@@ -129,6 +132,43 @@ export interface ExternalDetail {
   country?: string;
   box_office?: string;
   ratings?: Record<string, string>;
+}
+
+export interface StatsData {
+  total: number;
+  total_watched: number;
+  total_wishlist: number;
+  avg_rating: number;
+  rating_distribution: Array<{ range: string; count: number }>;
+  year_distribution: Array<{ year: number; count: number }>;
+  decade_distribution: Array<{ decade: string; count: number }>;
+  genre_distribution: Array<{ genre: string; count: number }>;
+  media_type_distribution: Array<{ type: string; count: number }>;
+  monthly_trend: Array<{ month: string; count: number }>;
+  top_rated: Array<{
+    id: number;
+    title: string;
+    rating: number;
+    year: number | null;
+    genre: string | null;
+    status: string;
+    media_type: string;
+    poster_url: string | null;
+    overview: string | null;
+    director: string | null;
+    actors: string | null;
+    runtime: number | null;
+    imdb_id: string | null;
+    tmdb_id: string | null;
+    country: string | null;
+    awards: string | null;
+    tagline: string | null;
+    scrape_error: string | null;
+    season_number: number | null;
+    episode_count: number | null;
+    created_at: string;
+  }>;
+  recent_additions: Array<{ title: string; status: string; created_at: string }>;
 }
 
 export type SortField = "title" | "rating" | "year" | "genre" | "created_at";

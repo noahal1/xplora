@@ -1,6 +1,6 @@
 /** Media database API client with auth support */
 
-import type { MediaImport, WishlistItem, MediaDetail, DBSession, DBSessionDetail, Recommendation, MediaSearchResult, ExternalDetail } from "../types";
+import type { MediaImport, WishlistItem, MediaDetail, DBSession, DBSessionDetail, Recommendation, MediaSearchResult, ExternalDetail, StatsData } from "../types";
 
 const API_BASE = "/api";
 
@@ -13,6 +13,16 @@ function getAuthHeaders(): Record<string, string> {
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
+
+  // If the response is HTML instead of JSON, the server is likely
+  // returning a fallback page (e.g. SPA index.html or nginx 404).
+  // This happens when the backend is not running or the route
+  // doesn't exist.
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("text/html")) {
+    throw new Error("服务器返回了 HTML 页面，请检查后端服务是否已启动并包含最新路由");
+  }
+
   if (!res.ok) {
     if (res.status === 401) {
       localStorage.removeItem("xplora-token");
@@ -363,6 +373,41 @@ export async function getHealth(): Promise<{
   api_keys: Record<string, boolean>;
 }> {
   return fetchJSON(`${API_BASE}/health`);
+}
+
+/** Fetch aggregated statistics for the current user's media library */
+export async function fetchStats(): Promise<StatsData> {
+  return fetchJSON(`${API_BASE}/media/stats`, { headers: getAuthHeaders() });
+}
+
+/** Fetch top rated movies with pin/hide status */
+export async function fetchTopRated(): Promise<MediaDetail[]> {
+  return fetchJSON(`${API_BASE}/top-rated`, { headers: getAuthHeaders() });
+}
+
+/** Toggle pin status for a movie in the top rated list */
+export async function togglePin(mediaId: number): Promise<{ id: number; pinned: boolean }> {
+  return fetchJSON(`${API_BASE}/top-rated/${mediaId}/toggle-pin`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Toggle hide status for a movie in the top rated list */
+export async function toggleHide(mediaId: number): Promise<{ id: number; hidden_from_top: boolean }> {
+  return fetchJSON(`${API_BASE}/top-rated/${mediaId}/toggle-hide`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Reorder the top rated list */
+export async function reorderTopRated(orderedIds: number[]): Promise<{ status: string }> {
+  return fetchJSON(`${API_BASE}/top-rated/reorder`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ordered_ids: orderedIds }),
+  });
 }
 
 /** Change current user's password */

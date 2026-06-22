@@ -20,6 +20,7 @@ export const GENRE_EN_TO_ZH: Record<string, string> = {
   Mystery: "悬疑",
   Romance: "爱情",
   "Sci-Fi": "科幻",
+  "Science Fiction": "科幻",
   "TV Movie": "电视电影",
   Thriller: "惊悚",
   War: "战争",

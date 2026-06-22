@@ -22,6 +22,8 @@ const WatchedTab = lazy(() => import("./components/WatchedTab").then((m) => ({ d
 const WishlistTab = lazy(() => import("./components/WishlistTab").then((m) => ({ default: m.WishlistTab })));
 const RecommendTab = lazy(() => import("./components/RecommendTab").then((m) => ({ default: m.RecommendTab })));
 const ManageTab = lazy(() => import("./components/ManageTab").then((m) => ({ default: m.ManageTab })));
+const StatsTab = lazy(() => import("./components/StatsTab").then((m) => ({ default: m.StatsTab })));
+const TopRatedTab = lazy(() => import("./components/TopRatedTab").then((m) => ({ default: m.TopRatedTab })));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -41,7 +43,7 @@ function MainApp() {
   const prevPathRef = useRef(location.pathname);
 
   // Tab order for directional animation
-  const tabOrder = ["/watched", "/wishlist", "/recommend", "/manage"];
+  const tabOrder = ["/watched", "/wishlist", "/recommend", "/stats", "/manage"];
 
   // Determine navigation direction
   const prevPath = prevPathRef.current;
@@ -94,6 +96,8 @@ function MainApp() {
                   <Route path="/watched" element={<WatchedTab />} />
                   <Route path="/wishlist" element={<WishlistTab />} />
                   <Route path="/recommend" element={<RecommendTab />} />
+                  <Route path="/top-rated" element={<TopRatedTab />} />
+                  <Route path="/stats" element={<StatsTab />} />
                   <Route path="/manage" element={<ManageTab />} />
                 </Routes>
               </Suspense>

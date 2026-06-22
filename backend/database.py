@@ -235,6 +235,10 @@ def init_user_database(user_id: int, username: str) -> None:
     engine = get_user_engine(user_id)
     SQLModel.metadata.create_all(engine)
 
+    # Run column migrations for this user's database (handles schema updates
+    # for existing databases, e.g. when new columns are added in a new version)
+    _run_per_user_column_migrations(user_id)
+
     db = Session(engine)
     try:
         existing = db.exec(
@@ -435,6 +439,8 @@ def init_db():
             for user in users:
                 init_user_database(user.id, user.username)
                 _migrate_user_data_to_per_user_db(user, db)
+                # Run column migrations on each user's database for new fields
+                _run_per_user_column_migrations(user.id)
             if users:
                 print(f"  [Migration] Per-user databases initialized for {len(users)} user(s)")
 
@@ -524,7 +530,28 @@ def _run_column_migrations():
         ("season_number", "INTEGER"),
         ("episode_count", "INTEGER"),
         ("series_poster_url", "VARCHAR(500)"),
+        ("pinned", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("hidden_from_top", "BOOLEAN NOT NULL DEFAULT 0"),
     ])
+
+
+def _run_per_user_column_migrations(user_id: int):
+    """Run column-level schema migrations for a per-user database."""
+    from sqlalchemy import inspect
+
+    engine = get_user_engine(user_id)
+    inspector = inspect(engine)
+
+    try:
+        columns = [c["name"] for c in inspector.get_columns("media_items")]
+    except Exception:
+        return
+
+    _add_columns_if_missing("media_items", columns, [
+        ("pinned", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("hidden_from_top", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("sort_order", "INTEGER"),
+    ], engine=engine)
 
     if "session_id" in columns:
         _drop_column_if_exists("media_items", "session_id")
@@ -541,16 +568,18 @@ def _run_column_migrations():
     ])
 
 
-def _add_columns_if_missing(table: str, existing_columns: list[str], columns: list[tuple[str, str]]):
+def _add_columns_if_missing(table: str, existing_columns: list[str], columns: list[tuple[str, str]], engine=None):
     """Add each column if it doesn't already exist."""
     from sqlalchemy import text
 
-    with master_engine.connect() as conn:
+    target = engine or master_engine
+    db_label = "per-user DB" if engine else "master DB"
+    with target.connect() as conn:
         for col_name, col_def in columns:
             if col_name not in existing_columns:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}"))
                 conn.commit()
-                print(f"  [Migration] Added '{col_name}' column to {table} table")
+                print(f"  [Migration] Added '{col_name}' column to {table} table ({db_label})")
 
 
 def _drop_column_if_exists(table: str, column: str):
