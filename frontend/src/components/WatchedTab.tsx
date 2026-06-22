@@ -29,7 +29,7 @@ const SLIDER_BASE_CLASS = "h-1 sm:h-1 appearance-none rounded-full bg-border acc
 const SLIDER_RANGE_CLASS = `${SLIDER_BASE_CLASS} w-14 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3`;
 const SLIDER_RANGE_CLASS_LIST = `${SLIDER_BASE_CLASS} w-20 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5`;
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 15;
 
 export function WatchedTab() {
   const { t } = useTranslation();
@@ -46,7 +46,7 @@ export function WatchedTab() {
 
   const search = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
-  const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, 30);
+  const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, PAGE_SIZE);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -96,7 +96,7 @@ export function WatchedTab() {
     try {
       const data = await api.listMedia({
         page,
-        page_size: 30,
+        page_size: PAGE_SIZE,
         status: "watched",
         search: q || undefined,
         sort_field: sortF,

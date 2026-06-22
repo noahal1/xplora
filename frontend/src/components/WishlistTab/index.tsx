@@ -47,7 +47,7 @@ interface WishlistEntry {
   series_poster_url?: string | null;
 }
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 15;
 
 export function WishlistTab() {
   const { t } = useTranslation();
@@ -64,7 +64,7 @@ export function WishlistTab() {
 
   const filter = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
-  const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, 30);
+  const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, PAGE_SIZE);
 
   // === External search (TMDB / OMDb) ===
   const [externalQuery, setExternalQuery] = useState("");
