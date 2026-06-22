@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Orb from "../components/Orb";
 import { Logo } from "../components/Logo";
+import SplitText from "../components/SplitText";
 
 // True on touch-capable devices — enables persistent Orb animation
 // since pointer-hover events aren't available on mobile
@@ -72,9 +73,19 @@ export function LoginPage() {
           >
             <Logo className="h-16 w-auto" />
           </div>
-          <p className="text-sm text-muted-foreground mt-2" style={{ animation: 'login-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both' }}>
-            {t("login.subtitle")}
-          </p>
+          <SplitText
+            text={t("login.subtitle")}
+            tag="p"
+            className="text-sm text-muted-foreground mt-2"
+            splitType="words"
+            delay={60}
+            duration={0.6}
+            threshold={0}
+            rootMargin="0px"
+            textAlign="center"
+            from={{ opacity: 0, y: 15 }}
+            to={{ opacity: 1, y: 0 }}
+          />
         </div>
 
         {/* Form — staggered entrance */}

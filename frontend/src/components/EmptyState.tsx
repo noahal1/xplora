@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
+import SplitText from "./SplitText";
 
 interface EmptyStateProps {
   /** Icon shown above the message. Optional — omitted for inline states. */
@@ -52,13 +53,33 @@ export function EmptyState({
       )}
       {hasActiveFilters ? (
         <>
-          <p className="text-sm font-medium animate-slide-up" style={{ animationDelay: '50ms' }}>
-            {searchQuery ? t(noMatchKey, { query: searchQuery }) : t(noMatchKey)}
-          </p>
+          <SplitText
+            text={searchQuery ? t(noMatchKey, { query: searchQuery }) : t(noMatchKey)}
+            tag="p"
+            className="text-sm font-medium"
+            splitType="words"
+            delay={40}
+            duration={0.5}
+            threshold={0}
+            rootMargin="0px"
+            textAlign="center"
+            from={{ opacity: 0, y: 10 }}
+            to={{ opacity: 1, y: 0 }}
+          />
           {searchQuery && noMatchSubtextKey && (
-            <p className="text-xs mt-1 text-muted-foreground animate-fade-in" style={{ animationDelay: '100ms' }}>
-              {t(noMatchSubtextKey)}
-            </p>
+            <SplitText
+              text={t(noMatchSubtextKey)}
+              tag="p"
+              className="text-xs mt-1 text-muted-foreground"
+              splitType="words"
+              delay={30}
+              duration={0.4}
+              threshold={0}
+              rootMargin="0px"
+              textAlign="center"
+              from={{ opacity: 0, y: 8 }}
+              to={{ opacity: 1, y: 0 }}
+            />
           )}
           {onClearFilters && (
             <button
@@ -73,13 +94,33 @@ export function EmptyState({
         </>
       ) : (
         <>
-          <p className="text-sm font-medium animate-slide-up" style={{ animationDelay: '50ms' }}>
-            {t(noDataKey)}
-          </p>
+          <SplitText
+            text={t(noDataKey)}
+            tag="p"
+            className="text-sm font-medium"
+            splitType="words"
+            delay={40}
+            duration={0.5}
+            threshold={0}
+            rootMargin="0px"
+            textAlign="center"
+            from={{ opacity: 0, y: 10 }}
+            to={{ opacity: 1, y: 0 }}
+          />
           {noDataSubtextKey && (
-            <p className="text-xs mt-1 text-muted-foreground animate-fade-in" style={{ animationDelay: '100ms' }}>
-              {t(noDataSubtextKey)}
-            </p>
+            <SplitText
+              text={t(noDataSubtextKey)}
+              tag="p"
+              className="text-xs mt-1 text-muted-foreground"
+              splitType="words"
+              delay={30}
+              duration={0.4}
+              threshold={0}
+              rootMargin="0px"
+              textAlign="center"
+              from={{ opacity: 0, y: 8 }}
+              to={{ opacity: 1, y: 0 }}
+            />
           )}
           {noDataActions && (
             <div className="mt-3 animate-fade-in" style={{ animationDelay: '150ms' }}>

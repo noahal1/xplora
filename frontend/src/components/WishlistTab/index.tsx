@@ -12,6 +12,7 @@ import { GenreInput } from "../GenreInput";
 import { ProgressiveImage } from "../ProgressiveImage";
 import { DetailModal } from "../ManageTab/DetailModal";
 import { Film, ChevronRight, Loader2, ChevronDown } from "lucide-react";
+import CountUp from "../CountUp";
 import { MediaTypeFilter } from "../MediaTypeFilter";
 import { SortControls } from "../SortControls";
 import { SearchInput } from "../SearchInput";
@@ -22,6 +23,7 @@ import { usePagination } from "../../hooks/usePagination";
 import { useSort } from "../../hooks/useSort";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
 
+import FadeContent from "../FadeContent";
 import { EmptyState } from "../EmptyState";
 import { WishlistDetailModal } from "./DetailModal";
 import { WishlistRatingModal } from "./RatingModal";
@@ -302,7 +304,7 @@ export function WishlistTab() {
 
       {/* === Wishlist Section === */}
       {(total > 0 || filter.debouncedValue || mediaTypeFilter !== "all" || loading) && (
-        <section className="section-card animate-slide-down">
+        <FadeContent className="section-card animate-slide-down">
           <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="section-title flex items-center gap-2">
               <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
@@ -327,7 +329,7 @@ export function WishlistTab() {
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 <span className="hidden sm:inline">{t("wishlist.manual_add")}</span>
               </button>
-              <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: total })}</span>
+              <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: 0 }).replace("0", "")}<CountUp end={total} /></span>
             </div>
           </div>
           <SearchInput
@@ -451,7 +453,7 @@ export function WishlistTab() {
               <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} info={t("watched.total_movies", { count: total })} />
             </>
           )}
-        </section>
+        </FadeContent>
       )}
 
       {/* === Search Modal === */}
@@ -624,7 +626,7 @@ export function WishlistTab() {
 
       {/* Empty State (no items, no filters) */}
       {total === 0 && !filter.debouncedValue && mediaTypeFilter === "all" && !loading && (
-        <section className="section-card">
+        <FadeContent className="section-card">
           <EmptyState
             icon={
               <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -648,7 +650,7 @@ export function WishlistTab() {
               </div>
             }
           />
-        </section>
+        </FadeContent>
       )}
     </div>
   );

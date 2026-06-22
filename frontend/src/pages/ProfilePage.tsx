@@ -10,6 +10,7 @@ import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { useNavigate } from "react-router-dom";
 import { useEnrich } from "../context/EnrichContext";
+import FadeContent from "../components/FadeContent";
 import { CheckCircle, XCircle, Moon, Sun } from "lucide-react";
 
 interface HealthStatus {
@@ -289,7 +290,7 @@ export function ProfilePage() {
       {/* ======================== */}
       {/* 1. Profile Section */}
       {/* ======================== */}
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center text-xl font-semibold text-foreground shrink-0">
             {user?.username?.charAt(0).toUpperCase()}
@@ -306,12 +307,12 @@ export function ProfilePage() {
             </div>
           </div>
         </div>
-      </section>
+      </FadeContent>
 
       {/* ======================== */}
       {/* 2. Theme Section */}
       {/* ======================== */}
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="section-header">
           <h2 className="section-title flex items-center gap-2">
             <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -357,12 +358,12 @@ export function ProfilePage() {
             </span>
           </button>
         </div>
-      </section>
+      </FadeContent>
 
       {/* ======================== */}
       {/* 3. API Key Status Section */}
       {/* ======================== */}
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="section-header">
           <h2 className="section-title flex items-center gap-2">
             <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -472,12 +473,12 @@ export function ProfilePage() {
         <p className="text-[10px] text-muted-foreground mt-3">
           {keyConfigOpen ? t("profile.api_hint_edit") : t("profile.api_hint_view")}
         </p>
-      </section>
+      </FadeContent>
 
       {/* ======================== */}
       {/* 4. Password Section */}
       {/* ======================== */}
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="section-header">
           <h2 className="section-title flex items-center gap-2">
             <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -520,12 +521,12 @@ export function ProfilePage() {
             {pwLoading ? t("profile.password_changing") : t("profile.change_password")}
           </Button>
         </form>
-      </section>
+      </FadeContent>
 
       {/* ======================== */}
       {/* 5. Data Section */}
       {/* ======================== */}
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="section-header">
           <h2 className="section-title flex items-center gap-2">
             <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -604,12 +605,12 @@ export function ProfilePage() {
             </p>
           )}
         </div>
-      </section>
+      </FadeContent>
 
       {/* ======================== */}
       {/* 6. System Info Section */}
       {/* ======================== */}
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="section-header">
           <h2 className="section-title flex items-center gap-2">
             <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -670,12 +671,12 @@ export function ProfilePage() {
         >
           {healthLoading ? t("profile.refreshing") : t("profile.refresh")}
         </Button>
-      </section>
+      </FadeContent>
 
       {/* ======================== */}
       {/* 7. Logout Section */}
       {/* ======================== */}
-      <section className="section-card">
+      <FadeContent className="section-card">
         <Button
           variant="outline"
           onClick={handleLogout}
@@ -686,7 +687,7 @@ export function ProfilePage() {
           </svg>
           {t("profile.logout")}
         </Button>
-      </section>
+      </FadeContent>
 
       {/* Update Modal */}
       {updateInfo && (

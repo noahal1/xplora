@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEnrich } from "../context/EnrichContext";
 import { Sparkles, X } from "lucide-react";
+import CountUp from "./CountUp";
 
 /**
  * A slim progress banner displayed at the top of the main app area
@@ -63,7 +64,7 @@ export function EnrichBanner() {
             <div className="flex items-center gap-1.5 shrink-0">
               {progress && progress.total > 0 && (
                 <span className="text-[10px] font-mono text-primary/60 tabular-nums">
-                  {pct}%
+                  <CountUp end={pct} suffix="%" decimals={0} duration={0.5} />
                   {progress.failed > 0 && (
                     <span className="ml-1 text-[10px] text-red-400/70">
                       ⚠{progress.failed}

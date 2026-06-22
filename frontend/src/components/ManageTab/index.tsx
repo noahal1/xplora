@@ -8,6 +8,7 @@ import { Badge } from "../ui/badge";
 import { Pagination } from "../Pagination";
 import { SkeletonTable } from "../Skeleton";
 import { translateGenres } from "../../utils/genre";
+import CountUp from "../CountUp";
 import { Modal } from "../Modal";
 import { GenreFilter } from "../GenreFilter";
 import { MediaTypeFilter } from "../MediaTypeFilter";
@@ -15,6 +16,7 @@ import { SortControls } from "../SortControls";
 import { StatusFilter } from "../StatusFilter";
 import { SearchInput } from "../SearchInput";
 import { ScrapeSourceFilter } from "../ScrapeSourceFilter";
+import FadeContent from "../FadeContent";
 import { Film, Upload, Plus, Search, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, AlertCircle, Star, X, Info, ChevronRight, Check, ChevronDown } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../../hooks/useGenreExtractor";
@@ -303,13 +305,13 @@ export function ManageTab() {
   
 
   return (
-    <section className="section-card min-h-[300px]">
+    <FadeContent className="section-card min-h-[300px]">
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-5">
         <h2 className="section-title flex items-center gap-2 text-base">
           <Film size={16} className="text-primary shrink-0" />
           <span className="truncate">{t("manage.title")}</span>
-          <span className="badge font-mono text-xs shrink-0">{t("manage.total", { count: total })}</span>
+          <span className="badge font-mono text-xs shrink-0">{t("manage.total", { count: 0 }).replace("0", "")}<CountUp end={total} /></span>
         </h2>
         <div className="flex gap-1.5 items-center flex-wrap w-full sm:w-auto">
           <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={() => fetchData()} title={t("manage.refresh")}>
@@ -343,7 +345,7 @@ export function ManageTab() {
             disabled={selected.size === 0} onClick={confirmDeleteSelected}
             title={selected.size > 0 ? t("manage.delete_selected") : undefined}>
             <Trash2 size={12} /><span className="sm:hidden">{t("manage.delete")}</span><span className="hidden sm:inline">{t("manage.delete_selected")}</span>
-            {selected.size > 0 && <span className="tabular-nums font-mono">{selected.size}</span>}
+            {selected.size > 0 && <span className="tabular-nums font-mono"><CountUp end={selected.size} /></span>}
           </button>
           <button className="btn btn-ghost btn-xs gap-1.5 flex-1 sm:flex-none justify-center" onClick={confirmDeleteAll} title={t("manage.clear_all")}>
             <Trash2 size={12} /><span className="hidden sm:inline">{t("manage.clear_all")}</span>
@@ -605,7 +607,7 @@ export function ManageTab() {
           } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); }
         }}
       />
-    </section>
+    </FadeContent>
   );
 }
 const ManageTableRow = memo(function ManageTableRow({ 
@@ -699,7 +701,7 @@ const ManageTableRow = memo(function ManageTableRow({
         onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
         <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap">
           <Star size={12} fill="currentColor" />
-          {movie.rating.toFixed(1)}
+          <CountUp end={movie.rating} decimals={1} />
         </span>
       </TableEditableCell>
       <TableEditableCell movie={movie} field="year" editingCell={editingCell} sliderValue={sliderValue}
@@ -947,7 +949,7 @@ const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelected, enr
                 {movie.status === "watched" && (
                   <span className="inline-flex items-center gap-0.5 text-xs font-medium text-amber tabular-nums">
                     <Star size={10} fill="currentColor" />
-                    {movie.rating.toFixed(1)}
+                    <CountUp end={movie.rating} decimals={1} />
                   </span>
                 )}
                 {/* Season info */}

@@ -10,14 +10,17 @@ import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
 import { ProgressiveImage } from "./ProgressiveImage";
 import { DetailModal } from "./ManageTab/DetailModal";
+import TiltedCard from "./TiltedCard";
 import { Upload, List, LayoutGrid, Loader2, Film, ChevronRight, ChevronDown } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenres } from "../utils/genre";
+import CountUp from "./CountUp";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { useEnrichReload } from "../hooks/useEnrichReload";
 import { usePagination } from "../hooks/usePagination";
 import { useSort } from "../hooks/useSort";
+import FadeContent from "./FadeContent";
 import { EmptyState } from "./EmptyState";
 import { GenreFilter } from "./GenreFilter";
 import { MediaTypeFilter } from "./MediaTypeFilter";
@@ -417,7 +420,7 @@ export function WatchedTab() {
 
       {/* === Movie List Section === */}
       {(total > 0 || hasActiveFilters || loading) && (
-        <section className="section-card animate-slide-down">
+        <FadeContent className="section-card animate-slide-down">
           <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="section-title flex items-center gap-2">
               <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -449,7 +452,7 @@ export function WatchedTab() {
                 </button>
               </div>
               <span className="badge font-mono text-xs">
-                {t("watched.movie_count", { count: total })}
+                {t("watched.movie_count", { count: 0 }).replace("0", "")}<CountUp end={total} />
               </span>
             </div>
           </div>
@@ -663,12 +666,12 @@ export function WatchedTab() {
               />
             </>
           )}
-        </section>
+        </FadeContent>
       )}
 
       {/* === Empty State (no movies at all, no filters) === */}
       {total === 0 && !hasActiveFilters && !loading && (
-        <section className="section-card">
+        <FadeContent className="section-card">
           <EmptyState
             icon={
               <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -692,7 +695,7 @@ export function WatchedTab() {
               </div>
             }
           />
-        </section>
+        </FadeContent>
       )}
 
       {/* === Import Modal === */}
@@ -1023,41 +1026,58 @@ const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle,
         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
       </button>
-      {/* Poster */}
-      <div className="aspect-[2/3] relative cursor-pointer overflow-hidden" onClick={() => onOpenDetail(movie)}>
+      {/* Poster — 3D tilt effect on hover */}
+      <div className="aspect-[2/3] relative cursor-pointer overflow-hidden rounded-xl" onClick={() => onOpenDetail(movie)}>
         {movie.poster_url ? (
-          <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />          ) : (
+          <TiltedCard
+            imageSrc={movie.poster_url}
+            altText={movie.title}
+            containerHeight="100%"
+            containerWidth="100%"
+            imageHeight="100%"
+            imageWidth="100%"
+            scaleOnHover={1.03}
+            rotateAmplitude={8}
+            showTooltip={false}
+            showMobileWarning={false}
+            displayOverlayContent={true}
+            className="rounded-xl"
+            overlayContent={
+              <div className="relative w-full h-full">
+                {/* Gradient overlay for text readability */}
+                <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
+                {/* Year badge top-left */}
+                {movie.year && (
+                  <div className="absolute top-2 left-2 z-10">
+                    <span className="text-[10px] font-semibold text-white bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md">{movie.year}</span>
+                  </div>
+                )}
+                {/* TV badge */}
+                {movie.media_type === "tv" && (
+                  <div className="absolute top-2 left-2 z-10" style={{ marginTop: movie.year ? '18px' : '0' }}>
+                    <Badge className="text-[9px] text-sky-200 border-sky-400/40 bg-sky-500/20 backdrop-blur-sm">TV</Badge>
+                  </div>
+                )}
+                {/* Title on poster */}
+                <div className="absolute bottom-0 inset-x-0 p-2.5 z-10">
+                  <div className="font-semibold text-sm text-white leading-tight line-clamp-2 drop-shadow-sm">{movie.title}</div>
+                  {/* Season info */}
+                  {movie.season_number != null && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Badge className="text-[9px] text-violet-200 border-violet-400/40 bg-violet-500/20 backdrop-blur-sm leading-none px-1.5 py-0.5">
+                        S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-80">· {movie.episode_count}ep</span>}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+            }
+          />
+        ) : (
           <div className="w-full h-full flex items-center justify-center text-4xl opacity-30 bg-muted/40">
             <Film size={28} className="opacity-50" />
           </div>
         )}
-        {/* Gradient overlay for text readability */}
-        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
-        {/* Year badge top-left */}
-        {movie.year && (
-          <div className="absolute top-2 left-2 z-10">
-            <span className="text-[10px] font-semibold text-white bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md">{movie.year}</span>
-          </div>
-        )}
-        {/* TV badge */}
-        {movie.media_type === "tv" && (
-          <div className="absolute top-2 left-2 z-10" style={{ marginTop: movie.year ? '18px' : '0' }}>
-            <Badge className="text-[9px] text-sky-200 border-sky-400/40 bg-sky-500/20 backdrop-blur-sm">TV</Badge>
-          </div>
-        )}
-
-        {/* Title on poster */}
-        <div className="absolute bottom-0 inset-x-0 p-2.5 z-10">
-          <div className="font-semibold text-sm text-white leading-tight line-clamp-2 drop-shadow-sm">{movie.title}</div>
-          {/* Season info */}
-          {movie.season_number != null && (
-            <div className="flex items-center gap-1 mt-1">
-              <Badge className="text-[9px] text-violet-200 border-violet-400/40 bg-violet-500/20 backdrop-blur-sm leading-none px-1.5 py-0.5">
-                S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-80">· {movie.episode_count}ep</span>}
-              </Badge>
-            </div>
-          )}
-        </div>
       </div>
       {/* Rating editing */}
       <div className="px-2.5 py-2 border-t border-border/50">
@@ -1080,7 +1100,7 @@ const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle,
               onClick={handleStartEdit} title={t("watched.click_to_edit")}>
               <span className="text-amber">★</span>
               {justSaved && <span className="text-green text-[10px]">✓</span>}
-              <span className="font-semibold">{movie.rating.toFixed(1)}</span>
+              <span className="font-semibold"><CountUp end={movie.rating} decimals={1} /></span>
               <span className="text-[9px] opacity-50 ml-0.5">{t("watched.edit")}</span>
             </span>
           </div>
@@ -1183,7 +1203,7 @@ const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle,
             onClick={handleStartEdit} title={t("watched.click_to_edit")}>
             <span className="text-amber text-base leading-none">★</span>
             {justSaved && <span className="text-green text-[10px]">✓</span>}
-            <span className="font-bold text-sm">{movie.rating.toFixed(1)}</span>
+            <span className="font-bold text-sm"><CountUp end={movie.rating} decimals={1} /></span>
           </span>
         )}
         <button

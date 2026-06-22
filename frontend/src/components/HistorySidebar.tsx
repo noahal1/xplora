@@ -9,6 +9,7 @@ import { Badge } from "./ui/badge";
 import { Modal } from "./Modal";
 import { formatDateTime } from "../utils/date";
 import { Brain, Bot } from "lucide-react";
+import CountUp from "./CountUp";
 
 type TabType = "movies" | "sessions";
 
@@ -217,7 +218,7 @@ export function HistorySidebar() {
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium truncate block">{m.title}</span>
                       <span className="text-[11px] text-muted-foreground">
-                        ★ {m.rating.toFixed(1)}{m.year && ` · ${m.year}`}
+                        ★ <CountUp end={m.rating} decimals={1} />{m.year && ` · ${m.year}`}
                       </span>
                     </div>
                     <button className="opacity-0 group-hover:opacity-100 max-sm:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1 rounded"

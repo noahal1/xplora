@@ -7,7 +7,9 @@ import { Modal } from "./Modal";
 import { Badge } from "./ui/badge";
 import { ProgressiveImage } from "./ProgressiveImage";
 import { formatDateTime } from "../utils/date";
+import FadeContent from "./FadeContent";
 import { Film, History, Brain, Bot, Trash2, ChevronRight, Percent, Plus, Clock } from "lucide-react";
+import CountUp from "./CountUp";
 import { translateGenres, translateGenreName } from "../utils/genre";
 
 const PAGE_SIZE = 20;
@@ -144,7 +146,7 @@ export function HistoryTab() {
   // -- Empty state
   if (!loading && sessions.length === 0) {
     return (
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="empty-state">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
             style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}>
@@ -157,7 +159,7 @@ export function HistoryTab() {
             {t("history.no_sessions_hint")}
           </p>
         </div>
-      </section>
+      </FadeContent>
     );
   }
 
@@ -165,7 +167,7 @@ export function HistoryTab() {
     <div className="space-y-5">
       {/* Header */}
       {!detail && (
-        <section className="section-card">
+        <FadeContent className="section-card">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -189,7 +191,7 @@ export function HistoryTab() {
               </div>
             )}
           </div>
-        </section>
+        </FadeContent>
       )}
 
       {/* Loading */}
@@ -201,7 +203,7 @@ export function HistoryTab() {
 
       {/* ── Session Detail View ── */}
       {!loading && detail && (
-        <section className="section-card">
+        <FadeContent className="section-card">
           {/* Back + session info bar */}
           <div className="flex items-start sm:items-center gap-2 pb-4 mb-5 flex-wrap" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
             <button
@@ -223,10 +225,10 @@ export function HistoryTab() {
               </span>
               <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
               <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                {t("history.source_movies", { count: detail.source_count })}
+                {t("history.source_movies", { count: 0 }).replace("0", "")}<CountUp end={detail.source_count} />
               </span>
               <Badge variant="outline" className="text-[10px] ml-1">
-                {t("history.recommendations", { count: detail.recommendations.length })}
+                {t("history.recommendations", { count: 0 }).replace("0", "")}<CountUp end={detail.recommendations.length} />
               </Badge>
             </div>
           </div>
@@ -278,8 +280,7 @@ export function HistoryTab() {
                             border: `1px solid ${rec.confidence >= 0.7 ? "var(--primary-20)" : "var(--border-subtle)"}`,
                           }}
                         >
-                          <Percent size={8} />
-                          {Math.round(rec.confidence * 100)}
+                          <Percent size={8} />                            <CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
                         </span>
                       </div>
                       <p className="text-xs mt-1 leading-relaxed line-clamp-2" style={{ color: "var(--fg-secondary)" }}>
@@ -310,8 +311,7 @@ export function HistoryTab() {
                 </div>
               ))}
             </div>
-          )}
-        </section>
+          )}          </FadeContent>
       )}
 
       {/* ── Session List (wishlist-style cards) ── */}
@@ -357,10 +357,10 @@ export function HistoryTab() {
                         <span className="font-medium" style={{ color: "var(--seed-primary)" }}>
                           {s.recommendation_count}
                         </span>{" "}
-                        {t("history.recommendations", { count: s.recommendation_count })}
+                        {t("history.recommendations", { count: 0 }).replace("0", "")}<CountUp end={s.recommendation_count} />
                       </span>
                       <span className="text-xs" style={{ color: "var(--fg-dim)" }}>
-                        {t("history.source_movies", { count: s.source_count })}
+                        {t("history.source_movies", { count: 0 }).replace("0", "")}<CountUp end={s.source_count} />
                       </span>
                     </div>
                   </div>

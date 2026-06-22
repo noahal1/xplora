@@ -21,7 +21,7 @@ interface FadeContentProps extends React.HTMLAttributes<HTMLDivElement> {
   onDisappearanceComplete?: () => void;
 }
 
-const FadeContent: React.FC<FadeContentProps> = ({
+const FadeContent = React.forwardRef<HTMLDivElement, FadeContentProps>(({
   children,
   container,
   blur = false,
@@ -37,11 +37,21 @@ const FadeContent: React.FC<FadeContentProps> = ({
   onDisappearanceComplete,
   className = '',
   ...props
-}) => {
-  const ref = useRef<HTMLDivElement>(null);
+}, ref) => {
+  const internalRef = useRef<HTMLDivElement>(null);
+
+  // Merge the forwarded ref with the internal ref
+  const setRefs = (el: HTMLDivElement | null) => {
+    internalRef.current = el;
+    if (typeof ref === 'function') {
+      ref(el);
+    } else if (ref) {
+      ref.current = el;
+    }
+  };
 
   useEffect(() => {
-    const el = ref.current;
+    const el = internalRef.current;
     if (!el) return;
 
     let scrollerTarget: Element | string | null = container || document.getElementById('snap-main-container') || null;
@@ -100,10 +110,12 @@ const FadeContent: React.FC<FadeContentProps> = ({
   }, []);
 
   return (
-    <div ref={ref} className={className} {...props}>
+    <div ref={setRefs} className={className} {...props}>
       {children}
     </div>
   );
-};
+});
+
+FadeContent.displayName = 'FadeContent';
 
 export default FadeContent;

@@ -7,6 +7,7 @@ import { Modal } from "../components/Modal";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { formatDate, formatDateTime } from "../utils/date";
+import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
 
 const LOG_PAGE_SIZE = 30;
@@ -247,7 +248,7 @@ export function AdminPanel() {
 
         <TabsContent value="users" className="space-y-6 mt-6">
           {/* Create User Form */}
-          <section className="section-card">
+          <FadeContent className="section-card">
             <div className="section-header">
               <h2 className="section-title flex items-center gap-2">
                 <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -277,10 +278,10 @@ export function AdminPanel() {
                 ) : t("admin.create")}
               </button>
             </form>
-          </section>
+          </FadeContent>
 
           {/* Users List */}
-          <section className="section-card">
+          <FadeContent className="section-card">
             <div className="section-header">
               <h2 className="section-title">
                 {t("admin.user_list")}
@@ -323,11 +324,11 @@ export function AdminPanel() {
                 })}
               </div>
             )}
-          </section>
+          </FadeContent>
         </TabsContent>
 
         <TabsContent value="logs" className="mt-6">
-          <section className="section-card">
+          <FadeContent className="section-card">
             <div className="section-header">
               <h2 className="section-title">
                 {t("admin.logs_title")}
@@ -376,7 +377,7 @@ export function AdminPanel() {
                 />
               </>
             )}
-          </section>
+          </FadeContent>
         </TabsContent>
       </Tabs>
 

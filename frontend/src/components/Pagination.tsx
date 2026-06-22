@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import CountUp from "./CountUp";
 
 interface PaginationProps {
   currentPage: number;
@@ -46,7 +47,7 @@ export function Pagination({ currentPage, totalPages, onPageChange, info }: Pagi
               className={`page-btn ${p === currentPage ? "active" : ""}`}
               onClick={() => onPageChange(p)}
             >
-              {p + 1}
+              {p === currentPage ? <CountUp end={p + 1} duration={0.3} /> : p + 1}
             </button>
           );
         })}

@@ -6,6 +6,7 @@ import { exportJSON, exportScreenshot } from "../utils/export";
 import { useToast } from "../context/ToastContext";
 import { SkeletonCard } from "./Skeleton";
 import { Modal } from "./Modal";
+import FadeContent from "./FadeContent";
 import {
   Sparkles, Send, Percent, MessageSquare, Film,
   Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star, Plus, Loader2, User,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { translateGenres } from "../utils/genre";
+import CountUp from "./CountUp";
 import { formatDateTime } from "../utils/date";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { GenreFilter } from "./GenreFilter";
@@ -488,12 +490,12 @@ export function RecommendTab() {
   // -- Loading state for initial data fetch
   if (loadingMovies) {
     return (
-      <section className="section-card">
+      <FadeContent className="section-card">
         <div className="flex items-center justify-center py-8">
           <div className="w-6 h-6 border-2 border-[var(--border-default)] border-t-[var(--seed-primary)] rounded-full animate-stream-spin" />
           <span className="ml-2 text-sm" style={{ color: "var(--fg-muted)" }}>{t("recommend.loading_movies")}</span>
         </div>
-      </section>
+      </FadeContent>
     );
   }
 
@@ -501,7 +503,7 @@ export function RecommendTab() {
     <div className="space-y-5">
       {/* === Empty / Config State === */}
       {!isLoading && recommendations.length === 0 ? (
-        <section className="section-card">
+        <FadeContent className="section-card">
           <div className="flex flex-col items-center py-10 px-4">
             {/* Sparkle icon */}
             <div
@@ -683,12 +685,12 @@ export function RecommendTab() {
               </p>
             </div>
           </div>
-        </section>
+        </FadeContent>
       ) : null}
 
       {/* === Loading State === */}
       {isLoading && recommendations.length === 0 && (
-        <section className="section-card">
+        <FadeContent className="section-card">
           <div className="flex flex-col items-center justify-center py-12">
             <div className="spinner mb-4" />
             <p className="text-sm font-[510]" style={{ color: "var(--fg-secondary)" }}>
@@ -701,12 +703,12 @@ export function RecommendTab() {
             </div>
           </div>
           <SkeletonCard count={3} />
-        </section>
+        </FadeContent>
       )}
 
       {/* === Results Section === */}
       {recommendations.length > 0 && (
-        <section className="section-card" ref={resultsRef}>
+        <FadeContent className="section-card" ref={resultsRef}>
           <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="text-heading" style={{ color: "var(--seed-fg)" }}>
               {t("recommend.results")}
@@ -796,7 +798,7 @@ export function RecommendTab() {
                     <div className="flex items-center gap-1">
                       <Percent size={11} style={{ color: "var(--seed-primary)" }} />
                       <span className="text-xs font-[590]" style={{ color: "var(--seed-primary)" }}>
-                        {Math.round(rec.confidence * 100)}
+                        <CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
                       </span>
                     </div>
                   </div>
@@ -834,7 +836,7 @@ export function RecommendTab() {
               </button>
             </div>
           )}
-        </section>
+        </FadeContent>
       )}
 
       {/* === TMDB Detail Modal === */}
@@ -912,9 +914,8 @@ export function RecommendTab() {
                                 : "var(--fg-dim)",
                           }} />
                       </div>
-                      <span className="text-xs font-[590] tabular-nums shrink-0" style={{ color: "var(--seed-primary)" }}>
-                        {Math.round(detailRec.confidence * 100)}%
-                      </span>
+                      <span className="text-xs font-[590] tabular-nums shrink-0" style={{ color: "var(--seed-primary)" }}>                        <CountUp end={Math.round(detailRec.confidence * 100)} suffix="%" />
+                        </span>
                     </div>
                     <p className="text-xs leading-relaxed" style={{ color: "var(--fg-secondary)" }}>{detailRec.reason}</p>
                   </div>
@@ -970,7 +971,7 @@ export function RecommendTab() {
 
       {/* === Recommendation History Section === */}
       {!selectedSession && (
-        <section className="section-card">
+        <FadeContent className="section-card">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div
@@ -1066,12 +1067,12 @@ export function RecommendTab() {
               ))}
             </div>
           )}
-        </section>
+        </FadeContent>
       )}
 
       {/* === Session Detail View === */}
       {selectedSession && (
-        <section className="section-card">
+        <FadeContent className="section-card">
           {/* Back + session info */}
           <div className="flex items-start sm:items-center gap-2 pb-4 mb-4 flex-wrap" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
             <button
@@ -1133,7 +1134,7 @@ export function RecommendTab() {
                             border: `1px solid ${rec.confidence >= 0.7 ? "var(--primary-20)" : "var(--border-subtle)"}`,
                           }}
                         >
-                          <Percent size={8} />{Math.round(rec.confidence * 100)}
+                          <Percent size={8} /><CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
                         </span>
                       </div>
                       <p className="text-xs mt-1 leading-relaxed line-clamp-2" style={{ color: "var(--fg-secondary)" }}>{rec.reason}</p>
@@ -1161,7 +1162,7 @@ export function RecommendTab() {
               ))}
             </div>
           )}
-        </section>
+        </FadeContent>
       )}
 
       {/* Delete Session Confirmation Modal */}
