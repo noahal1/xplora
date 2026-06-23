@@ -36,6 +36,8 @@ from crud import (
     get_media_stats,
     get_top_rated,
     reorder_top_rated,
+    add_to_top_rated,
+    remove_from_top_rated,
     log_operation,
 )
 from movie_search import search_movies as search_external_movies, get_movie_detail as get_external_movie_detail
@@ -87,6 +89,46 @@ async def top_rated_reorder(
     reorder_top_rated(current_user["id"], ordered_ids, db=db)
     log_operation(current_user["id"], current_user["username"], "reorder_top_rated", f"排行榜重排: {len(ordered_ids)} 项", db=db)
     return {"status": "ok", "count": len(ordered_ids)}
+
+
+@router.post("/top-rated/add")
+async def top_rated_add(
+    request: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Add a media item to the top-rated list.
+
+    Accepts ``{"media_id": 3}``.
+    """
+    media_id = request.get("media_id")
+    if not isinstance(media_id, int):
+        raise HTTPException(status_code=400, detail="请提供 media_id")
+    result = add_to_top_rated(current_user["id"], media_id, db=db)
+    if not result:
+        raise HTTPException(status_code=404, detail="媒体条目不存在")
+    log_operation(current_user["id"], current_user["username"], "add_to_top_rated", f"添加到排行榜: {result['title']}", db=db)
+    return {"status": "ok", "item": result}
+
+
+@router.post("/top-rated/remove")
+async def top_rated_remove(
+    request: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Remove a media item from the top-rated list.
+
+    Accepts ``{"media_id": 3}``.
+    """
+    media_id = request.get("media_id")
+    if not isinstance(media_id, int):
+        raise HTTPException(status_code=400, detail="请提供 media_id")
+    removed = remove_from_top_rated(current_user["id"], media_id, db=db)
+    if not removed:
+        raise HTTPException(status_code=404, detail="媒体条目不存在")
+    log_operation(current_user["id"], current_user["username"], "remove_from_top_rated", f"从排行榜移除: ID {media_id}", db=db)
+    return {"status": "ok"}
 
 
 # ── Media CRUD ──────────────────────────────────────────────────────

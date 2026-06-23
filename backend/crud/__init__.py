@@ -32,6 +32,8 @@ from crud.media import (
     get_media_stats,
     get_top_rated,
     reorder_top_rated,
+    add_to_top_rated,
+    remove_from_top_rated,
 )
 
 from crud.sessions import (
@@ -76,6 +78,8 @@ __all__ = [
     "get_media_stats",
     "get_top_rated",
     "reorder_top_rated",
+    "add_to_top_rated",
+    "remove_from_top_rated",
     # Sessions
     "save_session",
     "get_sessions",

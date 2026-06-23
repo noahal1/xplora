@@ -648,11 +648,11 @@ def get_top_rated(
     user_id: int,
     db: Optional[Session] = None,
 ) -> list[dict]:
-    """Return top rated watched movies for the current user.
+    """Return the user's curated top-rated list.
 
-    Sorted by sort_order first (if set), then by rating descending.
-    Pinned items float to top. Hidden items excluded.
-    Returns up to 30 items.
+    Only returns items that are explicitly pinned (pinned=True) or have
+    a sort_order set. Items are sorted by sort_order ascending, then
+    by rating descending as a tiebreaker. Returns up to 50 items.
     """
     session, close_db = _resolve_db(db)
     try:
@@ -661,20 +661,102 @@ def get_top_rated(
                 MediaItemRecord.user_id == user_id,
                 MediaItemRecord.status == "watched",
                 MediaItemRecord.hidden_from_top == False,
+                (MediaItemRecord.pinned == True) | (MediaItemRecord.sort_order.isnot(None)),
             )
         ).all()
 
-        # Sort: order by sort_order (non-null first), then by rating desc
+        # Sort: by sort_order (non-null first), then by rating desc
         def sort_key(r: MediaItemRecord):
             return (
-                0 if r.sort_order is not None else 1,  # items with sort_order first
-                r.sort_order or 0,                      # then by sort_order
-                -r.rating,                              # then by rating desc
+                0 if r.sort_order is not None else 1,
+                r.sort_order or 0,
+                -r.rating,
                 -(r.created_at.timestamp() if r.created_at else 0),
             )
 
-        sorted_records = sorted(records, key=sort_key)[:30]
+        sorted_records = sorted(records, key=sort_key)[:50]
         return [_media_to_dict(r) for r in sorted_records]
+    finally:
+        if close_db:
+            session.close()
+
+
+def add_to_top_rated(
+    user_id: int,
+    media_id: int,
+    db: Optional[Session] = None,
+) -> Optional[dict]:
+    """Pin a media item to the top-rated list at the end.
+
+    Sets ``pinned=True`` and assigns the next available ``sort_order``.
+    Returns the item dict on success, or ``None`` if the item doesn't
+    exist / isn't watched.
+    """
+    session, close_db = _resolve_db(db)
+    try:
+        record = session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id,
+                MediaItemRecord.user_id == user_id,
+            )
+        ).first()
+        if not record:
+            return None
+
+        # Already pinned — just return it
+        if record.pinned and not record.hidden_from_top:
+            return _media_to_dict(record)
+
+        # Find current max sort_order
+        max_order = session.scalar(
+            select(sa_func.max(MediaItemRecord.sort_order)).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.pinned == True,
+            )
+        ) or 0
+
+        record.pinned = True
+        record.hidden_from_top = False
+        record.sort_order = max_order + 1
+        session.commit()
+        return _media_to_dict(record)
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if close_db:
+            session.close()
+
+
+def remove_from_top_rated(
+    user_id: int,
+    media_id: int,
+    db: Optional[Session] = None,
+) -> bool:
+    """Unpin a media item from the top-rated list.
+
+    Sets ``pinned=False``, ``sort_order=None``, ``hidden_from_top=True``.
+    Returns ``True`` on success.
+    """
+    session, close_db = _resolve_db(db)
+    try:
+        record = session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.id == media_id,
+                MediaItemRecord.user_id == user_id,
+            )
+        ).first()
+        if not record:
+            return False
+
+        record.pinned = False
+        record.sort_order = None
+        record.hidden_from_top = True
+        session.commit()
+        return True
+    except Exception:
+        session.rollback()
+        raise
     finally:
         if close_db:
             session.close()

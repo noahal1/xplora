@@ -394,6 +394,24 @@ export async function reorderTopRated(orderedIds: number[]): Promise<{ status: s
   });
 }
 
+/** Add a media item to the top-rated list */
+export async function addToTopRated(mediaId: number): Promise<{ status: string; item: MediaDetail }> {
+  return fetchJSON(`${API_BASE}/top-rated/add`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ media_id: mediaId }),
+  });
+}
+
+/** Remove a media item from the top-rated list */
+export async function removeFromTopRated(mediaId: number): Promise<{ status: string }> {
+  return fetchJSON(`${API_BASE}/top-rated/remove`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ media_id: mediaId }),
+  });
+}
+
 /** Change current user's password */
 export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
   await fetchJSON(`${API_BASE}/auth/password`, {
