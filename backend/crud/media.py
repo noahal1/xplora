@@ -723,56 +723,6 @@ def reorder_top_rated(
             session.close()
 
 
-def toggle_pin(media_id: int, user_id: int, db: Optional[Session] = None) -> Optional[MediaItemRecord]:
-    """Toggle the pinned status of a media item."""
-    session, close_db = _resolve_db(db)
-    try:
-        record = session.exec(
-            select(MediaItemRecord).where(
-                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
-            )
-        ).first()
-        if not record:
-            return None
-        record.pinned = not record.pinned
-        if record.pinned:
-            record.hidden_from_top = False
-            # Clear sort_order when pinning via toggle (user manually pinned)
-            record.sort_order = None
-        session.commit()
-        return record
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        if close_db:
-            session.close()
-
-
-def toggle_hide(media_id: int, user_id: int, db: Optional[Session] = None) -> Optional[MediaItemRecord]:
-    """Toggle the hidden_from_top status of a media item."""
-    session, close_db = _resolve_db(db)
-    try:
-        record = session.exec(
-            select(MediaItemRecord).where(
-                MediaItemRecord.id == media_id, MediaItemRecord.user_id == user_id
-            )
-        ).first()
-        if not record:
-            return None
-        record.hidden_from_top = not record.hidden_from_top
-        if record.hidden_from_top:
-            record.pinned = False
-            record.sort_order = None
-        session.commit()
-        return record
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        if close_db:
-            session.close()
-
 
 def _media_to_dict(r: MediaItemRecord) -> dict:
     """Serialize a MediaItemRecord to a dict for API responses."""

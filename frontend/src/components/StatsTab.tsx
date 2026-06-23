@@ -24,6 +24,7 @@ import {
 import { translateGenreName } from "../utils/genre";
 import CountUp from "./CountUp";
 import FadeContent from "./FadeContent";
+import TiltedCard from "./TiltedCard";
 import { fetchStats } from "../api";
 import type { StatsData } from "../types";
 
@@ -116,7 +117,7 @@ function YearChart({ data, color }: { data: { name: string; value: number }[]; c
   const max = Math.max(...data.map((d) => d.value), 1);
   const visible = data.slice(0, 40); // limit to last 40 years
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <ResponsiveContainer width="100%" height={200}>
       <BarChart data={visible} margin={{ top: 8, right: 4, bottom: 4, left: -16 }}>
         <XAxis
           dataKey="name"
@@ -272,7 +273,7 @@ function TopRatedPreview({ movies, onNavigate }: { movies: StatsData["top_rated"
 
   return (
     <div
-      className="group relative overflow-hidden rounded-2xl p-5 sm:p-6 transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
+      className="group relative overflow-hidden rounded-2xl p-5 sm:p-6 transition-all duration-300 cursor-pointer"
       onClick={onNavigate}
       style={{
         background: `linear-gradient(135deg, color-mix(in srgb, var(--seed-primary) 8%, transparent), transparent 65%)`,
@@ -281,7 +282,7 @@ function TopRatedPreview({ movies, onNavigate }: { movies: StatsData["top_rated"
     >
       {/* Hover glow */}
       <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl pointer-events-none"
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-2xl pointer-events-none"
         style={{ background: `radial-gradient(500px circle at 20% 50%, color-mix(in srgb, var(--seed-primary) 8%, transparent), transparent)` }}
       />
       <div className="relative z-10 space-y-4">
@@ -306,36 +307,43 @@ function TopRatedPreview({ movies, onNavigate }: { movies: StatsData["top_rated"
 
         {/* Mini grid */}
         <div className="grid grid-cols-5 gap-2 sm:gap-3">
-          {topN.map((movie, i) => (
-            <div key={movie.id} className="flex flex-col items-center gap-1.5">
-              <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center border border-border/40">
+          {topN.map((movie, i) => (              <div key={movie.id} className="flex flex-col items-center gap-1.5">
+              <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 border border-border/40">
                 {movie.poster_url ? (
-                  <img
-                    src={movie.poster_url}
-                    alt={movie.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    loading="lazy"
+                  <TiltedCard
+                    imageSrc={movie.poster_url}
+                    altText={movie.title}
+                    containerHeight="100%"
+                    containerWidth="100%"
+                    imageHeight="100%"
+                    imageWidth="100%"
+                    scaleOnHover={1.02}
+                    rotateAmplitude={10}
+                    displayOverlayContent
+                    overlayContent={
+                      <div
+                        className="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-lg"
+                        style={{
+                          background: i === 0
+                            ? "linear-gradient(135deg, #f59e0b, #eab308)"
+                            : i === 1
+                              ? "linear-gradient(135deg, #94a3b8, #cbd5e1)"
+                              : i === 2
+                                ? "linear-gradient(135deg, #d97706, #f59e0b)"
+                                : "rgba(0,0,0,0.5)",
+                          color: i <= 2 ? "#0f0f0f" : "#fff",
+                          backdropFilter: "blur(4px)",
+                        }}
+                      >
+                        {i + 1}
+                      </div>
+                    }
                   />
                 ) : (
-                  <Film size={14} style={{ color: "var(--fg-dim)", opacity: 0.4 }} />
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Film size={14} style={{ color: "var(--fg-dim)", opacity: 0.4 }} />
+                  </div>
                 )}
-                {/* Rank badge */}
-                <div
-                  className="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
-                  style={{
-                    background: i === 0
-                      ? "linear-gradient(135deg, #f59e0b, #eab308)"
-                      : i === 1
-                        ? "linear-gradient(135deg, #94a3b8, #cbd5e1)"
-                        : i === 2
-                          ? "linear-gradient(135deg, #d97706, #f59e0b)"
-                          : "rgba(0,0,0,0.5)",
-                    color: i <= 2 ? "#0f0f0f" : "#fff",
-                    backdropFilter: "blur(4px)",
-                  }}
-                >
-                  {i + 1}
-                </div>
               </div>
               <div className="text-center min-w-0 w-full px-0.5">
                 <p className="text-[10px] font-medium truncate leading-tight" style={{ color: "var(--fg-secondary)" }}>
@@ -535,6 +543,13 @@ export function StatsTab() {
   const watchedPct = s.total > 0 ? Math.round((s.total_watched / s.total) * 100) : 0;
   const wishPct = s.total > 0 ? Math.round((s.total_wishlist / s.total) * 100) : 0;
 
+  const hasRating = ratingData.some((r) => r.value > 0);
+  const hasYearDecade = yearData.length > 0 || decadeData.length > 0;
+  const grid1Both = hasRating && hasYearDecade;
+  const hasMediaType = s.media_type_distribution.length > 1;
+  const hasRecent = s.recent_additions.length > 0;
+  const grid2Both = hasMediaType && hasRecent;
+
   return (
     <div className="space-y-5">
 
@@ -631,61 +646,63 @@ export function StatsTab() {
       {/* ════════════════════════════════════════════════════════
           RATING + YEAR/DECADE DISTRIBUTION — side by side
          ════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {ratingData.some((r) => r.value > 0) && (
-          <FadeContent delay={160}>
-            <ChartCard
-              title={t("stats.rating_distribution", "评分分布")}
-              count={s.avg_rating.toFixed(1)}
-              icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>}
-            >
-              <BarList data={ratingData} color="var(--chart-1)" />
-            </ChartCard>
-          </FadeContent>
-        )}
-        {(yearData.length > 0 || decadeData.length > 0) && (
-          <FadeContent delay={200}>
-            <ChartCard
-              title={yearViewMode === "year" ? t("stats.year_distribution", "年份分布") : t("stats.decade_distribution", "年代分布")}
-              icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>}
-            >
-              {/* Toggle */}
-              <div className="flex items-center gap-1 mb-3">
-                <button
-                  onClick={() => setYearViewMode("year")}
-                  className={`pill !text-[11px] ${yearViewMode === "year" ? "active" : ""}`}
-                >
-                  {t("stats.by_year", "按年")}
-                </button>
-                <button
-                  onClick={() => setYearViewMode("decade")}
-                  className={`pill !text-[11px] ${yearViewMode === "decade" ? "active" : ""}`}
-                >
-                  {t("stats.by_decade", "按年代")}
-                </button>
-              </div>
-              {yearViewMode === "year" && yearData.length > 0 ? (
-                <>
-                  <YearChart data={yearDisplay} color="var(--chart-3)" />
-                  {yearTruncated && (
-                    <button
-                      onClick={() => setYearExpanded(!yearExpanded)}
-                      className="w-full mt-2 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 text-muted-foreground hover:text-foreground"
-                    >
-                      {yearExpanded
-                        ? `${t("stats.show_recent", "显示最近")} ${YEAR_LIMIT} 年`
-                        : `${t("stats.expand", "展开全部")} ${yearData.length} 年`
-                      }
-                    </button>
-                  )}
-                </>
-              ) : decadeData.length > 0 ? (
-                <DecadeChart data={decadeData} color="var(--chart-4)" />
-              ) : null}
-            </ChartCard>
-          </FadeContent>
-        )}
-      </div>
+      {(hasRating || hasYearDecade) && (
+        <div className={`grid grid-cols-1 ${grid1Both ? 'sm:grid-cols-2' : ''} gap-4`}>
+          {hasRating && (
+            <FadeContent className={grid1Both ? "h-full" : undefined} delay={160}>
+              <ChartCard
+                title={t("stats.rating_distribution", "评分分布")}
+                count={s.avg_rating.toFixed(1)}
+                icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>}
+              >
+                <BarList data={ratingData} color="var(--chart-1)" />
+              </ChartCard>
+            </FadeContent>
+          )}
+          {hasYearDecade && (
+            <FadeContent className={grid1Both ? "h-full" : undefined} delay={200}>
+              <ChartCard
+                title={yearViewMode === "year" ? t("stats.year_distribution", "年份分布") : t("stats.decade_distribution", "年代分布")}
+                icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>}
+              >
+                {/* Toggle */}
+                <div className="flex items-center gap-1 mb-3">
+                  <button
+                    onClick={() => setYearViewMode("year")}
+                    className={`pill !text-[11px] ${yearViewMode === "year" ? "active" : ""}`}
+                  >
+                    {t("stats.by_year", "按年")}
+                  </button>
+                  <button
+                    onClick={() => setYearViewMode("decade")}
+                    className={`pill !text-[11px] ${yearViewMode === "decade" ? "active" : ""}`}
+                  >
+                    {t("stats.by_decade", "按年代")}
+                  </button>
+                </div>
+                {yearViewMode === "year" && yearData.length > 0 ? (
+                  <>
+                    <YearChart data={yearDisplay} color="var(--chart-3)" />
+                    {yearTruncated && (
+                      <button
+                        onClick={() => setYearExpanded(!yearExpanded)}
+                        className="w-full mt-2 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 text-muted-foreground hover:text-foreground"
+                      >
+                        {yearExpanded
+                          ? `${t("stats.show_recent", "显示最近")} ${YEAR_LIMIT} 年`
+                          : `${t("stats.expand", "展开全部")} ${yearData.length} 年`
+                        }
+                      </button>
+                    )}
+                  </>
+                ) : decadeData.length > 0 ? (
+                  <DecadeChart data={decadeData} color="var(--chart-4)" />
+                ) : null}
+              </ChartCard>
+            </FadeContent>
+          )}
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════
           MONTHLY TREND — full width area chart
@@ -719,7 +736,7 @@ export function StatsTab() {
             count={`${genreData.length} ${t("stats.total_genres", "种")}`}
             icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>}
           >
-            <GenreBarChart data={genreDisplay} color="var(--chart-2)" />
+            <GenreBarChart data={genreDisplay} color="#394c79" />
             {genreTruncated && (
               <button
                 onClick={() => setGenreExpanded(!genreExpanded)}
@@ -738,39 +755,40 @@ export function StatsTab() {
       {/* ══════════════════════════════════════════════════════
           MEDIA TYPE + RECENT — side by side
          ══════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {s.media_type_distribution.length > 1 && (
-          <FadeContent delay={360}>
-            <ChartCard
-              title={t("stats.media_type_distribution", "媒体类型")}
-              icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>}
-            >
-              <DonutSection
-                data={s.media_type_distribution.map((m) => ({
-                  name: m.type === "movie" ? t("stats.movie", "电影") : t("stats.tv", "剧集"),
-                  value: m.count,
-                }))}
-                colors={["var(--chart-1)", "var(--chart-3)"]}
-              />
-            </ChartCard>
-          </FadeContent>
-        )}
-
-        {s.recent_additions.length > 0 && (
-          <FadeContent delay={400}>
-            <ChartCard
-              title={t("stats.recent_additions", "最近添加")}
-              icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
-            >
-              <div className="space-y-0.5">
-                {s.recent_additions.slice(0, 7).map((item, i) => (
-                  <RecentRow key={i} status={item.status as "watched" | "wish"} title={item.title} date={item.created_at?.slice(0, 10) || ""} />
-                ))}
-              </div>
-            </ChartCard>
-          </FadeContent>
-        )}
-      </div>
+      {(hasMediaType || hasRecent) && (
+        <div className={`grid grid-cols-1 ${grid2Both ? 'sm:grid-cols-2' : ''} gap-4`}>
+          {hasMediaType && (
+            <FadeContent className={grid2Both ? "h-full" : undefined} delay={360}>
+              <ChartCard
+                title={t("stats.media_type_distribution", "媒体类型")}
+                icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>}
+              >
+                <DonutSection
+                  data={s.media_type_distribution.map((m) => ({
+                    name: m.type === "movie" ? t("stats.movie", "电影") : t("stats.tv", "剧集"),
+                    value: m.count,
+                  }))}
+                  colors={["var(--chart-1)", "var(--chart-3)"]}
+                />
+              </ChartCard>
+            </FadeContent>
+          )}
+          {hasRecent && (
+            <FadeContent className={grid2Both ? "h-full" : undefined} delay={400}>
+              <ChartCard
+                title={t("stats.recent_additions", "最近添加")}
+                icon={<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
+              >
+                <div className="space-y-0.5">
+                  {s.recent_additions.slice(0, 7).map((item, i) => (
+                    <RecentRow key={i} status={item.status as "watched" | "wish"} title={item.title} date={item.created_at?.slice(0, 10) || ""} />
+                  ))}
+                </div>
+              </ChartCard>
+            </FadeContent>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -780,7 +798,7 @@ function ChartCard({ title, count, icon, children }: {
   title: string; count?: string; icon?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <div className="group relative rounded-2xl p-5 sm:p-6 transition-all duration-300 hover:-translate-y-0.5" style={{
+    <div className="group relative rounded-2xl p-5 sm:p-6 transition-all duration-300 h-full" style={{
       background: "var(--bg-card)",
       border: "1px solid var(--border-default)",
     }}>

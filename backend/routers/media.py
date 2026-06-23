@@ -35,8 +35,6 @@ from crud import (
     set_scrape_error as db_set_scrape_error,
     get_media_stats,
     get_top_rated,
-    toggle_pin,
-    toggle_hide,
     reorder_top_rated,
     log_operation,
 )
@@ -70,34 +68,6 @@ async def top_rated_list(
 ):
     """Return top rated watched movies with pin/hide status."""
     return get_top_rated(current_user["id"], db=db)
-
-
-@router.post("/top-rated/{media_id}/toggle-pin")
-async def top_rated_toggle_pin(
-    media_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_user_db),
-):
-    """Toggle the pinned status of a media item in the top rated list."""
-    record = toggle_pin(media_id, current_user["id"], db=db)
-    if not record:
-        raise HTTPException(status_code=404, detail="Media item not found")
-    log_operation(current_user["id"], current_user["username"], "toggle_pin", f"置顶切换: {record.title}", db=db)
-    return {"id": record.id, "pinned": record.pinned}
-
-
-@router.post("/top-rated/{media_id}/toggle-hide")
-async def top_rated_toggle_hide(
-    media_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_user_db),
-):
-    """Toggle the hidden status of a media item in the top rated list."""
-    record = toggle_hide(media_id, current_user["id"], db=db)
-    if not record:
-        raise HTTPException(status_code=404, detail="Media item not found")
-    log_operation(current_user["id"], current_user["username"], "toggle_hide", f"隐藏切换: {record.title}", db=db)
-    return {"id": record.id, "hidden_from_top": record.hidden_from_top}
 
 
 @router.post("/top-rated/reorder")

@@ -530,8 +530,6 @@ def _run_column_migrations():
         ("season_number", "INTEGER"),
         ("episode_count", "INTEGER"),
         ("series_poster_url", "VARCHAR(500)"),
-        ("pinned", "BOOLEAN NOT NULL DEFAULT 0"),
-        ("hidden_from_top", "BOOLEAN NOT NULL DEFAULT 0"),
     ])
 
 
@@ -546,12 +544,6 @@ def _run_per_user_column_migrations(user_id: int):
         columns = [c["name"] for c in inspector.get_columns("media_items")]
     except Exception:
         return
-
-    _add_columns_if_missing("media_items", columns, [
-        ("pinned", "BOOLEAN NOT NULL DEFAULT 0"),
-        ("hidden_from_top", "BOOLEAN NOT NULL DEFAULT 0"),
-        ("sort_order", "INTEGER"),
-    ], engine=engine)
 
     if "session_id" in columns:
         _drop_column_if_exists("media_items", "session_id")

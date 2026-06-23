@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useTranslation } from "react-i18next";
 import {
-  Award, Star, Pin, PinOff, EyeOff, Film, Trophy,
+  Award, Star, Film, Trophy,
   GripVertical, Pencil, Check, ArrowUp, ArrowDown,
 } from "lucide-react";
 import FadeContent from "./FadeContent";
+import AnimatedContent from "./AnimatedContent";
 import { ProgressiveImage } from "./ProgressiveImage";
 import { DetailModal } from "./ManageTab/DetailModal";
-import { fetchTopRated, togglePin, toggleHide, reorderTopRated } from "../api";
+import { fetchTopRated, reorderTopRated } from "../api";
 import type { MediaDetail } from "../types";
 
 const MEDAL_COLORS = [
@@ -23,13 +23,13 @@ function getRankColor(index: number): string {
 }
 
 export function TopRatedTab() {
-  const { t } = useTranslation();
   const [movies, setMovies] = useState<MediaDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const [animated, setAnimated] = useState(false);
@@ -57,24 +57,6 @@ export function TopRatedTab() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleTogglePin = async (id: number) => {
-    try {
-      const result = await togglePin(id);
-      setMovies((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, pinned: result.pinned, hidden_from_top: false, sort_order: null } : m))
-      );
-    } catch { /* ignore */ }
-  };
-
-  const handleToggleHide = async (id: number) => {
-    try {
-      const result = await toggleHide(id);
-      if (result.hidden_from_top) {
-        setMovies((prev) => prev.filter((m) => m.id !== id));
-      }
-    } catch { /* ignore */ }
-  };
 
   // ── Drag & Drop ──────────────────────────────────────────
 
@@ -132,6 +114,9 @@ export function TopRatedTab() {
       // Exiting edit mode — save current order
       setSaving(true);
       reorderTopRated(movies.map((m) => m.id)).finally(() => setSaving(false));
+    } else {
+      // Entering edit mode — auto-expand to show all
+      setShowAll(true);
     }
     setEditMode(!editMode);
   };
@@ -216,7 +201,7 @@ export function TopRatedTab() {
 
       {/* ── Movie List ─────────────────────────────── */}
       <div className="space-y-3 sm:space-y-4">
-        {movies.map((movie, idx) => {
+        {movies.slice(0, showAll ? undefined : 10).map((movie, idx) => {
           const isTop3 = idx < 3;
           const medal = isTop3 ? MEDAL_COLORS[idx] : null;
           const delay = idx * 60;
@@ -297,15 +282,21 @@ export function TopRatedTab() {
                   )}
                 </div>
 
-                {/* Mini poster */}
-                <div
+                {/* Mini poster with bounce entrance */}
+                <AnimatedContent
                   className="w-10 h-14 sm:w-12 sm:h-16 rounded-lg overflow-hidden shrink-0"
                   style={{
                     ...(isTop3 ? { boxShadow: "0 2px 8px rgba(0,0,0,0.15)" } : {}),
-                    opacity: animated ? 1 : 0,
-                    transform: animated ? "scale(1)" : "scale(0.85)",
-                    transition: `opacity 0.5s cubic-bezier(0.16,1,0.3,1) ${delay + 100}ms, transform 0.5s cubic-bezier(0.16,1,0.3,1) ${delay + 100}ms`,
                   }}
+                  distance={60}
+                  direction="vertical"
+                  duration={0.7}
+                  ease="back.out(1.7)"
+                  scale={0.3}
+                  initialOpacity={0}
+                  animateOpacity={true}
+                  threshold={0}
+                  delay={idx * 0.04}
                 >
                   {movie.poster_url ? (
                     <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" wrapperClassName="!aspect-auto !h-full" />
@@ -314,7 +305,7 @@ export function TopRatedTab() {
                       <Film size={14} className="opacity-20" />
                     </div>
                   )}
-                </div>
+                </AnimatedContent>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
@@ -337,7 +328,6 @@ export function TopRatedTab() {
                         movie.title
                       )}
                     </span>
-                    {movie.pinned && <Pin size={10} className="text-amber shrink-0" fill="currentColor" />}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <div className="flex items-center gap-1">
@@ -351,28 +341,6 @@ export function TopRatedTab() {
                   </div>
                 </div>
 
-                {/* Actions (non-edit mode) */}
-                {!editMode && (
-                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-accent/30 transition-all"
-                      onClick={() => handleTogglePin(movie.id)}
-                      title={movie.pinned ? "取消置顶" : "置顶"}
-                    >
-                      {movie.pinned ? <PinOff size={12} className="text-amber" /> : <Pin size={12} className="opacity-40" />}
-                    </button>
-                    <button
-                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-accent/30 transition-all"
-                      onClick={() => handleToggleHide(movie.id)}
-                      title="隐藏"
-                    >
-                      <EyeOff size={12} className="opacity-40" />
-                    </button>
-                  </div>
-                )}
-
                 {/* Medal emoji for top 3 (non-edit mode) */}
                 {!editMode && isTop3 && (
                   <span className="text-lg shrink-0 ml-1">
@@ -384,6 +352,37 @@ export function TopRatedTab() {
           );
         })}
       </div>
+
+      {/* ── Show All Toggle ───────────────────────── */}
+      {movies.length > 10 && (
+        <FadeContent>
+          <button
+            className="w-full py-3 rounded-xl text-xs transition-all duration-300 hover:border-[var(--seed-primary)]"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-default)",
+              color: "var(--text-muted)",
+            }}
+            onClick={() => setShowAll(!showAll)}
+          >
+            {showAll ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M18 15l-6-6-6 6" />
+                </svg>
+                收起
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+                显示全部 {movies.length} 部
+              </span>
+            )}
+          </button>
+        </FadeContent>
+      )}
 
       {/* Detail Modal */}
       <DetailModal

@@ -31,8 +31,6 @@ from crud.media import (
     delete_media,
     get_media_stats,
     get_top_rated,
-    toggle_pin,
-    toggle_hide,
     reorder_top_rated,
 )
 
@@ -77,8 +75,6 @@ __all__ = [
     "delete_media",
     "get_media_stats",
     "get_top_rated",
-    "toggle_pin",
-    "toggle_hide",
     "reorder_top_rated",
     # Sessions
     "save_session",

@@ -385,22 +385,6 @@ export async function fetchTopRated(): Promise<MediaDetail[]> {
   return fetchJSON(`${API_BASE}/top-rated`, { headers: getAuthHeaders() });
 }
 
-/** Toggle pin status for a movie in the top rated list */
-export async function togglePin(mediaId: number): Promise<{ id: number; pinned: boolean }> {
-  return fetchJSON(`${API_BASE}/top-rated/${mediaId}/toggle-pin`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-  });
-}
-
-/** Toggle hide status for a movie in the top rated list */
-export async function toggleHide(mediaId: number): Promise<{ id: number; hidden_from_top: boolean }> {
-  return fetchJSON(`${API_BASE}/top-rated/${mediaId}/toggle-hide`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-  });
-}
-
 /** Reorder the top rated list */
 export async function reorderTopRated(orderedIds: number[]): Promise<{ status: string }> {
   return fetchJSON(`${API_BASE}/top-rated/reorder`, {
