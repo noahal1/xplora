@@ -381,9 +381,10 @@ export function ManageTab() {
       {/* Always render on desktop (sm:block), toggle on mobile via hidden/block */}
       <div className={`sm:block ${filtersExpanded ? 'max-sm:block max-sm:animate-slide-down' : 'max-sm:hidden'}`}>
         <div className="flex flex-col gap-0 sm:gap-0">
-          {/* Row 1: Status + MediaType (inline on mobile) */}
-          <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
-            <div className="max-sm:[&>*]:mb-0 shrink-0">
+          {/* Row 1: Status + MediaType + Sort + ScrapeSource (compact) */}
+          {/* Row 1: Status + MediaType (spaced groups) */}
+          <div className="flex items-start sm:items-center gap-2 sm:gap-1 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+            <div className="max-sm:[&>*]:mb-0 shrink-0 flex items-center">
               <StatusFilter
                 status={statusFilter}
                 error={errorFilter}
@@ -391,19 +392,27 @@ export function ManageTab() {
                 onErrorToggle={() => { setErrorFilter((v) => !v); setStatusFilter(""); setPage(0); setSelected(new Set()); }}
               />
             </div>
-            <MediaTypeFilter
-              selected={mediaTypeFilter}
-              allValue=""
-              onSelect={(v) => { setMediaTypeFilter(v); setPage(0); setSelected(new Set()); }}
-            />
+            <div className="flex items-center shrink-0">
+              <MediaTypeFilter
+                selected={mediaTypeFilter}
+                allValue=""
+                onSelect={(v) => { setMediaTypeFilter(v); setPage(0); setSelected(new Set()); }}
+              />
+            </div>
           </div>
 
-          {/* Row 2: Sort + Genre + ScrapeSource */}
-          <SortControls
-            field={sortField}
-            dir={sortDir}
-            onSort={(f) => { handleSort(f); setPage(0); setSelected(new Set()); }}
-          />
+          {/* Row 2: Sort + ScrapeSource */}
+          <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+            <SortControls
+              field={sortField}
+              dir={sortDir}
+              onSort={(f) => { handleSort(f); setPage(0); setSelected(new Set()); }}
+            />
+            <ScrapeSourceFilter
+              selected={enrichSource}
+              onSelect={setEnrichSource}
+            />
+          </div>
 
           <GenreFilter
             genres={uniqueGenres}
@@ -411,11 +420,6 @@ export function ManageTab() {
             allValue=""
             visibleCount={VISIBLE_GENRES}
             onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
-          />
-
-          <ScrapeSourceFilter
-            selected={enrichSource}
-            onSelect={setEnrichSource}
           />
         </div>
       </div>

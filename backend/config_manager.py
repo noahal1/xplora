@@ -9,12 +9,17 @@ import os
 import json
 
 # Config file path for API keys configured via the frontend UI.
-# In Docker, override via XPLORA_CONFIG_FILE=/app/data/config.json
-# to persist keys across container updates (/app/data is a volume).
-# Locally, defaults to backend/config.json (same dir as this file).
+# In Docker, /app/data is mounted as a persistent volume (./data:/app/data),
+# so config.json survives container updates. Override via XPLORA_CONFIG_FILE
+# env var if a different path is needed.
+# Locally, defaults to <project_root>/data/config.json.
 CONFIG_FILE = os.getenv(
     "XPLORA_CONFIG_FILE",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data",
+        "config.json",
+    ),
 )
 
 # All configurable API keys: short name -> env var name
@@ -39,13 +44,29 @@ def _load_config() -> dict:
         except (json.JSONDecodeError, IOError):
             _config_cache = {}
     else:
-        _config_cache = {}
+        # Backward compatibility: check old location (backend/config.json)
+        old_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "config.json"
+        )
+        if os.path.exists(old_path):
+            try:
+                with open(old_path, "r") as f:
+                    _config_cache = json.load(f)
+                # Migrate to new location immediately
+                _save_config(_config_cache)
+            except (json.JSONDecodeError, IOError):
+                _config_cache = {}
+        else:
+            _config_cache = {}
     return _config_cache
 
 
 def _save_config(config: dict) -> None:
     """Save config to JSON file and update cache."""
     global _config_cache
+    config_dir = os.path.dirname(CONFIG_FILE)
+    if config_dir:
+        os.makedirs(config_dir, exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
     _config_cache = config

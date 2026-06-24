@@ -513,8 +513,8 @@ export function WatchedTab() {
           {/* ── Filters: collapsible on mobile ───────────── */}
           <div className={`sm:block ${filtersExpanded ? 'max-sm:block max-sm:animate-slide-down' : 'max-sm:hidden'}`}>
             <div className="flex flex-col gap-0 sm:gap-0">
-              {/* Row 1: Sort + Rating (inline on mobile) */}
-              <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+              {/* Row 1: Sort + Rating + MediaType (compact) */}
+              <div className="flex items-start sm:items-center gap-2 sm:gap-1 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
                 <SortControls
                   field={sortField}
                   dir={sortDir}
@@ -540,12 +540,13 @@ export function WatchedTab() {
                     </button>
                   ))}
                 </div>
+                <div className="flex items-center shrink-0">
+                  <MediaTypeFilter
+                    selected={mediaTypeFilter}
+                    onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
+                  />
+                </div>
               </div>
-
-              <MediaTypeFilter
-                selected={mediaTypeFilter}
-                onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
-              />
 
               <GenreFilter
                 genres={uniqueGenres}

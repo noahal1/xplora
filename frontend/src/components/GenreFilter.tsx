@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { translateGenreName } from "../utils/genre";
 
@@ -34,13 +34,19 @@ export function GenreFilter({
   const { t } = useTranslation();
   const [showAll, setShowAll] = useState(false);
 
+  const hasMore = genres.length > effectiveVisibleCount;
+  const visibleGenres = showAll ? genres : genres.slice(0, effectiveVisibleCount);
+
+  const toggleShowAll = useCallback(() => setShowAll((v) => !v), []);
+
   if (genres.length === 0) return null;
 
-  const hasMore = genres.length > effectiveVisibleCount;
+  // Calculate which pills are "new" (appearing after expand) for stagger animation
+  const isNew = (idx: number) => showAll && idx >= effectiveVisibleCount;
 
   return (
-    <div className="mb-2 sm:mb-3 pb-0.5">
-      <div className={`flex items-center gap-1 sm:gap-1.5 pb-0.5 ${showAll ? "flex-wrap" : "flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar"}`}>
+    <div className="mb-2 sm:mb-3 pb-0.5 w-full">
+      <div className="flex items-center gap-1 sm:gap-1.5 pb-0.5 flex-wrap">
         <span className="text-xs text-muted-foreground mr-1 shrink-0 max-sm:hidden">
           {t("manage.genre_filter")}
         </span>
@@ -50,10 +56,11 @@ export function GenreFilter({
         >
           {t("manage.media_type_all")}
         </button>
-        {genres.slice(0, showAll ? genres.length : effectiveVisibleCount).map((g) => (
+        {visibleGenres.map((g, i) => (
           <button
             key={g}
-            className={`pill shrink-0 ${selected === g ? "active" : ""}`}
+            className={`pill shrink-0 ${selected === g ? "active" : ""}${isNew(i) ? " animate-pill-enter" : ""}`}
+            style={isNew(i) ? { animationDelay: `${(i - effectiveVisibleCount) * 30}ms` } : undefined}
             onClick={() => onSelect(g)}
           >
             {translateGenreName(g)}
@@ -61,8 +68,8 @@ export function GenreFilter({
         ))}
         {hasMore && (
           <button
-            className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0 ml-auto"
-            onClick={() => setShowAll((v) => !v)}
+            className="pill text-muted-foreground/60 hover:text-foreground gap-0.5 shrink-0"
+            onClick={toggleShowAll}
           >
             {showAll ? (
               <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
