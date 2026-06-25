@@ -559,6 +559,37 @@ def _run_per_user_column_migrations(user_id: int):
         ("detail", "VARCHAR(500)"),
     ])
 
+    # ── Data migration: ensure items with sort_order are marked as pinned ──
+    _fix_top_rated_pins(user_id, engine)
+
+
+def _fix_top_rated_pins(user_id: int, engine=None):
+    """One-time data migration: mark items with sort_order as pinned.
+
+    Before the `pinned` field was introduced, items were tracked solely
+    by having a non-null `sort_order`. After adding `pinned`, we need to
+    ensure all existing items with `sort_order` set also have `pinned=True`
+    so they continue to appear in get_top_rated (which now only checks
+    `pinned == True` instead of the old `pinned OR sort_order` condition).
+    """
+    from models import MediaItemRecord
+
+    target = engine or master_engine
+    try:
+        with Session(target) as session:
+            fixed = session.exec(
+                select(MediaItemRecord).where(
+                    MediaItemRecord.sort_order.isnot(None),
+                    MediaItemRecord.pinned == False,
+                )
+            ).all()
+            if fixed:
+                for r in fixed:
+                    r.pinned = True
+                session.commit()
+                logger.info(f"  [Migration] Fixed {len(fixed)} top-rated item(s) for user id={user_id} (set pinned=True)")
+    except Exception as e:
+        logger.warning(f"  [Migration] Error fixing top-rated pins for user id={user_id}: {e}")
 
 def _add_columns_if_missing(table: str, existing_columns: list[str], columns: list[tuple[str, str]], engine=None):
     """Add each column if it doesn't already exist."""

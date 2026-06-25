@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { BarChart3, Star, RefreshCw, Calendar, TrendingUp } from "lucide-react";
+import { BarChart3, Star, RefreshCw, Calendar, TrendingUp, Clock } from "lucide-react";
 import { translateGenreName } from "../utils/genre";
 import CountUp from "./CountUp";
 import FadeContent from "./FadeContent";
@@ -38,6 +38,126 @@ function setCachedStats(data: StatsData): void {
 }
 function clearCachedStats(): void {
   try { localStorage.removeItem(CACHE_KEY); } catch {}
+}
+
+/* ── Format total minutes into human-readable string ───────── */
+function formatWatchTime(minutes: number): string {
+  if (minutes <= 0) return "0";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours > 0 && mins > 0) {
+    return `${hours}h ${mins}m`;
+  }
+  if (hours > 0) {
+    return `${hours}h`;
+  }
+  return `${mins}m`;
+}
+
+/* ── Generate fun analogies for watch time ───────────────── */
+function getWatchTimeAnalogies(minutes: number): Array<{ icon: string; text: string }> {
+  if (minutes <= 0) return [];
+  const hours = minutes / 60;
+  const days = hours / 24;
+  const years = days / 365;
+  const candidates: Array<{ icon: string; text: string }> = [];
+
+  // 1. Continuous watching
+  if (days >= 1) {
+    const d = Math.floor(days);
+    const h = Math.round((days - d) * 24);
+    candidates.push({
+      icon: "🎬",
+      text: h > 0 ? `连续看片 ${d} 天 ${h} 小时` : `连续看片 ${d} 天`,
+    });
+  } else if (hours >= 2) {
+    candidates.push({ icon: "🎬", text: `连续看片 ${Math.round(hours)} 小时` });
+  }
+
+  // 2. 工作日 (8h/day)
+  if (days >= 3) {
+    candidates.push({ icon: "💼", text: `相当于 ${Math.round(days)} 个工作日` });
+  }
+
+  // 3. 🚗 自驾北京→拉萨（约 3,600km，40h）
+  const beijingLhasa = hours / 40;
+  if (beijingLhasa >= 0.5) {
+    const label = beijingLhasa > 100 ? "100+" : beijingLhasa.toFixed(1);
+    candidates.push({ icon: "🚗", text: `自驾北京→拉萨 ${label} 次` });
+  }
+
+  // 4. 🎮 通关《黑神话：悟空》（平均 ≈ 40h）
+  const wukong = hours / 40;
+  if (wukong >= 0.3) {
+    const label = wukong > 100 ? "100+" : wukong.toFixed(1);
+    candidates.push({ icon: "🎮", text: `通关《黑神话：悟空》${label} 遍` });
+  }
+
+  // 5. 《老友记》— 236 eps × 22 min ≈ 86.53h
+  const friendsRuns = hours / 86.53;
+  if (friendsRuns >= 0.5) {
+    const label = friendsRuns > 100 ? "100+" : friendsRuns.toFixed(1);
+    candidates.push({ icon: "📺", text: `刷完《老友记》${label} 遍` });
+  }
+
+  // 6. 《甄嬛传》— 76 eps × 45 min = 57h
+  const zhenhuanRuns = hours / 57;
+  if (zhenhuanRuns >= 0.5) {
+    const label = zhenhuanRuns > 100 ? "100+" : zhenhuanRuns.toFixed(1);
+    candidates.push({ icon: "👑", text: `刷完《甄嬛传》${label} 遍` });
+  }
+
+  // 7. 📚 听完《三体》有声书（≈ 120h）
+  const threeBody = hours / 120;
+  if (threeBody >= 0.5) {
+    const label = threeBody > 100 ? "100+" : threeBody.toFixed(1);
+    candidates.push({ icon: "📚", text: `听完《三体》有声书 ${label} 遍` });
+  }
+
+  // 8. 💍 看完《指环王》三部曲（≈ 12h）
+  const lotrRuns = hours / 12;
+  if (lotrRuns >= 0.5 && lotrRuns <= 50) {
+    candidates.push({ icon: "💍", text: `看完《指环王》三部曲 ${lotrRuns.toFixed(1)} 遍` });
+  }
+
+  // 9. ✈️ 北京→纽约往返飞行（单程 ≈ 14h）
+  const flights = hours / 14;
+  if (flights >= 1) {
+    candidates.push({ icon: "✈️", text: `北京→纽约往返飞行 ${Math.round(flights)} 次` });
+  }
+
+  // 10. 🏔️ 攀登珠穆朗玛峰（≈ 240h）
+  const everest = hours / 240;
+  if (everest >= 0.5) {
+    const label = everest > 100 ? "100+" : everest.toFixed(1);
+    candidates.push({ icon: "🏔️", text: `攀登珠穆朗玛峰 ${label} 次` });
+  }
+
+  // 11. 🌊 看完《海贼王》动画（≈ 440h）
+  const onePiece = hours / 440;
+  if (onePiece >= 0.5) {
+    const label = onePiece > 100 ? "100+" : onePiece.toFixed(1);
+    const epCount = onePiece > 100 ? "" : `（${Math.round(440 * onePiece)} 集）`;
+    candidates.push({ icon: "🌊", text: `看完《海贼王》动画 ${label} 遍${epCount}` });
+  }
+
+  // 12. 🌍 绕地球赤道步行（≈ 8,015h/圈）
+  const earthWalk = hours / 8015;
+  if (earthWalk >= 0.5) {
+    const label = earthWalk > 100 ? "100+" : earthWalk.toFixed(1);
+    candidates.push({ icon: "🌍", text: `绕地球赤道步行 ${label} 圈` });
+  }
+
+  // 13. ⏰ 占平均寿命百分比（80年 ≈ 700,800h）
+  if (years >= 0.1) {
+    const pct = ((years / 80) * 100).toFixed(1);
+    candidates.push({ icon: "⏰", text: `相当于人生 ${pct}% 的时光` });
+  }
+
+  // Pick one random analogy
+  if (candidates.length === 0) return [];
+  const idx = Math.floor(Math.random() * candidates.length);
+  return [candidates[idx]];
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -78,6 +198,12 @@ export function StatsTab() {
   const [genreExpanded, setGenreExpanded] = useState(false);
   const [yearExpanded, setYearExpanded] = useState(false);
   const [yearViewMode, setYearViewMode] = useState<"year" | "decade">("year");
+
+  /* ── Watch time analogy (must be before early returns!) ── */
+  const watchTimeAnalogies = useMemo(
+    () => getWatchTimeAnalogies(stats?.total_watch_time ?? 0),
+    [stats?.total_watch_time]
+  );
 
   /* ── Loading ───────────────────────────────────────────── */
   if (loading) {
@@ -121,8 +247,6 @@ export function StatsTab() {
   const yearDisplay = yearTruncated && !yearExpanded ? yearData.slice(-YEAR_LIMIT) : yearData;
 
   const s = stats!;
-  const watchedPct = s.total > 0 ? Math.round((s.total_watched / s.total) * 100) : 0;
-  const wishPct = s.total > 0 ? Math.round((s.total_wishlist / s.total) * 100) : 0;
 
   const hasRating = ratingData.some((r) => r.value > 0);
   const hasYearDecade = yearData.length > 0 || decadeData.length > 0;
@@ -164,7 +288,7 @@ export function StatsTab() {
                     <CountUp end={s.total} duration={1.4} />
                   </span>
                   <span className="text-sm font-medium" style={{ color: "var(--fg-muted)" }}>
-                    {t("stats.total", "部电影")}
+                    {t("stats.total", "部")}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -174,7 +298,6 @@ export function StatsTab() {
                     icon={<svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><polyline points="20 6 9 17 4 12" /></svg>}
                     value={s.total_watched}
                     label={t("stats.watched_short", "已看")}
-                    pct={s.total > 0 ? watchedPct : undefined}
                   />
 
                   {/* 想看 badge */}
@@ -183,7 +306,6 @@ export function StatsTab() {
                     icon={<svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>}
                     value={s.total_wishlist}
                     label={t("stats.wishlist_short", "想看")}
-                    pct={s.total > 0 ? wishPct : undefined}
                   />
 
                   {/* 均分 badge */}
@@ -194,21 +316,31 @@ export function StatsTab() {
                     label={t("stats.avg_short", "均分")}
                   />
 
-                  {/* 月记录 badge */}
-                  {trendData.length > 0 && (
-                    <StatBadge
-                      color="--chart-1"
-                      icon={<Calendar size={11} />}
-                      value={trendData.length}
-                      label={t("stats.month_short", "个月")}
-                    />
-                  )}
                 </div>
               </div>
               <button className="btn btn-ghost btn-xs shrink-0 mt-0.5" onClick={handleRefresh} title={t("stats.refresh", "刷新")}>
                 <RefreshCw size={12} />
               </button>
             </div>
+
+            {/* ══════════════════════════════════════════════════
+                WATCH TIME — compact inline row
+               ══════════════════════════════════════════════════ */}
+            {s.total_watch_time > 0 && (
+              <div className="mt-3 pt-3 flex items-center gap-2 text-sm flex-wrap" style={{ borderTop: "1px solid color-mix(in srgb, var(--seed-primary) 10%, transparent)" }}>
+                <span className="shrink-0 inline-flex items-center gap-1.5" style={{ color: "var(--chart-2)" }}>
+                  <Clock size={13} />
+                  <span className="font-[510]">{formatWatchTime(s.total_watch_time)}</span>
+                </span>
+                {watchTimeAnalogies.length > 0 && (
+                  <>
+                    <span className="text-xs" style={{ color: "var(--fg-dim)" }}>·</span>
+                    <span className="shrink-0">{watchTimeAnalogies[0].icon}</span>
+                    <span style={{ color: "var(--fg-secondary)" }}>{watchTimeAnalogies[0].text}</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </FadeContent>

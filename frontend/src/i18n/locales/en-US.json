@@ -502,7 +502,7 @@
   },
   "stats": {
     "title": "Statistics",
-    "total": "{{count}} movies",
+    "total": "movies",
     "total_watched": "Watched",
     "total_wishlist": "Wishlist",
     "avg_rating": "Avg Rating",

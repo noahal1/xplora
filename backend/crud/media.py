@@ -650,9 +650,9 @@ def get_top_rated(
 ) -> list[dict]:
     """Return the user's curated top-rated list.
 
-    Only returns items that are explicitly pinned (pinned=True) or have
-    a sort_order set. Items are sorted by sort_order ascending, then
-    by rating descending as a tiebreaker. Returns up to 50 items.
+    Only returns items that are explicitly pinned (pinned=True).
+    Items are sorted by sort_order ascending, then by rating descending
+    as a tiebreaker. Returns up to 10 items.
     """
     session, close_db = _resolve_db(db)
     try:
@@ -661,7 +661,7 @@ def get_top_rated(
                 MediaItemRecord.user_id == user_id,
                 MediaItemRecord.status == "watched",
                 MediaItemRecord.hidden_from_top == False,
-                (MediaItemRecord.pinned == True) | (MediaItemRecord.sort_order.isnot(None)),
+                MediaItemRecord.pinned == True,
             )
         ).all()
 
@@ -674,7 +674,7 @@ def get_top_rated(
                 -(r.created_at.timestamp() if r.created_at else 0),
             )
 
-        sorted_records = sorted(records, key=sort_key)[:50]
+        sorted_records = sorted(records, key=sort_key)[:10]
         return [_media_to_dict(r) for r in sorted_records]
     finally:
         if close_db:
@@ -706,6 +706,19 @@ def add_to_top_rated(
         # Already pinned — just return it
         if record.pinned and not record.hidden_from_top:
             return _media_to_dict(record)
+
+        # Enforce maximum of 10 items in the top rated list
+        current_count = session.scalar(
+            select(sa_func.count()).select_from(
+                select(MediaItemRecord).where(
+                    MediaItemRecord.user_id == user_id,
+                    MediaItemRecord.pinned == True,
+                    MediaItemRecord.hidden_from_top == False,
+                ).subquery()
+            )
+        ) or 0
+        if current_count >= 10:
+            return None
 
         # Find current max sort_order
         max_order = session.scalar(
@@ -931,6 +944,11 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             reverse=True,
         )[:10]
 
+        # ── Total watch time (minutes, watched only) ───────────
+        total_watch_time = sum(
+            r.runtime for r in watched if r.runtime is not None
+        )
+
         # ── Avg rating ────────────────────────────────────────
         avg_rating = (
             round(sum(r.rating for r in watched) / len(watched), 1)
@@ -944,6 +962,7 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             "total": total,
             "total_watched": len(watched),
             "total_wishlist": len(wishlist),
+            "total_watch_time": total_watch_time,
             "avg_rating": avg_rating,
             "rating_distribution": rating_distribution,
             "year_distribution": year_distribution,

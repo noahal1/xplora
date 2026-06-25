@@ -105,7 +105,11 @@ async def top_rated_add(
     if not isinstance(media_id, int):
         raise HTTPException(status_code=400, detail="请提供 media_id")
     result = add_to_top_rated(current_user["id"], media_id, db=db)
-    if not result:
+    if result is None:
+        # Check whether the list is full (max 10)
+        current_list = get_top_rated(current_user["id"], db=db)
+        if len(current_list) >= 10:
+            raise HTTPException(status_code=400, detail="排行榜最多10部，请先移除一部再添加")
         raise HTTPException(status_code=404, detail="媒体条目不存在")
     log_operation(current_user["id"], current_user["username"], "add_to_top_rated", f"添加到排行榜: {result['title']}", db=db)
     return {"status": "ok", "item": result}

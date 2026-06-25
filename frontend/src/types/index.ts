@@ -138,6 +138,7 @@ export interface StatsData {
   total: number;
   total_watched: number;
   total_wishlist: number;
+  total_watch_time: number;
   avg_rating: number;
   rating_distribution: Array<{ range: string; count: number }>;
   year_distribution: Array<{ year: number; count: number }>;

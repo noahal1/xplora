@@ -514,7 +514,7 @@
   },
   "stats": {
     "title": "观影统计",
-    "total": "共 {{count}} 部",
+    "total": "部",
     "total_watched": "已看",
     "total_wishlist": "想看",
     "avg_rating": "平均评分",

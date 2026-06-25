@@ -13,6 +13,7 @@ import {
 import type { MediaDetail } from "../types";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { TopRatedCard } from "./tabs/top_rated/TopRatedCard";
+import { useToast } from "../context/ToastContext";
 
 
 
@@ -35,7 +36,16 @@ export function TopRatedTab() {
   const [searchResults, setSearchResults] = useState<MediaDetail[]>([]);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState<number | null>(null);
+  const { showToast } = useToast();
   const searchRef = useRef<HTMLDivElement>(null);
+  const MAX_ITEMS = 10;
+
+  // ── Replace modal (当排行榜已满时选择替换哪一部) ────────
+  const [replacePending, setReplacePending] = useState<{
+    newId: number;
+    newTitle: string;
+  } | null>(null);
+  const [replacing, setReplacing] = useState(false);
 
   const { input: searchQuery, setInput: setSearchQuery, debouncedValue: debouncedSearchQuery } = useDebouncedSearch("", 300);
 
@@ -95,7 +105,15 @@ export function TopRatedTab() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showAddModal]);
 
-  const handleAdd = async (mediaId: number) => {
+  const handleAdd = async (mediaId: number, title: string) => {
+    // If list is already full, open replace modal instead
+    if (movies.length >= MAX_ITEMS) {
+      setReplacePending({ newId: mediaId, newTitle: title });
+      setShowAddModal(false);
+      setSearchQuery("");
+      return;
+    }
+
     setAdding(mediaId);
     try {
       const { item } = await addToTopRated(mediaId);
@@ -103,6 +121,25 @@ export function TopRatedTab() {
       setSearchResults((prev) => prev.filter((m) => m.id !== mediaId));
     } catch { /* ignore */ }
     setAdding(null);
+  };
+
+  // ── Replace: remove an existing movie then add the new one ──
+  const handleReplace = async (oldId: number) => {
+    if (!replacePending) return;
+    const { newId, newTitle } = replacePending;
+    setReplacing(true);
+    try {
+      await removeFromTopRated(oldId);
+      await addToTopRated(newId);
+      // Re-fetch the full list from backend to ensure consistency
+      const updated = await fetchTopRated();
+      setMovies(updated);
+      showToast(`已将「${newTitle}」加入排行榜`, "success");
+    } catch (e: any) {
+      showToast(e.message || "替换失败，请重试", "error");
+    }
+    setReplacePending(null);
+    setReplacing(false);
   };
 
   const handleConfirmRemove = async () => {
@@ -207,7 +244,7 @@ export function TopRatedTab() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* ── Header ─────────────────────────────────── */}
-      <FadeContent className="section-card">
+      <FadeContent className="section-card" style={{ position: "relative", zIndex: 1 }}>
         <div className="section-header">
           <div className="flex items-center gap-2">
             <div
@@ -217,7 +254,7 @@ export function TopRatedTab() {
               <Trophy size={14} className="text-white" />
             </div>
             <h2 className="section-title">Top 排行榜</h2>
-            <span className="text-[10px] opacity-30 ml-1">{movies.length} 部</span>
+            <span className="text-[10px] opacity-30 ml-1">{movies.length}/{MAX_ITEMS}</span>
           </div>
           <div className="flex items-center gap-2">
             {saving && <span className="text-[10px] animate-pulse opacity-40">保存中...</span>}
@@ -239,11 +276,7 @@ export function TopRatedTab() {
               {/* Search dropdown */}
               {showAddModal && (
                 <div
-                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-xl shadow-xl z-50 overflow-hidden"
-                  style={{
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-default)",
-                  }}
+                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-xl shadow-xl z-50 overflow-hidden bg-popover border border-border transition-none"
                 >
                   <div className="p-2 border-b" style={{ borderColor: "var(--border-default)" }}>
                     <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: "var(--bg-input)" }}>
@@ -283,7 +316,7 @@ export function TopRatedTab() {
                       <button
                         key={item.id}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-accent/20 transition-colors text-left"
-                        onClick={() => handleAdd(item.id)}
+                        onClick={() => handleAdd(item.id, item.title)}
                         disabled={adding === item.id}
                       >
                         {item.poster_url ? (
@@ -395,6 +428,75 @@ export function TopRatedTab() {
             </>
           }
         />
+      )}
+
+      {/* Replace Modal — pick which movie to replace */}
+      {replacePending && (
+        <Modal
+          open={true}
+          onClose={() => setReplacePending(null)}
+          title={
+            <div className="flex items-center gap-2">
+              <span>排行榜已满，替换哪一部？</span>
+              <span className="text-[11px] opacity-40 font-normal">10/10</span>
+            </div>
+          }
+          description={`选择要被「${replacePending.newTitle}」替换的电影`}
+          footer={
+            <button className="btn btn-ghost btn-sm" onClick={() => setReplacePending(null)}>
+              取消
+            </button>
+          }
+        >
+          <div className="space-y-1 max-h-72 overflow-y-auto -mx-1 px-1">
+            {movies.map((m, idx) => (
+              <button
+                key={m.id}
+                disabled={replacing}
+                className="w-full flex items-center gap-3 px-2.5 py-2 rounded-lg hover:bg-accent/20 transition-colors text-left disabled:opacity-40"
+                onClick={() => handleReplace(m.id)}
+              >
+                {/* Rank badge */}
+                <span
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0"
+                  style={{
+                    background: idx < 3
+                      ? `linear-gradient(135deg, ${idx === 0 ? "#f59e0b" : idx === 1 ? "#94a3b8" : "#b45309"}, ${idx === 0 ? "#eab308" : idx === 1 ? "#cbd5e1" : "#d97706"})`
+                      : "var(--bg-input)",
+                    color: idx < 3 ? "#fff" : "var(--fg-secondary)",
+                  }}
+                >
+                  {idx + 1}
+                </span>
+
+                {/* Poster */}
+                {m.poster_url ? (
+                  <img src={m.poster_url} alt="" className="w-7 h-10 rounded object-cover shrink-0" />
+                ) : (
+                  <div className="w-7 h-10 rounded flex items-center justify-center shrink-0" style={{ background: "var(--bg-input)" }}>
+                    <Film size={10} className="opacity-20" />
+                  </div>
+                )}
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{m.title}</div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="flex items-center gap-0.5 text-[10px] opacity-50">
+                      <Star size={8} fill="currentColor" /> {m.rating.toFixed(1)}
+                    </span>
+                    {m.year && <span className="text-[10px] opacity-30">{m.year}</span>}
+                  </div>
+                </div>
+
+                {/* Arrow */}
+                <svg className="w-3.5 h-3.5 opacity-30 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        </Modal>
       )}
 
       {/* Detail Modal */}
