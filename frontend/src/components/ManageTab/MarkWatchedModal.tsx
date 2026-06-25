@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../types";
 import { Modal } from "../Modal";
+import { RatingSlider } from "../shared/RatingSlider";
 
 interface MarkWatchedModalProps {
   open: boolean;
@@ -39,18 +40,10 @@ export function MarkWatchedModal({ open, movie, onClose, onConfirm }: MarkWatche
           <div className="text-5xl font-bold text-amber tabular-nums count-badge" key={rating}>{rating.toFixed(1)}</div>
           <div className="text-xs text-muted-foreground mt-1">/ 10</div>
         </div>
-        <input type="range" min={0} max={10} step={0.5} value={rating}
-          onChange={(e) => { setRating(parseFloat(e.target.value)); navigator.vibrate?.(3); }}
-          className="w-full max-w-xs h-1.5 sm:h-1.5 appearance-none rounded-full bg-border accent-amber outline-none cursor-pointer touch-manipulation
-            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
-            max-sm:[&::-webkit-slider-thumb]:w-7 max-sm:[&::-webkit-slider-thumb]:h-7
-            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber [&::-webkit-slider-thumb]:shadow-lg
-            [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-background
-            [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:ease-out
-            [&::-webkit-slider-thumb]:hover:scale-110
-            active:[&::-webkit-slider-thumb]:scale-125 active:[&::-webkit-slider-thumb]:shadow-amber/40
-            [&::-webkit-slider-track]:h-1.5 [&::-webkit-slider-track]:rounded-full
-            max-sm:[&::-webkit-slider-track]:h-2.5"
+        <RatingSlider
+          value={rating}
+          onChange={(v) => setRating(v)}
+          size="lg"
         />
         <div className="flex items-center justify-between w-full max-w-xs text-xs text-muted-foreground">
           <span>0</span>

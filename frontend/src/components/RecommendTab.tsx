@@ -1,42 +1,24 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaItem, Recommendation, ChatMessage, ExternalDetail, DBSession, DBSessionDetail } from "../types";
 import * as api from "../api";
-import { exportJSON, exportScreenshot } from "../utils/export";
+import { exportJSON } from "../utils/export";
 import { useToast } from "../context/ToastContext";
 import { SkeletonCard } from "./Skeleton";
-import { Modal } from "./Modal";
 import FadeContent from "./FadeContent";
-import {
-  Sparkles, Send, Percent, MessageSquare, Film,
-  Brain, Bot, Trophy, Heart, Calendar, Gem, Compass, Star, Plus, Loader2, User,
-  History, Trash2, ChevronRight, Clock, ChevronDown,
-} from "lucide-react";
-import { Badge } from "./ui/badge";
-import { translateGenres } from "../utils/genre";
-import CountUp from "./CountUp";
-import { formatDateTime } from "../utils/date";
+import { Sparkles } from "lucide-react";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
-import { GenreFilter } from "./GenreFilter";
-import { MediaTypeFilter } from "./MediaTypeFilter";
+import { ChatPanel } from "./tabs/recommend/ChatPanel";
+import { StrategySelector } from "./tabs/recommend/StrategySelector";
+import { SessionHistory } from "./tabs/recommend/SessionHistory";
+import { TMDBDetailModal } from "./shared/TMDBDetailModal";
+import { ResultsSection } from "./tabs/recommend/ResultsSection";
 
-const VISIBLE_GENRES = 6;
-
-const STRATEGIES = [
-  { id: "taste", icon: Heart },
-  { id: "classics", icon: Trophy },
-  { id: "mood", icon: Sparkles },
-  { id: "era", icon: Calendar },
-  { id: "gems", icon: Gem },
-  { id: "explore", icon: Compass },
-] as const;
 
 export function RecommendTab() {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const resultsRef = useRef<HTMLDivElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLInputElement>(null);
+
 
   const [movies, setMovies] = useState<MediaItem[]>([]);
   const [loadingMovies, setLoadingMovies] = useState(true);
@@ -316,11 +298,8 @@ export function RecommendTab() {
     }
   }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
 
-  const sendFollowUp = useCallback(async () => {
-    const input = chatInputRef.current;
-    if (!input || !input.value.trim() || isChatProcessing) return;
-    const text = input.value.trim();
-    input.value = "";
+  const sendFollowUp = useCallback(async (text: string) => {
+    if (!text.trim() || isChatProcessing) return;
     setChatMessages((prev) => [...prev, { role: "user", content: text }]);
     setIsChatProcessing(true);
 
@@ -448,9 +427,7 @@ export function RecommendTab() {
     })();
   }, [detailRec, t]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -479,14 +456,6 @@ export function RecommendTab() {
     }
   }, [addingToWishlist, showToast, t]);
 
-  const handleExportScreenshot = useCallback(async () => {
-    if (!resultsRef.current) return;
-    try {
-      await exportScreenshot(resultsRef.current);
-      showToast(t("recommend.export_screenshot_success"), "success");
-    } catch (err: any) { showToast(err.message, "error"); }
-  }, [showToast, t]);
-
   // -- Loading state for initial data fetch
   if (loadingMovies) {
     return (
@@ -504,187 +473,28 @@ export function RecommendTab() {
       {/* === Empty / Config State === */}
       {!isLoading && recommendations.length === 0 ? (
         <FadeContent className="section-card">
-          <div className="flex flex-col items-center py-10 px-4">
-            {/* Sparkle icon */}
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
-              style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}
-            >
-              <Sparkles size={20} style={{ color: "var(--seed-primary)" }} />
-            </div>
-            <h2 className="text-heading mb-2" style={{ color: "var(--seed-fg)" }}>
-              {t("recommend.empty_title")}
-            </h2>
-            <p className="text-body text-center max-w-md mb-6" style={{ color: "var(--fg-muted)" }}>
-              {t("recommend.empty_desc")}
-            </p>
-
-            {/* ── Strategy Selector Grid ────────────────────── */}
-            <div className="w-full max-w-[520px] mb-6">
-              <p className="text-label mb-3 text-center" style={{ color: "var(--fg-dim)" }}>
-                {t("recommend.strategy_label")}
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {STRATEGIES.map((s) => {
-                  const Icon = s.icon;
-                  const isActive = strategy === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setStrategy(s.id)}
-                      className="relative flex flex-col items-center gap-1.5 px-2 py-3 rounded-lg text-xs font-medium transition-all"
-                      style={{
-                        background: isActive ? "var(--accent-glow)" : "var(--bg-input)",
-                        border: isActive
-                          ? "1px solid var(--primary-30)"
-                          : "1px solid var(--border-subtle)",
-                        color: isActive ? "var(--seed-accent)" : "var(--fg-muted)",
-                      }}
-                    >
-                      {isActive && (
-                        <span
-                          className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
-                          style={{ background: "var(--seed-primary)", color: "#0f0f0f" }}
-                        >
-                          <Star size={8} fill="currentColor" />
-                        </span>
-                      )}
-                      <Icon size={16} />
-                      <span style={{ fontWeight: isActive ? 590 : 510 }}>{t(`recommend.strategy_${s.id}`)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <MediaTypeFilter
-              selected={mediaTypeFilter}
-              onSelect={setMediaTypeFilter}
-              className="justify-start sm:justify-center"
-            />
-
-            {/* ── Genre Filter ─────────────────────────── */}
-            <GenreFilter
-              genres={uniqueGenres}
-              selected={genreFilter}
-              onSelect={setGenreFilter}
-              visibleCount={VISIBLE_GENRES}
-            />
-
-            {/* ── Strategy-specific inputs ──────────────────── */}
-            {strategy === "mood" && (
-              <div className="w-full max-w-[400px] mb-5">
-                <input
-                  type="text"
-                  value={strategyMood}
-                  onChange={(e) => setStrategyMood(e.target.value)}
-                  placeholder={t("recommend.strategy_mood_placeholder")}
-                  className="input-field text-center"
-                />
-              </div>
-            )}
-
-            {strategy === "era" && (
-              <div className="w-full max-w-[320px] mb-5">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={strategyYearStart}
-                    onChange={(e) => setStrategyYearStart(e.target.value)}
-                    placeholder={t("recommend.strategy_era_start")}
-                    className="input-field text-center"
-                    min={1900}
-                    max={2030}
-                  />
-                  <span className="text-xs" style={{ color: "var(--fg-dim)" }}>—</span>
-                  <input
-                    type="number"
-                    value={strategyYearEnd}
-                    onChange={(e) => setStrategyYearEnd(e.target.value)}
-                    placeholder={t("recommend.strategy_era_end")}
-                    className="input-field text-center"
-                    min={1900}
-                    max={2030}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* ── Model + Count + Generate ─────────────────── */}
-            <div className="flex flex-col items-center gap-4 mb-2">
-              {/* Model toggle */}
-              <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}>
-                {[
-                  { value: "deepseek", icon: Brain },
-                  { value: "openai", icon: Bot },
-                ].map((opt) => {
-                  const Icon = opt.icon;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => setSelectedModel(opt.value)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
-                      style={
-                        selectedModel === opt.value
-                          ? { background: "var(--seed-primary)", color: "#0f0f0f" }
-                          : { color: "var(--fg-muted)" }
-                      }
-                    >
-                      <Icon size={13} />
-                      <span>{opt.value === "deepseek" ? "DeepSeek" : "GPT-4o"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Count */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: "var(--fg-dim)" }}>{t("recommend.rec_count")}</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    className="w-6 h-6 flex items-center justify-center rounded text-xs font-medium transition-all disabled:opacity-30"
-                    style={{ border: "1px solid var(--border-subtle)", color: "var(--fg-muted)" }}
-                    disabled={recCount <= 1}
-                    onClick={() => setRecCount((c) => Math.max(1, c - 1))}
-                  >−</button>
-                  <span className="w-6 text-center text-xs font-semibold" style={{ color: "var(--seed-primary)" }}>{recCount}</span>
-                  <button
-                    className="w-6 h-6 flex items-center justify-center rounded text-xs font-medium transition-all disabled:opacity-30"
-                    style={{ border: "1px solid var(--border-subtle)", color: "var(--fg-muted)" }}
-                    disabled={recCount >= 20}
-                    onClick={() => setRecCount((c) => Math.min(20, c + 1))}
-                  >+</button>
-                </div>
-              </div>
-
-              {/* Generate button */}
-              {filteredMovies.length < 2 && (
-                <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
-                  {mediaTypeFilter !== "all"
-                    ? t("recommend.need_more_filtered", { type: t(`manage.media_type_${mediaTypeFilter}`) })
-                    : t("recommend.need_more_movies")}
-                </p>
-              )}
-
-              <button
-                onClick={generateRecommendations}
-                disabled={filteredMovies.length < 2}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40"
-                style={{
-                  background: filteredMovies.length >= 2 ? "var(--seed-primary)" : "var(--bg-input)",
-                  color: filteredMovies.length >= 2 ? "#0f0f0f" : "var(--fg-dim)",
-                  border: filteredMovies.length >= 2 ? "none" : "1px solid var(--border-default)",
-                }}
-              >
-                <Sparkles size={14} />
-                {t("recommend.generate")}
-              </button>
-
-              <p className="text-caption" style={{ color: "var(--fg-dim)" }}>
-                {t("recommend.based_on", { count: filteredMovies.length })} · Ctrl+Enter
-              </p>
-            </div>
-          </div>
+          <StrategySelector
+            strategy={strategy}
+            onStrategyChange={setStrategy}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            recCount={recCount}
+            onRecCountChange={(n) => setRecCount(n)}
+            strategyMood={strategyMood}
+            onMoodChange={setStrategyMood}
+            strategyYearStart={strategyYearStart}
+            onYearStartChange={setStrategyYearStart}
+            strategyYearEnd={strategyYearEnd}
+            onYearEndChange={setStrategyYearEnd}
+            mediaTypeFilter={mediaTypeFilter}
+            onMediaTypeFilterChange={setMediaTypeFilter}
+            genreFilter={genreFilter}
+            onGenreFilterChange={setGenreFilter}
+            uniqueGenres={uniqueGenres}
+            filteredCount={filteredMovies.length}
+            onGenerate={generateRecommendations}
+            t={t}
+          />
         </FadeContent>
       ) : null}
 
@@ -708,541 +518,61 @@ export function RecommendTab() {
 
       {/* === Results Section === */}
       {recommendations.length > 0 && (
-        <FadeContent className="section-card" ref={resultsRef}>
-          <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
-            <h2 className="text-heading" style={{ color: "var(--seed-fg)" }}>
-              {t("recommend.results")}
-            </h2>
-            <div className="flex items-center gap-2 flex-wrap">
-              {modelUsed && <span className="badge">{modelUsed}</span>}
-              <span className="badge">{t(`recommend.strategy_${strategy}`)}</span>
-            </div>
-          </div>
-
-          {sourceInfo && (
-            <p className="text-center mb-5 pb-4" style={{ color: "var(--fg-muted)", fontSize: "0.8125rem", borderBottom: "1px solid var(--border-subtle)" }}>
-              {sourceInfo}
-            </p>
-          )}
-
-          <div className="space-y-3">
-            {recommendations.map((rec, i) => (
-              <div
-                key={i}
-                className="card p-4 animate-slide-up"
-                style={{ animationDelay: `${i * 0.1}s`, animationFillMode: "both" }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex gap-3 flex-1 min-w-0">
-                    {/* Poster — loaded from TMDB CDN, no local caching — click for details */}
-                    <div
-                      className="w-10 h-14 rounded shrink-0 flex items-center justify-center overflow-hidden cursor-pointer ring-1 ring-transparent hover:ring-[var(--seed-primary)] transition-all duration-200"
-                      style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}
-                      onClick={() => setDetailRec(rec)} title={t("recommend.view_detail")}
-                    >
-                      {rec.poster_url ? (
-                        <img src={rec.poster_url} alt={rec.title} className="w-full h-full object-cover" loading="lazy"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                      ) : (
-                        <>
-                          <svg width="40" height="56" viewBox="0 0 40 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <rect width="40" height="56" fill="transparent" />
-                            <rect x="3" y="3" width="34" height="50" rx="2" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" />
-                            <path d="M20 22L25 28H15L20 22Z" fill="rgba(255,255,255,0.08)" />
-                            <circle cx="17" cy="19" r="2.5" fill="rgba(255,255,255,0.06)" />
-                            <rect x="9" y="38" width="22" height="2.5" rx="1.25" fill="rgba(255,255,255,0.05)" />
-                            <rect x="12" y="43" width="16" height="1.5" rx="0.75" fill="rgba(255,255,255,0.03)" />
-                          </svg>
-                          <Film size={12} style={{ color: "var(--fg-dim)", opacity: 0.5, position: "relative", zIndex: 1 }} />
-                        </>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="text-sm font-[590] truncate" style={{ color: "var(--seed-fg)" }}>
-                          {rec.title}
-                        </p>
-                        {rec.media_type === "tv" && (
-                          <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
-                        )}
-                        {rec.watched && (
-                          <Badge variant="outline" className="text-[10px] shrink-0" style={{ color: "var(--fg-muted)", borderColor: "var(--border-default)" }}>
-                            {t("common.watched")}
-                          </Badge>
-                        )}
-                        {rec.genre && <span className="badge">{translateGenres(rec.genre)}</span>}
-                      </div>
-                      {rec.year && (
-                        <p className="text-xs mt-0.5" style={{ color: "var(--fg-muted)" }}>{rec.year}</p>
-                      )}
-                      <p className="text-body mt-2" style={{ color: "var(--fg-secondary)", fontSize: "0.8125rem" }}>
-                        {rec.reason}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Add to wishlist button */}
-                    <button
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-all disabled:opacity-50 hover:bg-accent"
-                      style={{ color: addingToWishlist[i] ? "var(--seed-primary)" : "var(--fg-dim)" }}
-                      disabled={addingToWishlist[i]}
-                      onClick={(e) => { e.stopPropagation(); addToWishlist(rec, i); }}
-                      title={t("wishlist.add")}
-                    >
-                      {addingToWishlist[i] ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <Plus size={12} />
-                      )}
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <Percent size={11} style={{ color: "var(--seed-primary)" }} />
-                      <span className="text-xs font-[590]" style={{ color: "var(--seed-primary)" }}>
-                        <CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Export buttons */}
-          {recommendations.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mt-5 pt-4" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-              <button
-                onClick={handleExportJSON}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
-                style={{ background: "var(--bg-input)", color: "var(--fg-secondary)", border: "1px solid var(--border-default)" }}
-              >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                {t("recommend.export_json")}
-              </button>
-              <button
-                onClick={handleExportScreenshot}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
-                style={{ background: "var(--bg-input)", color: "var(--fg-secondary)", border: "1px solid var(--border-default)" }}
-              >
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="12" r="4" /></svg>
-                {t("recommend.export_screenshot")}
-              </button>
-              <button
-                onClick={() => { setRecommendations([]); setShowChat(false); setChatMessages([]); setAddingToWishlist({}); }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all sm:ml-auto"
-                style={{ color: "var(--fg-muted)" }}
-              >
-                <Sparkles size={12} />
-                {t("recommend.new_session")}
-              </button>
-            </div>
-          )}
-        </FadeContent>
+        <ResultsSection
+          recommendations={recommendations}
+          modelUsed={modelUsed}
+          strategy={strategy}
+          sourceInfo={sourceInfo}
+          addingToWishlist={addingToWishlist}
+          onAddToWishlist={addToWishlist}
+          onOpenDetail={setDetailRec}
+          onNewSession={() => { setRecommendations([]); setShowChat(false); setChatMessages([]); setAddingToWishlist({}); }}
+          onExportJSON={handleExportJSON}
+          t={t}
+        />
       )}
 
-      {/* === TMDB Detail Modal === */}
-      <Modal open={detailRec !== null} onClose={closeDetail}
-        title={
-          <div className="flex items-center gap-2">
-            <span className="truncate">{detailRec?.title || ""}</span>
-            {detailRec?.media_type === "tv" && (
-              <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0">TV</Badge>
-            )}
-          </div>
-        }
-        description={detailData?.tagline || undefined}
-      >
-        {detailLoading && (
-          <div className="flex items-center justify-center py-10">
-            <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-            <span className="ml-2 text-sm" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.loading")}</span>
-          </div>
-        )}
-        {detailError && (
-          <div className="px-3 py-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">{detailError}</div>
-        )}
-        {detailData && !detailLoading && !detailError && (
-          <div className="space-y-5">
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <div className="w-[72px] sm:w-[100px] shrink-0">
-                <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
-                  {detailData.poster_url ? (
-                    <img src={detailData.poster_url} alt={detailData.title} className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                  ) : <span className="text-3xl opacity-30">🎬</span>}
-                </div>
-              </div>
-              <div className="flex-1 min-w-0 space-y-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {detailData.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{detailData.year}</span>}
-                  {detailData.runtime && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{Math.floor(detailData.runtime / 60)}h {detailData.runtime % 60}m</span>}
-                  {detailData.original_language && <Badge variant="outline" className="text-[9px]">{detailData.original_language.toUpperCase()}</Badge>}
-                  <Badge variant="outline" className="text-[9px] font-mono border-primary/30" style={{ color: "var(--seed-primary)" }}>{detailData.source.toUpperCase()}</Badge>
-                </div>
-                {detailData.genre && (
-                  <div className="flex flex-wrap gap-1">
-                    {Array.from(
-                      new Set(detailData.genre.split(" / ").map((g) => g.trim()).filter(Boolean))
-                    ).map((g) => (
-                      <Badge key={g} variant="secondary" className="text-[10px]">{translateGenreName(g)}</Badge>
-                    ))}
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {detailData.rating != null && (
-                    <div className="flex items-center gap-1">
-                      <span style={{ color: "var(--seed-primary)" }}>★</span>
-                      <span className="font-semibold text-sm">{Number(detailData.rating).toFixed(1)}</span>
-                      {detailData.vote_count != null && <span className="text-[10px]" style={{ color: "var(--fg-muted)" }}>({detailData.vote_count})</span>}
-                    </div>
-                  )}
-                  {detailData.ratings && Object.entries(detailData.ratings).map(([key, val]) => (
-                    <Badge key={key} variant="outline" className="text-[9px]">                    {key === "imdb" ? "IMDb" : key === "rotten_tomatoes" ? "RT" : key === "metacritic" ? "M" : key}: {val}</Badge>
-                  ))}
-                </div>
-                {/* Confidence & reason from recommendation */}
-                {detailRec && (
-                  <div className="pt-2 mt-2" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
-                        <div className="h-full rounded-full transition-all duration-700"
-                          style={{
-                            width: `${Math.round(detailRec.confidence * 100)}%`,
-                            background: detailRec.confidence >= 0.8
-                              ? "var(--seed-primary)"
-                              : detailRec.confidence >= 0.5
-                                ? "#f59e0b"
-                                : "var(--fg-dim)",
-                          }} />
-                      </div>
-                      <span className="text-xs font-[590] tabular-nums shrink-0" style={{ color: "var(--seed-primary)" }}>                        <CountUp end={Math.round(detailRec.confidence * 100)} suffix="%" />
-                        </span>
-                    </div>
-                    <p className="text-xs leading-relaxed" style={{ color: "var(--fg-secondary)" }}>{detailRec.reason}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {detailData.overview && (
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.overview")}</h4>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--fg-secondary)" }}>{detailData.overview}</p>
-              </div>
-            )}
-
-            {(detailData.director || detailData.actors || detailData.writer || detailData.awards) && (
-              <div className="grid grid-cols-2 gap-3">
-                {detailData.director && (
-                  <div><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.director")}</h4><p className="text-sm">{detailData.director}</p></div>
-                )}
-                {detailData.writer && (
-                  <div><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.writer")}</h4><p className="text-sm">{detailData.writer}</p></div>
-                )}
-                {detailData.actors && (
-                  <div className="col-span-2"><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.actors")}</h4><p className="text-sm">{detailData.actors}</p></div>
-                )}
-                {detailData.awards && (
-                  <div className="col-span-2"><h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>{t("detail_modal.awards")}</h4><p className="text-sm">{detailData.awards}</p></div>
-                )}
-              </div>
-            )}
-
-            {(detailData.country || detailData.box_office) && (
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--fg-muted)" }}>
-                {detailData.country && <span>{t("detail_modal.country")}: {detailData.country}</span>}
-                {detailData.box_office && <span>{t("detail_modal.box_office")}: {detailData.box_office}</span>}
-              </div>
-            )}
-
-            {detailData.homepage && (
-              <div>
-                <a href={detailData.homepage} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                  {t("detail_modal.homepage")}
-                </a>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+      <TMDBDetailModal
+        open={detailRec !== null}
+        title={detailRec?.title}
+        loading={detailLoading}
+        error={detailError}
+        data={detailData}
+        recommendation={detailRec}
+        mediaType={detailRec?.media_type}
+        tagline={detailData?.tagline}
+        onClose={closeDetail}
+        t={t}
+      />
 
       {/* === Recommendation History Section === */}
-      {!selectedSession && (
-        <FadeContent className="section-card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}
-              >
-                <History size={15} style={{ color: "var(--seed-primary)" }} />
-              </div>
-              <h2 className="text-sm font-[590]" style={{ color: "var(--seed-fg)" }}>
-                {t("history.title")}
-              </h2>
-              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                {t("history.session_count", { count: sessionsTotal })}
-              </span>
-            </div>
-            {sessionsTotal > 10 && (
-              <div className="flex items-center gap-1">
-                <button className="page-btn" disabled={sessionsPage <= 0} onClick={() => loadSessions(sessionsPage - 1)}>‹</button>
-                <span className="text-xs px-1" style={{ color: "var(--fg-muted)" }}>{sessionsPage + 1}/{Math.ceil(sessionsTotal / 10)}</span>
-                <button className="page-btn" disabled={sessionsPage >= Math.ceil(sessionsTotal / 10) - 1} onClick={() => loadSessions(sessionsPage + 1)}>›</button>
-              </div>
-            )}
-          </div>
+      <SessionHistory
+        sessions={sessions}
+        sessionsTotal={sessionsTotal}
+        sessionsPage={sessionsPage}
+        sessionsLoading={sessionsLoading}
+        selectedSession={selectedSession}
+        selectedSessionLoading={selectedSessionLoading}
+        deleteTargetId={deleteTargetId}
+        sessionPosterMap={sessionPosterMap}
+        addingFromSession={addingFromSession}
+        onLoadSessions={loadSessions}
+        onViewSession={viewSession}
+        onBackToList={() => { setSelectedSession(null); setSessionPosterMap({}); setAddingFromSession({}); }}
+        onConfirmDeleteSession={confirmDeleteSession}
+        onSetDeleteTarget={setDeleteTargetId}
+        onAddRecToWishlist={addRecToWishlist}
+        onOpenDetail={setDetailRec}
+        t={t}
+      />
 
-          {sessionsLoading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-            </div>
-          )}
-
-          {!sessionsLoading && sessions.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <History size={20} className="opacity-30 mb-2" />
-              <p className="text-xs">{t("history.no_sessions_hint")}</p>
-            </div>
-          )}
-
-          {!sessionsLoading && sessions.length > 0 && (
-            <div className="space-y-2">
-              {sessions.map((s) => (
-                <div
-                  key={s.id}
-                  className="card card-lift p-3 flex items-center justify-between cursor-pointer"
-                  onClick={() => viewSession(s.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-12 rounded shrink-0 flex items-center justify-center"
-                      style={{
-                        background: s.model === "deepseek" ? "var(--accent-glow)" : "rgba(16, 185, 129, 0.1)",
-                        border: `1px solid ${s.model === "deepseek" ? "var(--primary-20)" : "rgba(16, 185, 129, 0.2)"}`,
-                      }}
-                    >
-                      {s.model === "deepseek" ? (
-                        <Brain size={14} style={{ color: "var(--seed-primary)" }} />
-                      ) : (
-                        <Bot size={14} style={{ color: "#10b981" }} />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-[510]">
-                          {s.model === "deepseek" ? "DeepSeek" : "OpenAI"}
-                        </span>
-                        <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-                        <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                          <Clock size={10} className="inline mr-0.5" />
-                          {formatDateTime(s.created_at)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                          <span className="font-medium" style={{ color: "var(--seed-primary)" }}>{s.recommendation_count}</span>
-                          {' '}{t("history.recommendations", { count: s.recommendation_count })}
-                        </span>
-                        <span className="text-xs" style={{ color: "var(--fg-dim)" }}>
-                          {t("history.source_movies", { count: s.source_count })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      className="text-muted-foreground hover:text-destructive p-1.5 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTargetId(s.id); }}
-                      title={t("common.delete")}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                    <ChevronRight size={14} style={{ color: "var(--fg-dim)" }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </FadeContent>
-      )}
-
-      {/* === Session Detail View === */}
-      {selectedSession && (
-        <FadeContent className="section-card">
-          {/* Back + session info */}
-          <div className="flex items-start sm:items-center gap-2 pb-4 mb-4 flex-wrap" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-            <button
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all hover:bg-accent"
-              style={{ color: "var(--fg-muted)" }}
-              onClick={() => { setSelectedSession(null); setSessionPosterMap({}); setAddingFromSession({}); }}
-            >
-              <ChevronRight size={14} className="rotate-180" />
-              {t("common.back")}
-            </button>
-            <div className="flex items-center gap-2 ml-2 flex-wrap">
-              <span className="text-sm font-medium">
-                {selectedSession.model === "deepseek" ? <><Brain size={14} className="inline mr-1" />DeepSeek</> : <><Bot size={14} className="inline mr-1" />OpenAI</>}
-              </span>
-              <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                <Clock size={10} className="inline mr-0.5" />
-                {formatDateTime(selectedSession.created_at)}
-              </span>
-              <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                {t("history.source_movies", { count: selectedSession.source_count })}
-              </span>
-            </div>
-          </div>
-
-          {selectedSessionLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {selectedSession.recommendations.map((rec, i) => (
-                <div
-                  key={i}
-                  className="card card-lift p-3.5 flex items-center justify-between cursor-pointer animate-slide-up"
-                  style={{ animationDelay: `${i * 0.06}s`, animationFillMode: "both" }}
-                  onClick={() => setDetailRec(rec)}
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center border border-border">
-                      {sessionPosterMap[i] ? (
-                        <img src={sessionPosterMap[i]!} alt={rec.title} className="w-full h-full object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                      ) : (
-                        <Film size={14} className="opacity-40" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-[510] truncate" style={{ color: "var(--seed-fg)" }}>{rec.title}</span>
-                        {rec.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{rec.year}</span>}
-                        {rec.genre && <span className="badge text-[10px]">{translateGenres(rec.genre)}</span>}
-                        <span
-                          className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
-                          style={{
-                            color: rec.confidence >= 0.7 ? "var(--seed-primary)" : "var(--fg-muted)",
-                            background: rec.confidence >= 0.7 ? "var(--accent-glow)" : "var(--bg-input)",
-                            border: `1px solid ${rec.confidence >= 0.7 ? "var(--primary-20)" : "var(--border-subtle)"}`,
-                          }}
-                        >
-                          <Percent size={8} /><CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
-                        </span>
-                      </div>
-                      <p className="text-xs mt-1 leading-relaxed line-clamp-2" style={{ color: "var(--fg-secondary)" }}>{rec.reason}</p>
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-xs shrink-0 ml-3 transition-all disabled:opacity-50"
-                    style={{
-                      background: "var(--accent-glow)",
-                      color: "var(--seed-primary)",
-                      border: "1px solid var(--primary-20)",
-                    }}
-                    disabled={addingFromSession[i]}
-                    onClick={(e) => { e.stopPropagation(); addRecToWishlist(rec, i); }}
-                    title={t("wishlist.add")}
-                  >
-                    {addingFromSession[i] ? (
-                      <div className="w-3 h-3 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-                    ) : (
-                      <Plus size={12} />
-                    )}
-                    <span className="text-[11px] font-medium">{t("wishlist.add")}</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </FadeContent>
-      )}
-
-      {/* Delete Session Confirmation Modal */}
-      <Modal
-        open={deleteTargetId !== null}
-        onClose={() => setDeleteTargetId(null)}
-        title={t("common.delete")}
-        footer={
-          <div className="flex items-center gap-2 w-full justify-end">
-            <button className="btn btn-ghost btn-sm" onClick={() => setDeleteTargetId(null)}>
-              {t("common.cancel")}
-            </button>
-            <button
-              className="btn btn-sm"
-              style={{ background: "var(--destructive)", color: "#fff", borderColor: "transparent" }}
-              onClick={confirmDeleteSession}
-            >
-              {t("common.delete")}
-            </button>
-          </div>
-        }
-      >
-        <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
-          {t("history.delete_session_confirm")}
-        </p>
-      </Modal>
-
-      {/* === Chat Area — aligns with design === */}
+      {/* === Chat Panel === */}
       {showChat && (
-        <section className="card overflow-hidden animate-slide-down">
-          <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-            <MessageSquare size={13} style={{ color: "var(--fg-muted)" }} />
-            <span className="text-caption font-[510]">{t("recommend.chat_title")}</span>
-          </div>
-
-          <div className="px-4 py-3 max-h-[300px] overflow-y-auto space-y-3">
-            {chatMessages.map((msg, i) => (
-              <div key={i} className={`flex gap-2 items-start max-w-[90%] ${msg.role === "user" ? "ml-auto flex-row-reverse" : ""}`}>
-                <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs"
-                  style={{ background: msg.role === "user" ? "var(--accent-glow)" : "var(--bg-input)", border: "1px solid var(--border-subtle)" }}>
-                  {msg.role === "user" ? <User size={12} /> : <Brain size={12} />}
-                </div>
-                <div className="px-3 py-2 rounded-xl text-sm leading-relaxed break-words"
-                  style={msg.role === "user"
-                    ? { background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }
-                    : { background: "var(--bg-card)", border: "1px solid var(--border-subtle)" }
-                  }>
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {isChatProcessing && (
-              <div className="flex gap-2 items-start max-w-[85%]">
-                <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs"
-                  style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}><Brain size={12} /></div>
-                <div className="px-3 py-2 rounded-xl" style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)" }}>
-                  <span className="text-sm" style={{ color: "var(--fg-muted)" }}>{t("recommend.chat_thinking")}</span>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          <div className="flex gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-            <input
-              ref={chatInputRef}
-              type="text"
-              placeholder={t("recommend.chat_placeholder")}
-              className="input-field flex-1"
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendFollowUp(); }}}
-            />
-            <button
-              onClick={sendFollowUp}
-              disabled={isChatProcessing}
-              className="btn btn-primary w-9 h-9 flex items-center justify-center shrink-0"
-            >
-              <Send size={14} />
-            </button>
-          </div>
-        </section>
+        <ChatPanel
+          messages={chatMessages}
+          isProcessing={isChatProcessing}
+          onSend={sendFollowUp}
+        />
       )}
     </div>
   );

@@ -1,32 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import {
-  BarChart3, Film, Star,
-  Trophy, ChevronRight, RefreshCw,
-  Sparkles, Calendar, TrendingUp,
-} from "lucide-react";
-import {
-  Tooltip,
-  ResponsiveContainer,
-  PieChart as RePieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  LabelList,
-  AreaChart,
-  Area,
-  CartesianGrid,
-} from "recharts";
+import { BarChart3, Star, RefreshCw, Calendar, TrendingUp } from "lucide-react";
 import { translateGenreName } from "../utils/genre";
 import CountUp from "./CountUp";
 import FadeContent from "./FadeContent";
-import TiltedCard from "./TiltedCard";
 import { fetchStats } from "../api";
 import type { StatsData } from "../types";
+
+import { StatsSkeleton } from "./tabs/stats/StatsSkeleton";
+import { StatBadge } from "./tabs/stats/StatBadge";
+import { TopRatedPreview } from "./tabs/stats/TopRatedPreview";
+import { ChartCard } from "./tabs/stats/ChartCard";
+import { BarList } from "./tabs/stats/BarList";
+import { YearChart } from "./tabs/stats/YearChart";
+import { DecadeChart } from "./tabs/stats/DecadeChart";
+import { formatMonthLabel, MonthlyTrendChart } from "./tabs/stats/MonthlyTrendChart";
+import { GenreBarChart } from "./tabs/stats/GenreBarChart";
+import { DonutSection } from "./tabs/stats/DonutSection";
+import { RecentRow } from "./tabs/stats/RecentRow";
 
 /* ── localStorage cache helpers ──────────────────────────────── */
 const CACHE_KEY = "xplora-stats-cache";
@@ -46,417 +38,6 @@ function setCachedStats(data: StatsData): void {
 }
 function clearCachedStats(): void {
   try { localStorage.removeItem(CACHE_KEY); } catch {}
-}
-
-/* ── Helpers ─────────────────────────────────────────────────── */
-
-/** Format "YYYY-MM" → "Jan" / "1月" style label (keep short for axis) */
-function formatMonthLabel(ym: string): string {
-  const d = new Date(ym + "-01T00:00:00");
-  if (isNaN(d.getTime())) return ym;
-  // Use short month name + last 2 digits of year if different from prev
-  return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-}
-
-/* ── Chart tooltip ──────────────────────────────────────────── */
-function ChartTip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div
-      className="text-xs rounded-lg shadow-xl backdrop-blur-sm px-3 py-2"
-      style={{
-        background: "color-mix(in srgb, var(--bg-elevated) 96%, transparent)",
-        border: "1px solid var(--border-default)",
-        color: "var(--seed-fg)",
-      }}
-    >
-      <p className="font-medium mb-0.5">{label}</p>
-      {payload.map((entry: any, i: number) => (
-        <p key={i} style={{ color: entry.color }}>
-          {entry.name && <span className="mr-1 opacity-70">{entry.name}</span>}
-          <span className="font-semibold">{entry.value}</span>
-        </p>
-      ))}
-    </div>
-  );
-}
-
-/* ── Horizontal bar list ─────────────────────────────────────── */
-function BarList({ data, color }: { data: { name: string; value: number }[]; color: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
-  return (
-    <div className="space-y-3">
-      {data.map((item, i) => (
-        <div key={i}>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium truncate" style={{ color: "var(--fg-secondary)" }}>
-              {item.name}
-            </span>
-            <span className="text-sm font-semibold tabular-nums ml-3" style={{ color: "var(--fg-muted)" }}>
-              {item.value}
-            </span>
-          </div>
-          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
-            <div
-              className="h-full rounded-full transition-all duration-[1200ms] ease-out"
-              style={{
-                width: `${Math.max((item.value / max) * 100, 2)}%`,
-                transitionDelay: `${i * 60}ms`,
-                background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 30%, transparent))`,
-              }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ── Year distribution bar chart ──────────────────────────────── */
-function YearChart({ data, color }: { data: { name: string; value: number }[]; color: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const visible = data.slice(0, 40); // limit to last 40 years
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={visible} margin={{ top: 8, right: 4, bottom: 4, left: -16 }}>
-        <XAxis
-          dataKey="name"
-          tick={{ fill: "var(--fg-muted)", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis hide domain={[0, max * 1.15]} />
-        <Tooltip content={<ChartTip />} cursor={{ fill: "var(--bg-card-hover)" }} />
-        <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={12} isAnimationActive animationBegin={200} animationDuration={1000}>
-          {visible.map((_e, i) => (
-            <Cell key={i} fill={color} fillOpacity={0.4 + (visible[i].value / max) * 0.6} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ── Decade bar chart ─────────────────────────────────────────── */
-function DecadeChart({ data, color }: { data: { name: string; value: number }[]; color: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={data} margin={{ top: 8, right: 4, bottom: 4, left: -16 }}>
-        <XAxis dataKey="name" tick={{ fill: "var(--fg-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-        <YAxis hide domain={[0, max * 1.15]} />
-        <Tooltip content={<ChartTip />} cursor={{ fill: "var(--bg-card-hover)" }} />
-        <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44} isAnimationActive animationBegin={200} animationDuration={1000}>
-          {data.map((_e, i) => (
-            <Cell key={i} fill={color} fillOpacity={0.5 + (data[i].value / max) * 0.5} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ── Monthly trend area chart ─────────────────────────────────── */
-function MonthlyTrendChart({ data, color }: { data: { name: string; value: number }[]; color: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const gradientId = "trendGradient";
-  return (
-    <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={data} margin={{ top: 8, right: 4, bottom: 4, left: -16 }}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
-        <XAxis
-          dataKey="name"
-          tick={{ fill: "var(--fg-muted)", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis hide domain={[0, Math.max(max * 1.25, 4)]} />
-        <Tooltip content={<ChartTip />} cursor={{ stroke: "var(--border-hover)", strokeDasharray: "3 3" }} />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke={color}
-          strokeWidth={2}
-          fill={`url(#${gradientId})`}
-          isAnimationActive
-          animationBegin={200}
-          animationDuration={1200}
-          dot={false}
-          activeDot={{ r: 5, fill: color, stroke: "var(--seed-bg)", strokeWidth: 2 }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ── Genre bar chart (recharts, horizontal) ──────────────────── */
-function GenreBarChart({ data, color }: { data: { name: string; value: number }[]; color: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(data.length * 42, 80)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 0, right: 28, bottom: 0, left: -6 }}>
-        <XAxis type="number" hide domain={[0, max * 1.18]} />
-        <YAxis
-          type="category"
-          dataKey="name"
-          tick={{ fill: "var(--fg-secondary)", fontSize: 12 }}
-          axisLine={false}
-          tickLine={false}
-          width={80}
-        />
-        <Tooltip content={<ChartTip />} cursor={{ fill: "var(--bg-card-hover)" }} />
-        <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={18} isAnimationActive animationBegin={200} animationDuration={1000}>
-          {data.map((_e, i) => (
-            <Cell key={i} fill={color} fillOpacity={0.5 + (data[i].value / max) * 0.5} />
-          ))}
-          <LabelList
-            dataKey="value"
-            position="right"
-            style={{ fill: "var(--fg-muted)", fontSize: 11, fontVariantNumeric: "tabular-nums" }}
-          />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ── Donut chart ──────────────────────────────────────────────── */
-function DonutSection({ data, colors }: { data: { name: string; value: number }[]; colors: string[] }) {
-  const { t } = useTranslation();
-  const total = data.reduce((s, d) => s + d.value, 0);
-  return (
-    <div className="flex flex-col items-center gap-5">
-      <div className="relative">
-        <ResponsiveContainer width={180} height={180}>
-          <RePieChart>
-            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={82} paddingAngle={3} stroke="none" isAnimationActive animationBegin={200} animationDuration={1200}>
-              {data.map((_e, i) => (<Cell key={i} fill={colors[i % colors.length]} />))}
-            </Pie>
-            <Tooltip content={<ChartTip />} />
-          </RePieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-2xl font-bold tabular-nums tracking-tight" style={{ color: "var(--seed-fg)" }}>
-            <CountUp end={total} duration={1.2} />
-          </span>                          <span className="text-[10px] font-medium mt-0.5" style={{ color: "var(--fg-muted)" }}>{t("stats.total_label", "总计")}</span>
-        </div>
-      </div>
-      <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-        {data.map((item, i) => {
-          const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
-          return (
-            <div key={i} className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colors[i % colors.length] }} />
-              <span className="text-xs" style={{ color: "var(--fg-secondary)" }}>{item.name}</span>
-              <span className="text-xs font-semibold tabular-nums" style={{ color: "var(--seed-fg)" }}>{pct}%</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ── Top Rated Preview ────────────────────────────────────────── */
-function TopRatedPreview({ movies, onNavigate }: { movies: StatsData["top_rated"]; onNavigate: () => void }) {
-  const { t } = useTranslation();
-  const topN = movies.slice(0, 5);
-  if (topN.length === 0) return null;
-
-  return (
-    <div
-      className="group relative overflow-hidden rounded-2xl p-5 sm:p-6 transition-all duration-300 cursor-pointer"
-      onClick={onNavigate}
-      style={{
-        background: `linear-gradient(135deg, color-mix(in srgb, var(--seed-primary) 8%, transparent), transparent 65%)`,
-        border: "1px solid color-mix(in srgb, var(--seed-primary) 14%, transparent)",
-      }}
-    >
-      {/* Hover glow */}
-      <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-2xl pointer-events-none"
-        style={{ background: `radial-gradient(500px circle at 20% 50%, color-mix(in srgb, var(--seed-primary) 8%, transparent), transparent)` }}
-      />
-      <div className="relative z-10 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "color-mix(in srgb, var(--seed-primary) 20%, transparent)" }}>
-              <Trophy size={15} style={{ color: "var(--seed-primary)" }} />
-            </div>
-            <div>
-              <span className="text-sm font-semibold" style={{ color: "var(--seed-fg)" }}>
-                {t("stats.top_rated", "高分排行榜")}
-              </span>
-              <span className="text-[10px] ml-2" style={{ color: "var(--fg-muted)" }}>
-                <Sparkles size={10} className="inline mr-0.5" style={{ color: "var(--seed-primary)" }} />
-                {t("stats.view_top_rated", "浏览 Top 10")}
-              </span>
-            </div>
-          </div>
-          <ChevronRight size={15} className="shrink-0 transition-all duration-300 group-hover:translate-x-0.5" style={{ color: "var(--fg-dim)" }} />
-        </div>
-
-        {/* Mini grid */}
-        <div className="grid grid-cols-5 gap-2 sm:gap-3">
-          {topN.map((movie, i) => (              <div key={movie.id} className="flex flex-col items-center gap-1.5">
-              <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 border border-border/40">
-                {movie.poster_url ? (
-                  <TiltedCard
-                    imageSrc={movie.poster_url}
-                    altText={movie.title}
-                    containerHeight="100%"
-                    containerWidth="100%"
-                    imageHeight="100%"
-                    imageWidth="100%"
-                    scaleOnHover={1.02}
-                    rotateAmplitude={10}
-                    displayOverlayContent
-                    overlayContent={
-                      <div
-                        className="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-lg"
-                        style={{
-                          background: i === 0
-                            ? "linear-gradient(135deg, #f59e0b, #eab308)"
-                            : i === 1
-                              ? "linear-gradient(135deg, #94a3b8, #cbd5e1)"
-                              : i === 2
-                                ? "linear-gradient(135deg, #d97706, #f59e0b)"
-                                : "rgba(0,0,0,0.5)",
-                          color: i <= 2 ? "#0f0f0f" : "#fff",
-                          backdropFilter: "blur(4px)",
-                        }}
-                      >
-                        {i + 1}
-                      </div>
-                    }
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Film size={14} style={{ color: "var(--fg-dim)", opacity: 0.4 }} />
-                  </div>
-                )}
-              </div>
-              <div className="text-center min-w-0 w-full px-0.5">
-                <p className="text-[10px] font-medium truncate leading-tight" style={{ color: "var(--fg-secondary)" }}>
-                  {movie.title}
-                </p>
-                <div className="flex items-center justify-center gap-0.5 mt-0.5">
-                  <Star size={8} style={{ color: "var(--seed-primary)" }} />
-                  <span className="text-[9px] font-semibold tabular-nums" style={{ color: "var(--fg-muted)" }}>
-                    {movie.rating.toFixed(1)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Recent row ───────────────────────────────────────────────── */
-function RecentRow({ status, title, date }: { status: "watched" | "wish"; title: string; date: string }) {
-  const isW = status === "watched";
-  return (
-    <div className="flex items-center justify-between py-2 px-2 -mx-2 rounded-lg transition-all duration-200 cursor-default group">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isW ? "bg-green" : "bg-pink"}`} />
-        <span className="text-sm truncate" style={{ color: "var(--seed-fg)" }}>{title}</span>
-        <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
-          isW ? "text-green bg-green/10 border border-green/20" : "text-pink bg-pink/10 border border-pink/20"
-        }`}>
-          {isW ? (
-            <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="20 6 9 17 4 12" /></svg>
-          ) : (
-            <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
-          )}
-          {isW ? "已看" : "想看"}
-        </span>
-      </div>
-      <span className="text-[10px] tabular-nums hidden sm:inline shrink-0" style={{ color: "var(--fg-dim)" }}>{date || ""}</span>
-    </div>
-  );
-}
-
-/* ── Stat Badge ──────────────────────────────────────────────── */
-function StatBadge({ color, icon, value, label, pct }: {
-  color: string;
-  icon: React.ReactNode;
-  value: string | number;
-  label: string;
-  pct?: number;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 hover:scale-105" style={{
-      background: `color-mix(in srgb, var(${color}) 14%, transparent)`,
-      color: `var(${color})`,
-      border: `1px solid color-mix(in srgb, var(${color}) 20%, transparent)`,
-    }}>
-      {icon}
-      <span className="tabular-nums font-bold">{value}</span>
-      <span className="opacity-70">{label}</span>
-      {pct !== undefined && <span className="opacity-50 text-[10px]">{pct}%</span>}
-    </span>
-  );
-}
-
-/* ── Loading Skeleton ─────────────────────────────────────────── */
-function StatsSkeleton() {
-  return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Hero */}
-      <div className="rounded-2xl p-6 sm:p-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
-        <div className="space-y-4">
-          <div className="skeleton w-24 h-4 rounded" />
-          <div className="skeleton w-40 h-12 rounded" />
-          <div className="flex gap-3 flex-wrap">
-            <div className="skeleton h-7 w-24 rounded-full" />
-            <div className="skeleton h-7 w-24 rounded-full" />
-            <div className="skeleton h-7 w-20 rounded-full" />
-          </div>
-        </div>
-      </div>
-      {/* Chart pair */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[1, 2].map((i) => (
-          <div key={i} className="rounded-2xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
-            <div className="space-y-4">
-              <div className="skeleton w-20 h-3 rounded" />
-              <div className="skeleton w-full h-[180px] rounded-lg" />
-            </div>
-          </div>
-        ))}
-      </div>
-      {/* Full width chart */}
-      <div className="rounded-2xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
-        <div className="space-y-4">
-          <div className="skeleton w-20 h-3 rounded" />
-          <div className="skeleton w-full h-[200px] rounded-lg" />
-        </div>
-      </div>
-      {/* Final pair */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[1, 2].map((i) => (
-          <div key={i} className="rounded-2xl p-5" style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
-            <div className="space-y-4">
-              <div className="skeleton w-20 h-3 rounded" />
-              <div className="skeleton w-full h-[180px] rounded-lg" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -632,8 +213,6 @@ export function StatsTab() {
         </div>
       </FadeContent>
 
-
-
       {/* ══════════════════════════════════════════════════════
           TOP RATED PREVIEW — mini grid of top movies
          ══════════════════════════════════════════════════════ */}
@@ -727,7 +306,7 @@ export function StatsTab() {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          GENRE — full width (was paired with decade, now merged)
+          GENRE — full width
          ══════════════════════════════════════════════════════ */}
       {genreData.length > 0 && (
         <FadeContent delay={280}>
@@ -789,33 +368,6 @@ export function StatsTab() {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ── Chart card wrapper ──────────────────────────────────────── */
-function ChartCard({ title, count, icon, children }: {
-  title: string; count?: string; icon?: React.ReactNode; children: React.ReactNode;
-}) {
-  return (
-    <div className="group relative rounded-2xl p-5 sm:p-6 transition-all duration-300 h-full" style={{
-      background: "var(--bg-card)",
-      border: "1px solid var(--border-default)",
-    }}>
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          {icon && <span className="shrink-0" style={{ color: "var(--seed-primary)" }}>{icon}</span>}
-          <span className="text-xs font-semibold uppercase tracking-[0.06em]" style={{ color: "var(--fg-dim)" }}>
-            {title}
-          </span>
-          {count && (
-            <span className="text-[10px] font-medium tabular-nums ml-auto" style={{ color: "var(--fg-muted)" }}>
-              {count}
-            </span>
-          )}
-        </div>
-        {children}
-      </div>
     </div>
   );
 }
