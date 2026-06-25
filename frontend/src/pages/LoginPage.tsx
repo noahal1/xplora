@@ -2,15 +2,9 @@ import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import Orb from "../components/Orb";
+import LineWaves from "../components/LineWaves";
 import { Logo } from "../components/Logo";
 import SplitText from "../components/SplitText";
-
-// True on touch-capable devices — enables persistent Orb animation
-// since pointer-hover events aren't available on mobile
-const isTouchDevice =
-  typeof window !== "undefined" &&
-  ("ontouchstart" in window || navigator.maxTouchPoints > 0);
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -41,13 +35,20 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-page relative overflow-hidden">
-      {/* Interactive Orb background — fine-tuned for mobile */}
-      <div className="absolute inset-0 z-0 opacity-40 max-sm:opacity-55">
-        <Orb
-          hoverIntensity={0.3}
-          backgroundColor="#08090a"
-          forceHoverState={isTouchDevice}
-          rotateOnHover={true}
+      {/* LineWaves background — amber waves */}
+      <div className="absolute inset-0 z-0 opacity-45 max-sm:opacity-60">
+        <LineWaves
+          speed={0.3}
+          brightness={0.5}
+          color1="#f59e0b"
+          color2="#d97706"
+          color3="#78350f"
+          enableMouseInteraction={true}
+          mouseInfluence={1.5}
+          rotation={-45}
+          warpIntensity={1}
+          innerLineCount={32}
+          outerLineCount={32}
         />
       </div>
 
