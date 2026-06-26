@@ -937,12 +937,10 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             for m, c in sorted(month_counter.items())
         ]
 
-        # ── Top rated (watched, rating >= 8) ──────────────────
-        top_rated = sorted(
-            [r for r in watched if r.rating >= 8],
-            key=lambda x: x.rating,
-            reverse=True,
-        )[:10]
+        # ── Top rated (user's curated Top 10 list) ────────────
+        # Return the user's manually pinned & ordered top-rated list.
+        # Falls back to empty list if the user hasn't curated one yet.
+        top_rated = get_top_rated(user_id, db=session)
 
         # ── Total watch time (minutes, watched only) ───────────
         total_watch_time = sum(
@@ -970,32 +968,7 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             "genre_distribution": genre_distribution,
             "media_type_distribution": media_type_distribution,
             "monthly_trend": monthly_trend,
-            "top_rated": [
-                {
-                    "id": r.id,
-                    "title": r.title,
-                    "rating": r.rating,
-                    "year": r.year,
-                    "genre": r.genre,
-                    "status": r.status,
-                    "media_type": r.media_type or "movie",
-                    "poster_url": r.poster_url,
-                    "overview": r.overview,
-                    "director": r.director,
-                    "actors": r.actors,
-                    "runtime": r.runtime,
-                    "imdb_id": r.imdb_id,
-                    "tmdb_id": r.tmdb_id,
-                    "country": r.country,
-                    "awards": r.awards,
-                    "tagline": r.tagline,
-                    "scrape_error": r.scrape_error,
-                    "season_number": r.season_number,
-                    "episode_count": r.episode_count,
-                    "created_at": r.created_at.isoformat(),
-                }
-                for r in top_rated
-            ],
+            "top_rated": top_rated,
             "recent_additions": [
                 {
                     "title": r.title,
