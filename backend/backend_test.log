@@ -1,0 +1,20 @@
+INFO:     Started server process [87528]
+INFO:     Waiting for application startup.
+09:43:16 [INFO] database: Created engine for user DB: sqlite:///C:/Users/noaha/prj/xplora/data/user_1.db
+09:43:16 [INFO] database: Created engine for user DB: sqlite:///C:/Users/noaha/prj/xplora/data/user_2.db
+09:43:16 [INFO] database: Migrated data for user noah (id=2)
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8000): [winerror 10048] 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+  Poster cache: C:\Users\noaha\prj\xplora\backend\static\posters
+==================================================
+  Movie Recommender API starting...
+==================================================
+  [Migration] Per-user databases initialized for 2 user(s)
+  [Migration] Cleaned up migrated data from master DB
+  Database: SQLite — sqlite:///data/xplora.db
+  Per-user DBs: enabled (data/user_{id}.db)
+INFO:     127.0.0.1:45352 - "GET /api/health HTTP/1.1" 200 OK
+============================================
+Shutting down...

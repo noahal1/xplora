@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { ProgressiveImage } from "../../ProgressiveImage";
-import { Film, ChevronRight } from "lucide-react";
+import { Film, ChevronRight, Check, Info, Trash2 } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
 import type { WishlistEntry } from "../../WishlistTab/index";
@@ -66,27 +66,21 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-green hover:bg-green/10 shrink-0"
           onClick={() => onMarkWatched(item)}
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <Check size={14} />
           <span>{t("wishlist.mark_as_watched")}</span>
         </button>
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-sky hover:bg-sky/10"
           onClick={() => onOpenDetail(item)}
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
-          </svg>
+          <Info size={14} />
           <span>{t("manage.detail")}</span>
         </button>
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
           onClick={() => onDelete(item.id)}
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-          </svg>
+          <Trash2 size={14} />
           <span>{t("watched.remove")}</span>
         </button>
       </div>

@@ -1,6 +1,6 @@
 import { GripVertical, ArrowUp, ArrowDown, Film, Star, Trash2 } from "lucide-react";
 import type { MediaDetail } from "../../../types";
-import AnimatedContent from "../../AnimatedContent";
+import FadeContent from "../../FadeContent";
 import { ProgressiveImage } from "../../ProgressiveImage";
 
 const MEDAL_COLORS = [
@@ -114,7 +114,7 @@ export function TopRatedCard({
         </div>
 
         {/* Mini poster with bounce entrance */}
-        <AnimatedContent
+        <FadeContent
           className="w-10 h-14 sm:w-12 sm:h-16 rounded-lg overflow-hidden shrink-0"
           style={{
             ...(isTop3 ? { boxShadow: "0 2px 8px rgba(0,0,0,0.15)" } : {}),
@@ -136,7 +136,7 @@ export function TopRatedCard({
               <Film size={14} className="opacity-20" />
             </div>
           )}
-        </AnimatedContent>
+        </FadeContent>
 
         {/* Info */}
         <div className="flex-1 min-w-0">

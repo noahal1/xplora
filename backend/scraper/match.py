@@ -206,7 +206,7 @@ def word_overlap_ratio(a: str, b: str) -> float:
     return len(intersection) / min(len(words_a), len(words_b))
 
 
-def _title_similarity(a: str, b: str) -> float:
+def title_similarity(a: str, b: str) -> float:
     """Compute title similarity as a continuous score between 0.0 and 1.0.
 
     Uses the same strategies as :func:`titles_match` but returns a graded
@@ -216,13 +216,21 @@ def _title_similarity(a: str, b: str) -> float:
     Score   Condition
     ======= ============================================================
     1.00    Exact match (after basic normalization)
-    0.95    Substring match (one title is contained in the other)
     0.90    Unicode-normalized + punctuation-stripped match
+    0.50–   Substring match, scaled by length ratio (see below)
     0.70–   Word overlap >= 70% (scaled linearly to 0.70–0.90)
     0.50–   Word overlap 50–70% (scaled linearly to 0.50–0.70)
     0.30–   Word overlap 30–50% (scaled linearly to 0.30–0.50)
     0.00    Below confidence — no meaningful similarity
     ======= ============================================================
+
+    **Substring scoring:** When one title is entirely contained in the other,
+    the score is scaled by the **length ratio** of the shorter to the longer
+    string. This prevents short queries (e.g. ``"麻将"``) from getting a near-
+    perfect match against much longer titles (e.g. ``"麻将之夜"``).
+
+    - Query ≈ result length → score approaches 0.85
+    - Query is a small fragment → score drops toward 0.50
     """
     a = normalize(a)
     b = normalize(b)
@@ -233,9 +241,15 @@ def _title_similarity(a: str, b: str) -> float:
     if a == b:
         return 1.0
 
-    # 0.95: Substring match
+    # 0.50–0.85: Substring match, scaled by length ratio
+    # If the query is only a small part of the result title, don't give
+    # a near-perfect score. E.g. "麻将" (2 chars) in "麻将之夜" (4 chars)
+    # → ratio = 0.5 → score = 0.50 + 0.35 * 0.5 = 0.675
     if a in b or b in a:
-        return 0.95
+        min_len = min(len(a), len(b))
+        max_len = max(len(a), len(b))
+        length_ratio = min_len / max_len if max_len > 0 else 0
+        return 0.50 + 0.35 * length_ratio
 
     # 0.90: Unicode-normalized + punctuation-stripped match
     a_clean = remove_special_chars(normalize_unicode(a))
@@ -268,7 +282,7 @@ def find_best_match(results: list[dict], title: str, year: Optional[int]) -> Opt
     Scoring:
     - **Title similarity** (primary): compares ``title`` against both the
       result's localized ``title`` and ``original_title`` via
-      :func:`_title_similarity`, taking the better score.  Falls back to
+      :func:`title_similarity`, taking the better score.  Falls back to
       word overlap on the concatenated original + localized title.
     - **Year boost**: if the result's year matches the target year **and**
       there is meaningful title similarity (score >= 0.3), the title score
@@ -297,7 +311,7 @@ def find_best_match(results: list[dict], title: str, year: Optional[int]) -> Opt
         if ot and ot != rt:
             candidates.append(ot)
         if candidates:
-            title_score = max(_title_similarity(title, c) for c in candidates)
+            title_score = max(title_similarity(title, c) for c in candidates)
         else:
             title_score = 0.0
 

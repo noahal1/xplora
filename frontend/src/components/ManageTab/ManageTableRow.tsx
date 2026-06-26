@@ -4,7 +4,7 @@ import type { MediaDetail } from "../../types";
 import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import CountUp from "../CountUp";
-import { Film, AlertCircle, Star, Search, Sparkles, Loader2, Trash2 } from "lucide-react";
+import { Film, AlertCircle, Star, Search, Sparkles, Loader2, Trash2, Check, Info, Heart } from "lucide-react";
 import { TableEditableCell } from "./TableEditableCell";
 
 export const ManageTableRow = memo(function ManageTableRow({ 
@@ -68,12 +68,12 @@ export const ManageTableRow = memo(function ManageTableRow({
         <div className="flex items-center gap-1.5">
           {movie.status === "wish" ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-pink px-1.5 py-0.5 rounded-full bg-pink/10 border border-pink/20">
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+              <Heart size={12} />
               {t("manage.status_wish")}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-[11px] text-green px-1.5 py-0.5 rounded-full bg-green/10 border border-green/20">
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="20 6 9 17 4 12" /></svg>
+              <Check size={12} />
               {t("manage.status_watched")}
             </span>
           )}
@@ -124,7 +124,7 @@ export const ManageTableRow = memo(function ManageTableRow({
             </button>
           )}
           <button className="text-muted-foreground hover:text-sky px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors hover:bg-sky/10"
-            onClick={() => onSetDetailMovie(movie)} title={t("manage.detail")}><InfoIcon size={14} /></button>
+            onClick={() => onSetDetailMovie(movie)} title={t("manage.detail")}><Info size={14} /></button>
 
           <button className={`px-1.5 max-sm:px-2 py-1 max-sm:py-1.5 rounded transition-colors ${movie.scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
             onClick={() => onSetRematchMovie(movie)} title={movie.scrape_error ? t("manage.rematch_error_hint") : t("manage.rematch")}>
@@ -169,11 +169,3 @@ export const ManageTableRow = memo(function ManageTableRow({
   return true;
 });
 
-/* ── Inline info icon (no lucide import needed) ───────────────── */
-function InfoIcon({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
-    </svg>
-  );
-}

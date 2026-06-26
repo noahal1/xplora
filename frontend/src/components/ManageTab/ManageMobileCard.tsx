@@ -4,7 +4,7 @@ import type { MediaDetail } from "../../types";
 import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import CountUp from "../CountUp";
-import { Film, Star, AlertCircle, Search, Sparkles, Loader2, Trash2, Check, Info, ChevronRight } from "lucide-react";
+import { Film, Star, AlertCircle, Search, Sparkles, Loader2, Trash2, Check, Info, ChevronRight, Heart } from "lucide-react";
 
 /* ── Mobile Card Row ──────────────────────────────────────────── */
 export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelected, enrichingIds, onToggle, onConfirmDelete, onSetDetailMovie, onSetRematchMovie, onEnrich, onSetMarkWatchedMovie, onStartInlineEdit }: {
@@ -66,12 +66,12 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
                 {/* Status badge */}
                 {movie.status === "wish" ? (
                   <span className="inline-flex items-center gap-1 text-[10px] text-pink px-1.5 py-0.5 rounded-full bg-pink/10 border border-pink/20">
-                    <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+                    <Heart size={10} />
                     {t("manage.status_wish")}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-[10px] text-green px-1.5 py-0.5 rounded-full bg-green/10 border border-green/20">
-                    <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="20 6 9 17 4 12" /></svg>
+                    <Check size={10} />
                     {t("manage.status_watched")}
                   </span>
                 )}

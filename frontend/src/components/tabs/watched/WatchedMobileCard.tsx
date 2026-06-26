@@ -1,11 +1,12 @@
-import { memo, useState, useCallback, useEffect } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
 import { ProgressiveImage } from "../../ProgressiveImage";
-import { Film, ChevronRight } from "lucide-react";
+import { Film, ChevronRight, Info, X } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
 import { RatingSlider } from "../../shared/RatingSlider";
+import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized mobile card — compact card layout for small screens ── */
 export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
@@ -17,25 +18,14 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
   onOpenDetail: (movie: MediaDetail) => void;
 }) {
   const { t } = useTranslation();
-  const [editing, setEditing] = useState(false);
-  const [localSlider, setLocalSlider] = useState(movie.rating);
-  const [justSaved, setJustSaved] = useState(false);
-
-  useEffect(() => { setEditing(false); setLocalSlider(movie.rating); setJustSaved(false); }, [movie.id, movie.rating]);
-
-  const handleStartEdit = useCallback(() => {
-    setLocalSlider(movie.rating);
-    setEditing(true);
-  }, [movie.rating]);
-
-  const handleSave = useCallback(() => {
-    setEditing(false);
-    setJustSaved(true);
-    setTimeout(() => setJustSaved(false), 1500);
-    onSaveRating(movie.id, localSlider);
-  }, [movie.id, localSlider, onSaveRating]);
-
-  const handleCancel = useCallback(() => setEditing(false), []);
+  const {
+    editing, localSlider, justSaved, setLocalSlider,
+    handleStartEdit, handleSave, handleCancel,
+  } = useRatingEditor({
+    movieId: movie.id,
+    currentRating: movie.rating,
+    onSaveRating,
+  });
 
   return (
     <div
@@ -117,9 +107,7 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-sky hover:bg-sky/10"
           onClick={() => onOpenDetail(movie)}
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
-          </svg>
+          <Info size={14} />
           <span>{t("manage.detail")}</span>
         </button>
         {/* Remove */}
@@ -127,9 +115,7 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
           onClick={() => onRemove(movie.id)}
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-          </svg>
+          <X size={14} />
           <span>{t("watched.remove")}</span>
         </button>
       </div>

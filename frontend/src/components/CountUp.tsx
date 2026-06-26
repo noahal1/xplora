@@ -157,17 +157,7 @@ export default function CountUp({
   };
 
   // SSR / initial display (before animation)
-  const initialDisplay = useMemo(() => {
-    const fixed = start.toFixed(decimals);
-    const [intPart, decPart] = fixed.split(".");
-    const formattedInt = separator
-      ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, separator)
-      : intPart;
-    const result = decPart !== undefined
-      ? `${formattedInt}.${decPart}`
-      : formattedInt;
-    return `${prefix}${result}${suffix}`;
-  }, [start, decimals, separator, prefix, suffix]);
+  const initialDisplay = useMemo(() => formatNumber(start), [start, decimals, separator, prefix, suffix]);
 
   return (
     <span

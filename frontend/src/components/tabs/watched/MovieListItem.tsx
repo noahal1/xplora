@@ -1,12 +1,13 @@
-import { memo, useState, useCallback, useEffect } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
 import { ProgressiveImage } from "../../ProgressiveImage";
-import { Film } from "lucide-react";
+import { Film, X } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
 import CountUp from "../../CountUp";
 import { RatingSlider } from "../../shared/RatingSlider";
+import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized list item — rich layout with poster & metadata ── */
 export const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
@@ -18,25 +19,14 @@ export const MovieListItem = memo(function MovieListItem({ movie, isSelected, on
   onOpenDetail: (movie: MediaDetail) => void;
 }) {
   const { t } = useTranslation();
-  const [editing, setEditing] = useState(false);
-  const [localSlider, setLocalSlider] = useState(movie.rating);
-  const [justSaved, setJustSaved] = useState(false);
-
-  useEffect(() => { setEditing(false); setLocalSlider(movie.rating); setJustSaved(false); }, [movie.id, movie.rating]);
-
-  const handleStartEdit = useCallback(() => {
-    setLocalSlider(movie.rating);
-    setEditing(true);
-  }, [movie.rating]);
-
-  const handleSave = useCallback(() => {
-    setEditing(false);
-    setJustSaved(true);
-    setTimeout(() => setJustSaved(false), 1500);
-    onSaveRating(movie.id, localSlider);
-  }, [movie.id, localSlider, onSaveRating]);
-
-  const handleCancel = useCallback(() => setEditing(false), []);
+  const {
+    editing, localSlider, justSaved, setLocalSlider,
+    handleStartEdit, handleSave, handleCancel,
+  } = useRatingEditor({
+    movieId: movie.id,
+    currentRating: movie.rating,
+    onSaveRating,
+  });
 
   return (
     <div
@@ -109,8 +99,7 @@ export const MovieListItem = memo(function MovieListItem({ movie, isSelected, on
         <button
           className="flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all duration-200 opacity-0 group-hover:opacity-100 max-sm:opacity-100"
           onClick={() => onRemove(movie.id)} title={t("watched.remove")}>
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          <X size={14} />
         </button>
       </div>
     </div>

@@ -1,11 +1,12 @@
-import { memo, useState, useCallback, useEffect } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
 import TiltedCard from "../../TiltedCard";
-import { Film } from "lucide-react";
+import { Film, X } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import CountUp from "../../CountUp";
 import { RatingSlider } from "../../shared/RatingSlider";
+import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized grid card — cinematic poster with overlay ─────── */
 export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
@@ -17,25 +18,14 @@ export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, on
   onOpenDetail: (movie: MediaDetail) => void;
 }) {
   const { t } = useTranslation();
-  const [editing, setEditing] = useState(false);
-  const [localSlider, setLocalSlider] = useState(movie.rating);
-  const [justSaved, setJustSaved] = useState(false);
-
-  useEffect(() => { setEditing(false); setLocalSlider(movie.rating); setJustSaved(false); }, [movie.id, movie.rating]);
-
-  const handleStartEdit = useCallback(() => {
-    setLocalSlider(movie.rating);
-    setEditing(true);
-  }, [movie.rating]);
-
-  const handleSave = useCallback(() => {
-    setEditing(false);
-    setJustSaved(true);
-    setTimeout(() => setJustSaved(false), 1500);
-    onSaveRating(movie.id, localSlider);
-  }, [movie.id, localSlider, onSaveRating]);
-
-  const handleCancel = useCallback(() => setEditing(false), []);
+  const {
+    editing, localSlider, justSaved, setLocalSlider,
+    handleStartEdit, handleSave, handleCancel,
+  } = useRatingEditor({
+    movieId: movie.id,
+    currentRating: movie.rating,
+    onSaveRating,
+  });
 
   return (
     <div className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
@@ -48,8 +38,7 @@ export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, on
       <button
         className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 sm:w-6 sm:h-6 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 max-sm:opacity-100 hover:bg-red-500/80 hover:text-white transition-all duration-200 backdrop-blur-sm"
         onClick={(e) => { e.stopPropagation(); onRemove(movie.id); }} title={t("watched.remove")}>
-        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+        <X size={14} />
       </button>
       {/* Poster — 3D tilt effect on hover */}
       <div className="aspect-[2/3] relative cursor-pointer overflow-hidden rounded-xl" onClick={() => onOpenDetail(movie)}>

@@ -1,6 +1,7 @@
 """AI service for movie recommendations supporting DeepSeek and OpenAI models."""
 
 import json
+import logging
 import re
 from collections import Counter, defaultdict
 from typing import Optional
@@ -41,6 +42,25 @@ STRATEGY_TEMPERATURES = {
 DEFAULT_TEMPERATURE = 0.7
 MAX_TOKENS = 3000  # Increased from 2000 for Chinese responses
 MAX_API_RETRIES = 10  # Hard cap on total retries per request to prevent excessive API calls
+
+logger = logging.getLogger(__name__)
+
+
+# ── Helpers ─────────────────────────────────────────────────────────
+
+
+def _get_title(r) -> str:
+    """Get the title from a MediaRecommendation object or dict."""
+    return r.title if isinstance(r, MediaRecommendation) else r.get("title", "")
+
+
+def _get_filtered_out(before: list, after: list) -> list:
+    """Get items that were in ``before`` but removed in ``after``.
+
+    Works with both ``MediaRecommendation`` objects and dicts.
+    """
+    after_titles = {_get_title(r) for r in after}
+    return [r for r in before if _get_title(r) not in after_titles]
 
 
 class AIService:
@@ -163,6 +183,8 @@ class AIService:
         taste_analysis: Optional[dict] = None,
         exclude_titles: Optional[list[str]] = None,
         retry_attempt: int = 0,
+        previous_feedback: Optional[dict] = None,
+        filtered_titles_info: Optional[list[tuple[str, str]]] = None,
     ) -> str:
         """Build an optimized prompt for the AI model with taste analysis and exclude list.
 
@@ -172,6 +194,9 @@ class AIService:
         - An ``exclude_titles`` list that explicitly tells the AI which titles to avoid
         - A ``retry_attempt`` hint when the previous attempt's suggestions were
           already watched by the user
+        - ``previous_feedback`` — which past recommendations the user liked/ignored
+        - ``filtered_titles_info`` — specific titles from the AI's previous attempt
+          that were filtered and why, used to improve retry accuracy
         """
 
         # Compact sample: top 15 highest-rated movies as concrete examples
@@ -192,14 +217,27 @@ class AIService:
 
         strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
 
-        # Retry hint — tells the AI its previous suggestions were already seen
+        # Retry hint — tells the AI which of its previous suggestions were filtered and why
         retry_hint = ""
         if retry_attempt > 0:
-            retry_hint = (
-                f"\n\nNote: This is retry #{retry_attempt}. Your previous suggestions were "
-                "all movies the user has already seen. Please recommend DIFFERENT movies "
-                "this time, being extra careful to avoid the exclusion list below."
-            )
+            if filtered_titles_info:
+                filtered_details = "\n".join(
+                    f'  - "{title}" → {reason}'
+                    for title, reason in filtered_titles_info
+                )
+                retry_hint = (
+                    f"\n\nNote: This is retry #{retry_attempt}. Your previous suggestions "
+                    f"were filtered out because the user has already seen or wishlisted them:\n"
+                    f"{filtered_details}\n\n"
+                    f"Please recommend DIFFERENT movies this time. Be more creative — "
+                    f"avoid the user's existing library and the exclusion list below."
+                )
+            else:
+                retry_hint = (
+                    f"\n\nNote: This is retry #{retry_attempt}. Your previous suggestions were "
+                    f"all movies the user has already seen. Please recommend DIFFERENT movies "
+                    f"this time, being extra careful to avoid the exclusion list below."
+                )
 
         # Explicit exclusion list (used on retry to prevent recommending already-seen titles)
         exclude_section = ""
@@ -217,6 +255,53 @@ You MUST NOT recommend any of the following movies, even if they seem like a goo
 {exclude_list}
 """
 
+        # Previous recommendation feedback (P2: 反馈闭环)
+        feedback_section = ""
+        if previous_feedback:
+            liked = previous_feedback.get("liked_titles", [])
+            ignored = previous_feedback.get("ignored_titles", [])
+            feedback_parts = []
+            if liked:
+                liked_list = "\n".join(f'  ✅ {t}' for t in liked[:10])
+                feedback_parts.append(
+                    f"用户之前对这些推荐感兴趣并加入了想看列表（说明用户喜欢这类电影）：\n{liked_list}"
+                )
+                if len(liked) > 10:
+                    feedback_parts.append(f"  ... 以及另外 {len(liked) - 10} 部")
+            if ignored:
+                ignored_list = "\n".join(f'  ❌ {t}' for t in ignored[:10])
+                feedback_parts.append(
+                    f"用户之前对这些推荐没有采取行动（可能不太感兴趣），请避免推荐类似电影：\n{ignored_list}"
+                )
+                if len(ignored) > 10:
+                    feedback_parts.append(f"  ... 以及另外 {len(ignored) - 10} 部")
+            if feedback_parts:
+                feedback_section = "\n\n## Previous Recommendation Feedback\n" + "\n\n".join(feedback_parts)
+
+        # Language-adaptive title instruction: detect the dominant language
+        # of the user's library and tell the AI to output in that same language.
+        # This avoids cross-language title mismatches (e.g. AI outputting
+        # "Inception" in English while user's library has "盗梦空间" in Chinese).
+        cjk_in_sample = sum(1 for m in sample if has_cjk(m.title))
+        use_cjk_titles = cjk_in_sample > len(sample) / 2
+
+        if use_cjk_titles:
+            title_instruction = (
+                "Use Chinese/localized titles for ALL movies where a Chinese title "
+                'exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", '
+                '"Inception" → "盗梦空间"). '
+                "Only use English titles for movies without a known Chinese translation."
+            )
+            json_title_hint = "Movie Title (use Chinese title if available)"
+        else:
+            title_instruction = (
+                "Use original English titles for ALL movies. "
+                'Do NOT translate titles to Chinese (e.g. "肖申克的救赎" → '
+                '"The Shawshank Redemption", "盗梦空间" → "Inception"). '
+                "Only use Chinese titles for movies that do not have an English original title."
+            )
+            json_title_hint = "Movie Title (use English original title)"
+
         return f"""You are a professional movie recommendation expert. Based on the movies the user has watched and their ratings, recommend NEW movies they haven't seen.
 
 ## User's Taste Profile
@@ -225,7 +310,7 @@ Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-
 
 ## Taste Analysis
 {taste_summary or "No taste analysis available."}
-{exclude_section}{retry_hint}
+{exclude_section}{retry_hint}{feedback_section}
 
 {strategy_instruction}
 
@@ -233,16 +318,15 @@ Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-
 1. Each recommendation MUST include a personalized reason that references the user's specific taste (genres they rate highly, preferred eras, etc.)
 2. Confidence score (0-1) should reflect how well the movie matches the user's demonstrated taste
 3. DIVERSITY: Do NOT recommend multiple movies from the same franchise, same director (unless the user clearly loves that director), or same series
-4. Use Chinese/localized titles for ALL movies where a Chinese title exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", "Inception" → "盗梦空间")
-5. Only use English titles for movies without a known Chinese translation
-6. The reason MUST be in Chinese
-7. Ensure recommendations are genuinely diverse in genre, era, and style
+4. {title_instruction}
+5. The reason MUST be in Chinese
+6. Ensure recommendations are genuinely diverse in genre, era, and style
 
 Respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
 {{
     "recommendations": [
         {{
-            "title": "Movie Title (use Chinese title if available)",
+            "title": "{json_title_hint}",
             "year": 2024,
             "genre": "Sci-Fi / Action",
             "reason": "Recommendation reason in Chinese, referencing user's taste",
@@ -251,6 +335,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
     ]
 }}
 """
+
 
     def _get_strategy_instruction(self, strategy: str, params: Optional[dict] = None, count: int = 5) -> str:
         """Get strategy-specific instructions for the AI prompt."""
@@ -451,7 +536,15 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             return None
 
         def _is_watched(title: str) -> bool:
-            """Check if a title (possibly CJK) matches any watched title."""
+            """Check if a title (possibly CJK) matches any watched title.
+
+            Matching strategies (in order):
+            1. Direct fuzzy match (works when both titles share a language)
+            2. If REC has CJK → resolve REC to English via TMDB, match against watched
+            3. If REC is Latin but WATCHED has CJK → resolve WATCHED to English via TMDB,
+               match against REC (reverse direction — catches e.g.
+               AI outputting "Inception" vs watched "盗梦空间")
+            """
             # Step 1: Try fuzzy match directly
             if any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean):
                 return True
@@ -460,16 +553,29 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 en_title = _resolve_en_title(title)
                 if en_title and en_title != title:
                     return any(_match_score(en_title, wt) >= MATCH_THRESHOLD for wt in watched_clean)
+            # Step 3: If title is Latin but some watched titles have CJK,
+            # resolve each CJK watched title to English and compare against the rec title
+            # This catches the reverse case: AI outputs "Inception" but user has "盗梦空间"
+            if not has_cjk(title):
+                for wt in watched_clean:
+                    if has_cjk(wt):
+                        en_wt = _resolve_en_title(wt)
+                        if en_wt and _match_score(title, en_wt) >= MATCH_THRESHOLD:
+                            return True
             return False
 
+        # Track what's being filtered for debugging
         filtered = []
         for r in recs:
             title = r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "")
             if not title:
                 filtered.append(r)
                 continue
-            if not _is_watched(title):
+            is_watched = _is_watched(title)
+            if not is_watched:
                 filtered.append(r)
+            else:
+                logger.info("[FilterDebug] FILTERED OUT (watched): '%s'", title)
 
         # Also deduplicate within the same batch — AI sometimes returns the same
         # movie twice in one response (exact title or fuzzy match).
@@ -482,14 +588,18 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 deduped.append(r)
                 continue
             # Check against seen titles; for CJK, also check English equivalent
-            if not any(_match_score(title, st) >= MATCH_THRESHOLD for st in seen_titles):
-                # Also check CJK seen titles via their English names
-                if has_cjk(title):
-                    en_title = _resolve_en_title(title)
-                    if en_title and any(_match_score(st, en_title) >= MATCH_THRESHOLD for st in seen_titles):
-                        continue  # CJK duplicate of an already-seen English title
-                seen_titles.append(title)
-                deduped.append(r)
+            is_dup = any(_match_score(title, st) >= MATCH_THRESHOLD for st in seen_titles)
+            if is_dup:
+                logger.info("[FilterDebug] FILTERED OUT (duplicate in batch): '%s'", title)
+                continue
+            # Also check CJK seen titles via their English names
+            if has_cjk(title):
+                en_title = _resolve_en_title(title)
+                if en_title and any(_match_score(st, en_title) >= MATCH_THRESHOLD for st in seen_titles):
+                    logger.info("[FilterDebug] FILTERED OUT (CJK duplicate): '%s'", title)
+                    continue  # CJK duplicate of an already-seen English title
+            seen_titles.append(title)
+            deduped.append(r)
 
         return deduped
 
@@ -501,6 +611,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         strategy_params: Optional[dict] = None,
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
+        previous_feedback: Optional[dict] = None,
     ) -> list[MediaRecommendation]:
         """Generate movie recommendations (non-streaming) with dynamic retry.
 
@@ -515,6 +626,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         all_excluded = list(watched_titles or [])
         all_recs: list[MediaRecommendation] = []
         total_filtered = 0
+        filtered_titles_info: list[tuple[str, str]] | None = None
 
         for attempt in range(max_retries):
             remaining = count - len(all_recs)
@@ -529,6 +641,8 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 watched_titles=all_excluded, taste_analysis=taste_analysis,
                 exclude_titles=all_excluded,
                 retry_attempt=attempt,
+                previous_feedback=previous_feedback,
+                filtered_titles_info=filtered_titles_info,
             )
 
             try:
@@ -567,9 +681,17 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     raise
                 break
 
-            before_filter = len(new_recs)
+            before = list(new_recs)
             new_recs = self._filter_watched(new_recs, all_excluded)
-            total_filtered += before_filter - len(new_recs)
+            filtered_out = _get_filtered_out(before, new_recs)
+            total_filtered += len(filtered_out)
+
+            # Build filtered_titles_info for next retry
+            if filtered_out:
+                filtered_titles_info = []
+                for r in filtered_out:
+                    title = _get_title(r)
+                    filtered_titles_info.append((title, "已在用户的已看/想看列表中"))
 
             if not new_recs:
                 # Don't break — retry with retry_hint might help the AI avoid
@@ -830,6 +952,7 @@ Format 2 - For explanation or other questions:
         strategy_params: Optional[dict] = None,
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
+        previous_feedback: Optional[dict] = None,
     ):
         """Generator that yields SSE-formatted events as recommendations are streamed.
 
@@ -845,6 +968,7 @@ Format 2 - For explanation or other questions:
         all_excluded = list(watched_titles or [])
         all_recs: list[dict] = []
         total_filtered = 0
+        filtered_titles_info: list[tuple[str, str]] | None = None
 
         # Yield start event
         start_data = json.dumps({"model": self.model_type, "source_count": len(movies)})
@@ -863,6 +987,8 @@ Format 2 - For explanation or other questions:
                 watched_titles=all_excluded, taste_analysis=taste_analysis,
                 exclude_titles=all_excluded,
                 retry_attempt=attempt,
+                previous_feedback=previous_feedback,
+                filtered_titles_info=filtered_titles_info,
             )
 
             # SSE stream from AI
@@ -919,17 +1045,30 @@ Format 2 - For explanation or other questions:
             if not new_recs:
                 continue
 
+            # Re-check against all_excluded (which now includes previous retry AI suggestions)
+            before = list(new_recs)
             new_recs = self._filter_watched(new_recs, all_excluded)
-            before_filter = len(new_recs)
-            new_recs = self._filter_watched(new_recs, all_excluded)
-            total_filtered += before_filter - len(new_recs)
+            filtered_out = _get_filtered_out(before, new_recs)
+            total_filtered += len(filtered_out)
+
+            # Build filtered_titles_info for next retry
+            if filtered_out:
+                filtered_titles_info = []
+                for r in filtered_out:
+                    title = _get_title(r)
+                    filtered_titles_info.append((title, "已在用户的已看/想看列表中"))
 
             if not new_recs:
                 # Don't break — retry with retry_hint might help
                 continue
 
             all_recs.extend(new_recs)
-            all_excluded.extend(r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "") for r in new_recs)
+            titles_seen = set()
+            for r in new_recs:
+                t = r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "")
+                if t and t not in titles_seen:
+                    titles_seen.add(t)
+                    all_excluded.append(t)
 
         if total_filtered > 0:
             print(f"[Recommend] Filtered out {total_filtered} already-watched titles "

@@ -7,7 +7,7 @@ from typing import Optional
 from config_manager import get_api_key as get_config_api_key
 from httpx import Timeout
 from http_client import get_shared_client
-from scraper.match import strip_season, extract_season_number
+from scraper.match import strip_season, extract_season_number, title_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -328,6 +328,12 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False)
     if season_number is not None and tmdb_key:
         _enrich_tv_with_season_data(deduped, season_number, tmdb_key)
 
+    # Re-rank by title similarity: put better title matches first,
+    # regardless of TMDB's popularity-based ordering. This ensures
+    # that searching "麻将" ranks the exact match "麻将" above
+    # "麻将之夜" (which only contains the query as a substring).
+    _rank_by_title_similarity(deduped, original_query)
+
     return [r.to_dict() for r in deduped]
 
 
@@ -360,6 +366,27 @@ def _merge_results(new_results: list[MovieSearchResult], target: list[MovieSearc
         if key not in seen:
             seen.add(key)
             target.append(r)
+
+
+def _rank_by_title_similarity(results: list[MovieSearchResult], query: str):
+    """Re-rank search results in-place by title similarity to the query.
+
+    TMDB returns results sorted by **popularity**, which means a popular
+    but loosely-related title (e.g. ``"麻将之夜"``) can rank above a less
+    popular but exact match (e.g. ``"麻将"``). This function re-orders
+    results so the most **title-relevant** matches appear first.
+
+    Uses the same :func:`title_similarity` scoring as the metadata scraper
+    for consistent matching behavior across search and enrichment.
+    """
+
+    def _score(result: MovieSearchResult) -> float:
+        candidates = [result.title]
+        if result.original_title and result.original_title != result.title:
+            candidates.append(result.original_title)
+        return max(title_similarity(query, c) for c in candidates)
+
+    results.sort(key=_score, reverse=True)
 
 
 def _search_tmdb_variants(
