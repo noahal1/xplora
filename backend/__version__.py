@@ -1,3 +1,3 @@
 """Centralized version string for the Xplora application."""
 
-VERSION = "dawn-1.4.9"
+VERSION = "dawn-1.5.0"
