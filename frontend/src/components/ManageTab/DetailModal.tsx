@@ -131,16 +131,10 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
 
   if (!movie) return null;
 
-  const descParts = [];
-  if (movie.year) descParts.push(movie.year);
-  if (movie.genre) descParts.push(translateGenres(movie.genre));
-  if (movie.runtime) descParts.push(`${movie.runtime} ${t("detail_modal.minutes")}`);
-  const description = descParts.join(" · ");
-
   return (
     <Modal open={open} onClose={handleClose}
       title={editing ? (form.title || t("detail_modal.edit_title")) : movie.title}
-      description={editing ? undefined : description}
+      description={undefined}
       footer={editing ? (
         <div className="flex items-center gap-2 w-full justify-end">
           <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>
@@ -154,22 +148,22 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       ) : undefined}
     >
       {editing ? (
-        /* ── Edit Mode ──────────────────────────────────── */
-        <div className="space-y-4">
+        /* ── Edit Mode (mobile-friendly) ──────────────────── */
+        <div className="space-y-3 sm:space-y-4">
           {/* ── Title ────────────────────────────────── */}
           <EditField label={t("manage.col_title")}>
-            <input type="text" className="input-field w-full text-sm px-3 py-2 font-medium"
+            <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2 font-medium"
               value={form.title ?? ""}
               onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))}
               placeholder={t("manage.col_title")} />
           </EditField>
           {/* ── Media Type Toggle ──────────────────────── */}
           <div>
-            <p className="text-xs text-muted-foreground font-medium mb-1.5 uppercase tracking-wider">{t("manage.media_type")}</p>
-            <div className="flex gap-1.5">
+            <p className="text-[11px] sm:text-xs text-muted-foreground font-medium mb-1.5 uppercase tracking-wider">{t("manage.media_type")}</p>
+            <div className="flex gap-2 sm:gap-1.5">
               {[{ value: "movie", label: t("manage.media_type_movie") }, { value: "tv", label: t("manage.media_type_tv") }].map((opt) => (
                 <button key={opt.value} type="button"
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${
+                  className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-full text-xs font-medium transition-all duration-150 border ${
                     form.media_type === opt.value
                       ? "bg-primary/10 text-primary border-primary/25 shadow-sm"
                       : "bg-muted/40 text-muted-foreground border-border/60 hover:border-primary/30 hover:text-foreground hover:bg-accent/40"
@@ -181,109 +175,147 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
             </div>
           </div>
           <EditField label={t("detail_modal.overview")}>
-            <textarea className="input-field w-full h-24 text-sm px-3 py-2 resize-y leading-relaxed"
+            <textarea className="input-field w-full h-28 sm:h-24 text-sm px-3 py-2.5 sm:py-2 resize-y leading-relaxed"
               value={form.overview ?? ""}
               onChange={(e) => setForm(f => ({ ...f, overview: e.target.value }))} />
           </EditField>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 sm:gap-y-4">
             <EditField label={t("detail_modal.director")}>
-              <input type="text" className="input-field w-full text-sm px-3 py-2"
+              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.director ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, director: e.target.value }))} />
             </EditField>
             <EditField label={t("detail_modal.country")}>
-              <input type="text" className="input-field w-full text-sm px-3 py-2"
+              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.country ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, country: e.target.value }))} />
             </EditField>
-            <EditField label={t("detail_modal.actors")} className="col-span-2">
-              <input type="text" className="input-field w-full text-sm px-3 py-2"
+            <EditField label={t("detail_modal.actors")} className="sm:col-span-2">
+              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.actors ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, actors: e.target.value }))} />
             </EditField>
-            <EditField label={t("detail_modal.awards")} className="col-span-2">
-              <input type="text" className="input-field w-full text-sm px-3 py-2"
+            <EditField label={t("detail_modal.awards")} className="sm:col-span-2">
+              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.awards ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, awards: e.target.value }))} />
             </EditField>
             <EditField label={t("detail_modal.runtime")}>
-              <input type="number" className="input-field w-full text-sm px-3 py-2 no-spinner"
+              <input type="number" className="input-field w-full text-sm px-3 py-2.5 sm:py-2 no-spinner"
                 value={form.runtime ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, runtime: e.target.value ? parseInt(e.target.value) : null }))}
                 min={0} placeholder={t("detail_modal.minutes")} />
             </EditField>
             <EditField label={t("manage.col_year")}>
-              <input type="number" className="input-field w-full text-sm px-3 py-2 no-spinner"
+              <input type="number" className="input-field w-full text-sm px-3 py-2.5 sm:py-2 no-spinner"
                 value={form.year ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, year: e.target.value ? parseInt(e.target.value) : null }))}
                 min={1888} max={2030} placeholder={t("manage.col_year")} />
             </EditField>
             <EditField label={t("detail_modal.tagline")}>
-              <input type="text" className="input-field w-full text-sm px-3 py-2"
+              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.tagline ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, tagline: e.target.value }))} />
             </EditField>
           </div>
         </div>
       ) : (
-        /* ── View Mode (existing) ────────────────────────── */
-        <div className="space-y-5">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="w-full sm:w-[100px] h-[140px] shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center max-sm:flex-row max-sm:w-full max-sm:h-auto max-sm:aspect-[2/3]"
-              style={{ border: "1px solid var(--border-subtle)" }}>
-              {movie.poster_url ? (
-                <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
-              ) : <Film size={28} className="text-muted-foreground/30" />}
+        /* ── View Mode (mobile-optimized) ─────────────── */
+        <div className="space-y-4 sm:space-y-5">
+          {/* Poster + key info — horizontal on mobile */}
+          <div className="flex flex-row gap-3 sm:gap-4">
+            <div className="w-[80px] sm:w-[100px] shrink-0">
+              <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center border border-border/50 shadow-sm"
+              >
+                {movie.poster_url ? (
+                  <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
+                ) : <Film size={22} className="text-muted-foreground/30" />}
+              </div>
             </div>
             <div className="flex-1 min-w-0 space-y-2">
+              {/* Quick info badges */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                {movie.year && (
+                  <span className="font-medium">{movie.year}</span>
+                )}
+                {movie.genre && (
+                  <span className="truncate max-w-[160px] sm:max-w-full opacity-70">{translateGenres(movie.genre)}</span>
+                )}
+                {movie.runtime && (
+                  <span className="opacity-70">{movie.runtime} {t("detail_modal.minutes")}</span>
+                )}
+                {movie.media_type === "tv" && (
+                  <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 leading-none px-1.5 py-0 shrink-0">TV</Badge>
+                )}
+              </div>
+
+              {/* Overview */}
               {movie.overview ? (
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.overview")}</p>
-                  <p className="text-sm leading-relaxed line-clamp-4">{movie.overview}</p>
-                </div>
-              ) : <p className="text-sm text-muted-foreground italic">{t("detail_modal.no_overview")}</p>}
+                <p className="text-xs sm:text-sm leading-relaxed line-clamp-3 sm:line-clamp-4 text-foreground/80">
+                  {movie.overview}
+                </p>
+              ) : (
+                <p className="text-xs sm:text-sm text-muted-foreground italic">{t("detail_modal.no_overview")}</p>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          {/* Metadata grid — 1 col on mobile, 2 col on desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 sm:gap-y-3">
             {movie.director && (
-              <><p className="text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.director")}</p><p className="text-sm">{movie.director}</p></>
+              <div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.director")}</p>
+                <p className="text-sm">{movie.director}</p>
+              </div>
             )}
             {movie.actors && (
-              <><p className="text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.actors")}</p><p className="text-sm line-clamp-2">{movie.actors}</p></>
+              <div className="sm:col-span-2">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.actors")}</p>
+                <p className="text-sm line-clamp-2">{movie.actors}</p>
+              </div>
             )}
             {movie.country && (
-              <><p className="text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.country")}</p><p className="text-sm">{movie.country}</p></>
+              <div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.country")}</p>
+                <p className="text-sm">{movie.country}</p>
+              </div>
             )}
             {movie.awards && (
-              <><p className="text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.awards")}</p><p className="text-sm line-clamp-2">{movie.awards}</p></>
+              <div className="sm:col-span-2">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.awards")}</p>
+                <p className="text-sm line-clamp-2">{movie.awards}</p>
+              </div>
             )}
             {movie.runtime && (
-              <><p className="text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.runtime")}</p><p className="text-sm">{movie.runtime} {t("detail_modal.minutes")}</p></>
+              <div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.runtime")}</p>
+                <p className="text-sm">{movie.runtime} {t("detail_modal.minutes")}</p>
+              </div>
             )}
             {movie.tagline && (
-              <div className="col-span-2">
-                <p className="text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.tagline")}</p>
+              <div className="sm:col-span-2">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.tagline")}</p>
                 <p className="text-sm italic">"{movie.tagline}"</p>
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-2 pt-1 flex-wrap">
+          {/* Badges row */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1">
             {movie.imdb_id && (
-              <Badge variant="outline" className="text-[10px] gap-1">
+              <Badge variant="outline" className="text-[10px] gap-1 py-0.5">
                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 8.5h2v7h-2zm5.5 0h2v7h-2zm5.5-3.5h2v10.5h-2zM4 5.5h2v11H4z"/></svg>
                 {movie.imdb_id}
               </Badge>
             )}
-            {movie.tmdb_id && <Badge variant="outline" className="text-[10px]">TMDB: {movie.tmdb_id}</Badge>}
+            {movie.tmdb_id && <Badge variant="outline" className="text-[10px] py-0.5">TMDB: {movie.tmdb_id}</Badge>}
             {movie.poster_url ? (
-              <Badge variant="outline" className="text-[10px] text-green gap-1">
+              <Badge variant="outline" className="text-[10px] text-green gap-1 py-0.5">
                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="20 6 9 17 4 12"/></svg>
                 {t("manage.metadata_complete")}
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-[10px] text-amber gap-1">
+              <Badge variant="outline" className="text-[10px] text-amber gap-1 py-0.5">
                 <Sparkles size={10} />{t("manage.enrich_hint")}
               </Badge>
             )}

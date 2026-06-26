@@ -86,6 +86,12 @@
   /* Easing functions */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Mobile bottom nav bar — slide up on mount */
+  --animate-bottom-nav-enter: bottomNavEnter 0.3s var(--ease-out-expo);
+  --animate-page-slide-in-right: pageSlideInRight 0.4s var(--ease-out-expo);
+  --animate-page-slide-in-left: pageSlideInLeft 0.4s var(--ease-out-expo);
+  --animate-tab-icon-bounce: tabIconBounce 0.45s var(--ease-spring) forwards;
 }
 
 /* Seed Tokens — Light Theme */
@@ -209,8 +215,6 @@
   --animate-menu-slide: menuSlideIn 0.25s var(--ease-out-expo);
   --animate-float: float 3s ease-in-out infinite;
   --animate-count-up: countUp 0.35s var(--ease-out-expo);
-  --animate-star-pop: starPop 0.35s var(--ease-spring) forwards;
-  --animate-saved-confirm: savedConfirm 1.5s var(--ease-out-expo) forwards;
   --animate-pill-enter: pillEnter 0.25s var(--ease-out-expo) both;
 
 }
@@ -282,11 +286,6 @@
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-@keyframes typingDot {
-  0%, 60%, 100% { opacity: 0.2; }
-  30% { opacity: 1; }
-}
-
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -297,20 +296,9 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes starPop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.35); }
-  100% { transform: scale(1.1); }
-}
-
 @keyframes imageReveal {
   from { filter: blur(20px); transform: scale(1.05); }
   to { filter: blur(0); transform: scale(1); }
-}
-
-@keyframes shimmer-slide {
-  0% { background-position: 200% center; }
-  100% { background-position: -200% center; }
 }
 
 @keyframes login-enter {
@@ -345,27 +333,6 @@
   40% { transform: scale(1.25); }
   70% { transform: scale(0.95); }
   100% { transform: scale(1.1); }
-}
-
-@keyframes savedConfirm {
-  0% {
-    color: var(--success);
-    transform: scale(1);
-  }
-  15% {
-    transform: scale(1.15);
-    filter: brightness(1.3);
-  }
-  30% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-  90% {
-    color: var(--success);
-  }
-  100% {
-    color: inherit;
-  }
 }
 
 @keyframes pillEnter {
@@ -467,12 +434,6 @@ body {
   .card-lift:active {
     transform: translateY(0);
     box-shadow: 0 2px 8px -4px rgba(0, 0, 0, 0.3);
-  }
-
-  /* Card with glow border (active/selected state) */
-  .card-glow {
-    border-color: var(--primary-25);
-    box-shadow: 0 0 0 1px var(--accent-glow), 0 4px 16px -6px var(--primary-20);
   }
 
   /* Button base */
@@ -678,22 +639,6 @@ body {
     animation: streamSpin 0.7s linear infinite;
   }
 
-  /* Star rating */
-  .star-rating {
-    display: inline-flex;
-    gap: 2px;
-  }
-  .star-rating .star {
-    transition: transform 0.15s var(--ease-spring), color 0.1s ease;
-    cursor: pointer;
-  }
-  .star-rating .star:hover {
-    transform: scale(1.2);
-  }
-  .star-rating .star:active {
-    transform: scale(0.9);
-  }
-
   /* Streaming text animation */
   .typing-dots span {
     display: inline-block;
@@ -705,20 +650,6 @@ body {
   }
   .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
   .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-  /* Progress bar */
-  .progress-bar {
-    height: 3px;
-    background: var(--border-subtle);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .progress-bar .fill {
-    height: 100%;
-    background: var(--seed-primary);
-    border-radius: 2px;
-    transition: width 0.3s ease;
-  }
 
   /* Empty state */
   .empty-state {
@@ -792,44 +723,13 @@ body {
     );
   }
 
-  /* === Glow focus ring === */
-  .glow-ring:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--seed-bg), 0 0 0 4px var(--seed-primary);
-  }
-
-  /* === Button press effect === */
-  .btn-press:active {
-    transform: scale(0.97);
-  }
-
   /* === Count badge animation === */
   .count-badge {
     animation: countUp 0.35s var(--ease-out-expo);
   }
 
-  /* === Star pop animation === */
-  .star-pop {
-    animation: starPop 0.35s var(--ease-spring) forwards;
-  }
-
-  /* === Saved confirmation animation === */
-  .saved-confirm {
-    animation: savedConfirm 1.5s var(--ease-out-expo) forwards;
-  }
-
 
 }
-
-/* ============================================
-   Typing dots (global)
-   ============================================ */
-.typing-dot {
-  animation: typingDot 1.4s infinite both;
-}
-.typing-dot:nth-child(1) { animation-delay: 0s; }
-.typing-dot:nth-child(2) { animation-delay: 0.2s; }
-.typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
 /* ============================================
    Theme Transition — smooth color changes
@@ -883,22 +783,6 @@ input[type="number"].no-spinner {
 }
 
 /* ============================================
-   Star rating interactive
-   ============================================ */
-.star-btn {
-  transition: all 0.15s var(--ease-spring);
-}
-.star-btn:hover {
-  transform: scale(1.2);
-}
-.star-btn:active {
-  transform: scale(0.9);
-}
-.star-btn.active {
-  animation: starPop 0.35s var(--ease-spring) forwards;
-}
-
-/* ============================================
    Skeleton loading components
    ============================================ */
 .skeleton-movie-row {
@@ -912,16 +796,6 @@ input[type="number"].no-spinner {
   background: linear-gradient(90deg, var(--border-default) 25%, var(--border-hover) 50%, var(--border-default) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
-}
-
-/* ============================================
-   Mobile bottom nav bar — slide up on mount
-   ============================================ */
-@theme {
-  --animate-bottom-nav-enter: bottomNavEnter 0.3s var(--ease-out-expo);
-  --animate-page-slide-in-right: pageSlideInRight 0.4s var(--ease-out-expo);
-  --animate-page-slide-in-left: pageSlideInLeft 0.4s var(--ease-out-expo);
-  --animate-tab-icon-bounce: tabIconBounce 0.45s var(--ease-spring) forwards;
 }
 
 /* ============================================
@@ -970,25 +844,6 @@ input[type="number"].no-spinner {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-
-/* ============================================
-   Safe area utility
-   ============================================ */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-.safe-left {
-  padding-left: env(safe-area-inset-left, 0px);
-}
-
-.safe-right {
-  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* ============================================

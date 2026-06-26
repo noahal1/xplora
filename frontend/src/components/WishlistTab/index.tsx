@@ -151,7 +151,7 @@ export function WishlistTab() {
               <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
               {t("wishlist.title")}
             </h2>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1">
               <button
                 onClick={() => setSearchModalOpen(true)}
                 className="btn btn-ghost btn-xs shrink-0"
@@ -170,7 +170,7 @@ export function WishlistTab() {
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 <span className="hidden sm:inline">{t("wishlist.manual_add")}</span>
               </button>
-              <span className="badge font-mono text-xs">{t("wishlist.movie_count", { count: 0 }).replace("0", "")}<CountUp end={total} /></span>
+              <span className="badge font-mono text-xs shrink-0">{t("wishlist.movie_count", { count: 0 }).replace("0", "")}<CountUp end={total} /></span>
             </div>
           </div>
           <SearchInput

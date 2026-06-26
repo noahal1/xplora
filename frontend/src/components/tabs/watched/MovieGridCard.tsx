@@ -60,15 +60,15 @@ export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, on
               <div className="relative w-full h-full">
                 {/* Gradient overlay for text readability */}
                 <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
-                {/* Year badge top-left */}
+                {/* Year badge top-left (offset right to avoid checkbox overlap) */}
                 {movie.year && (
-                  <div className="absolute top-2 left-2 z-10">
+                  <div className="absolute top-2 left-8 z-10">
                     <span className="text-[10px] font-semibold text-white bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md">{movie.year}</span>
                   </div>
                 )}
                 {/* TV badge */}
                 {movie.media_type === "tv" && (
-                  <div className="absolute top-2 left-2 z-10" style={{ marginTop: movie.year ? '18px' : '0' }}>
+                  <div className="absolute top-2 left-8 z-10" style={{ marginTop: movie.year ? '18px' : '0' }}>
                     <Badge className="text-[9px] text-sky-200 border-sky-400/40 bg-sky-500/20 backdrop-blur-sm">TV</Badge>
                   </div>
                 )}

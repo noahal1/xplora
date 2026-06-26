@@ -13,6 +13,7 @@ import {
 import type { MediaDetail } from "../types";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { TopRatedCard } from "./tabs/top_rated/TopRatedCard";
+import { TopRatedMobileCard } from "./tabs/top_rated/TopRatedMobileCard";
 import { useToast } from "../context/ToastContext";
 
 
@@ -27,6 +28,13 @@ export function TopRatedTab() {
   const [animated, setAnimated] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  // ── Mobile touch drag state ──────────────────────────────
+  const [touchDragIdx, setTouchDragIdx] = useState<number | null>(null);
+  const [touchOverIdx, setTouchOverIdx] = useState<number | null>(null);
+  const mobileListRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef(0);
+  const touchDraggedItemRef = useRef<HTMLDivElement | null>(null);
 
   // ── Remove confirmation ─────────────────────────────────
   const [confirmRemove, setConfirmRemove] = useState<MediaDetail | null>(null);
@@ -152,7 +160,7 @@ export function TopRatedTab() {
     } catch { /* ignore */ }
   };
 
-  // ── Drag & Drop ──────────────────────────────────────────
+  // ── Drag & Drop (Desktop) ─────────────────────────────────
 
   const handleDragStart = (idx: number) => {
     setDragIdx(idx);
@@ -176,6 +184,72 @@ export function TopRatedTab() {
     setMovies(reordered);
     setDragIdx(null);
     setOverIdx(null);
+
+    // Persist
+    setSaving(true);
+    try {
+      await reorderTopRated(reordered.map((m) => m.id));
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
+
+  // ── Touch Drag & Drop (Mobile) ────────────────────────────
+
+  const handleTouchStart = (e: React.TouchEvent, idx: number) => {
+    // Only in editMode
+    if (!editMode) return;
+    const touch = e.touches[0];
+    touchStartY.current = touch.clientY;
+    setTouchDragIdx(idx);
+    setTouchOverIdx(idx);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchDragIdx === null) return;
+    e.preventDefault(); // Prevent scrolling while dragging
+
+    const touch = e.touches[0];
+    const container = mobileListRef.current;
+    if (!container) return;
+
+    // Find which card the touch is over based on Y position
+    const children = Array.from(container.children) as HTMLElement[];
+    let hoverIdx = touchDragIdx;
+    for (let i = 0; i < children.length; i++) {
+      const rect = children[i].getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      // Use a threshold: consider over when touch is past the midpoint
+      if (touch.clientY < midY) {
+        hoverIdx = i;
+        break;
+      }
+      // If touch is past the last item's midpoint, it's at the end
+      if (i === children.length - 1) {
+        hoverIdx = children.length - 1;
+      }
+    }
+
+    // Clamp so we don't go out of bounds
+    hoverIdx = Math.max(0, Math.min(children.length - 1, hoverIdx));
+
+    if (hoverIdx !== touchOverIdx) {
+      setTouchOverIdx(hoverIdx);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (touchDragIdx === null || touchOverIdx === null || touchDragIdx === touchOverIdx) {
+      setTouchDragIdx(null);
+      setTouchOverIdx(null);
+      return;
+    }
+
+    const reordered = [...movies];
+    const [moved] = reordered.splice(touchDragIdx, 1);
+    reordered.splice(touchOverIdx, 0, moved);
+    setMovies(reordered);
+    setTouchDragIdx(null);
+    setTouchOverIdx(null);
 
     // Persist
     setSaving(true);
@@ -256,10 +330,10 @@ export function TopRatedTab() {
             <h2 className="section-title">Top 排行榜</h2>
             <span className="text-[10px] opacity-30 ml-1">{movies.length}/{MAX_ITEMS}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {saving && <span className="text-[10px] animate-pulse opacity-40">保存中...</span>}
             {editMode && (
-              <span className="text-[10px] opacity-40">拖拽或点击上下箭头排序</span>
+              <span className="text-[10px] opacity-40 hidden sm:inline">拖拽或点击上下箭头排序</span>
             )}
 
             {/* Add button */}
@@ -269,8 +343,8 @@ export function TopRatedTab() {
                 onClick={() => { setShowAddModal(!showAddModal); setSearchQuery(""); }}
                 title="搜索添加"
               >
-                <Plus size={13} className="mr-0.5" />
-                添加
+                <Plus size={13} />
+                <span className="hidden sm:inline ml-0.5">添加</span>
               </button>
 
               {/* Search dropdown */}
@@ -354,11 +428,12 @@ export function TopRatedTab() {
             <button
               className={`btn btn-xs ${editMode ? "btn-primary" : "btn-ghost"}`}
               onClick={toggleEditMode}
+              title={editMode ? "完成排序" : "编辑排序"}
             >
               {editMode ? (
-                <><Check size={12} className="mr-1" />完成</>
+                <><Check size={12} /><span className="hidden sm:inline ml-1">完成</span></>
               ) : (
-                <><Pencil size={12} className="mr-1" />编辑排序</>
+                <><Pencil size={12} /><span className="hidden sm:inline ml-1">排序</span></>
               )}
             </button>
             <button className="btn btn-ghost btn-xs" onClick={loadData} title="刷新">
@@ -372,46 +447,115 @@ export function TopRatedTab() {
 
       {/* ── Empty State ─────────────────────────────── */}
       {movies.length === 0 && (
-        <FadeContent className="section-card">
-          <div className="flex flex-col items-center justify-center py-16 gap-4">
-            <Trophy size={48} className="opacity-10" />
-            <div className="text-center">
-              <p className="text-sm opacity-50 mb-1">排行榜还是空的</p>
-              <p className="text-[11px] opacity-30">点击上方「添加」按钮，搜索并添加你喜欢的电影</p>
+        <FadeContent className="section-card overflow-hidden relative">
+          {/* Decorative background glow */}
+          <div
+            className="absolute -top-20 -right-20 w-64 h-64 rounded-full opacity-[0.04] pointer-events-none"
+            style={{
+              background: "radial-gradient(circle, #f59e0b 0%, transparent 70%)",
+            }}
+          />
+          <div
+            className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full opacity-[0.03] pointer-events-none"
+            style={{
+              background: "radial-gradient(circle, #f59e0b 0%, transparent 70%)",
+            }}
+          />
+
+          <div className="flex flex-col items-center justify-center py-12 sm:py-16 gap-4 sm:gap-5 relative z-10">
+            {/* Trophy icon with subtle glow */}
+            <div className="relative">
+              <div
+                className="absolute inset-0 rounded-full blur-xl opacity-20 animate-pulse-glow"
+                style={{ background: "radial-gradient(circle, #f59e0b 0%, transparent 70%)" }}
+              />
+              <div
+                className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center"
+                style={{
+                  background: "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(234,179,8,0.05))",
+                  border: "1px solid rgba(245,158,11,0.15)",
+                }}
+              >
+                <Trophy size={26} className="text-amber/60" />
+              </div>
             </div>
+
+            {/* Text */}
+            <div className="text-center max-w-[280px] sm:max-w-sm">
+              <p className="text-sm sm:text-base font-semibold text-foreground/70 mb-1.5">
+                排行榜还是空的
+              </p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground/60 leading-relaxed">
+                从已看的电影中挑选你最喜欢的
+                <br className="hidden sm:inline" />
+                打造你的个人 Top 10 排行榜
+              </p>
+            </div>
+
+            {/* CTA button — full width on mobile */}
             <button
-              className="btn btn-primary btn-sm gap-1.5 mt-2"
+              className="btn btn-primary gap-1.5 mt-1 sm:mt-2 w-full sm:w-auto justify-center"
               onClick={() => setShowAddModal(true)}
             >
-              <Plus size={14} />
+              <Plus size={15} />
               添加第一部
             </button>
+
+            {/* Hint for desktop */}
+            <p className="text-[10px] text-muted-foreground/30 mt-1 hidden sm:block">
+              点击上方「添加」搜索已看的电影
+            </p>
           </div>
         </FadeContent>
       )}
 
       {/* ── Movie List ─────────────────────────────── */}
       {movies.length > 0 && (
-        <div className="space-y-3 sm:space-y-4">
-          {movies.map((movie, idx) => (
-            <TopRatedCard
-              key={movie.id}
-              movie={movie}
-              index={idx}
-              total={movies.length}
-              editMode={editMode}
-              animated={animated}
-              isDragOver={overIdx === idx}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-              onMoveUp={handleMoveUp}
-              onMoveDown={handleMoveDown}
-              onRemove={(m) => setConfirmRemove(m)}
-              onClick={(m) => setDetailMovie(m)}
-            />
-          ))}
-        </div>
+        <>
+          {/* Mobile cards */}
+          <div className="sm:hidden space-y-2.5" ref={mobileListRef}>
+            {movies.map((movie, idx) => (
+              <TopRatedMobileCard
+                key={movie.id}
+                movie={movie}
+                index={idx}
+                total={movies.length}
+                editMode={editMode}
+                animated={animated}
+                isDragging={touchDragIdx === idx}
+                isDragOver={touchOverIdx === idx}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onMoveUp={handleMoveUp}
+                onMoveDown={handleMoveDown}
+                onRemove={(m) => setConfirmRemove(m)}
+                onClick={(m) => setDetailMovie(m)}
+              />
+            ))}
+          </div>
+          {/* Desktop cards */}
+          <div className="max-sm:hidden space-y-3 sm:space-y-4">
+            {movies.map((movie, idx) => (
+              <TopRatedCard
+                key={movie.id}
+                movie={movie}
+                index={idx}
+                total={movies.length}
+                editMode={editMode}
+                animated={animated}
+                isDragOver={overIdx === idx}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                onMoveUp={handleMoveUp}
+                onMoveDown={handleMoveDown}
+                onRemove={(m) => setConfirmRemove(m)}
+                onClick={(m) => setDetailMovie(m)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Remove Confirmation */}

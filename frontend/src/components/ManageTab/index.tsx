@@ -313,19 +313,19 @@ export function ManageTab() {
           <span className="truncate">{t("manage.title")}</span>
           <span className="badge font-mono text-xs shrink-0">{t("manage.total", { count: 0 }).replace("0", "")}<CountUp end={total} /></span>
         </h2>
-        <div className="flex gap-1.5 items-center flex-wrap w-full sm:w-auto">
-          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={() => fetchData()} title={t("manage.refresh")}>
+        <div className="flex gap-1.5 items-center w-full sm:w-auto overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1">
+          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={() => fetchData()} title={t("manage.refresh")}>
             <RefreshCw size={13} /><span className="hidden sm:inline">{t("manage.refresh")}</span>
           </button>
-          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={handleExportMovies} title={t("manage.export")}>
+          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={handleExportMovies} title={t("manage.export")}>
             <Upload size={13} /><span className="hidden sm:inline">{t("manage.export")}</span>
           </button>
-          <button className={`btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm gap-1 sm:gap-1.5 ${batchLoading ? "opacity-50" : ""}`}
+          <button className={`btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm gap-1 sm:gap-1.5 shrink-0 ${batchLoading ? "opacity-50" : ""}`}
             onClick={handleBatchAll} disabled={batchLoading} title={t("manage.batch_all")}>
             {batchLoading ? <Loader2 size={13} className="animate-spin" /> : <WandSparkles size={13} />}
             <span className="hidden sm:inline">{t("manage.batch_all")}</span>
           </button>
-          <button className="btn btn-primary btn-xs sm:py-1.5 sm:px-3 sm:text-sm" onClick={openSearchDialog} title={t("manage.add_movie")}>
+          <button className="btn btn-primary btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={openSearchDialog} title={t("manage.add_movie")}>
             <Plus size={13} /><span className="hidden sm:inline">{t("manage.add_movie")}</span>
           </button>
         </div>

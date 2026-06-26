@@ -44,27 +44,27 @@ export function StrategySelector({
   t,
 }: StrategySelectorProps) {
   return (
-    <div className="flex flex-col items-center py-10 px-4">
+    <div className="flex flex-col items-center py-6 sm:py-10 px-3 sm:px-4">
       {/* Sparkle icon */}
       <div
-        className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
+        className="w-10 sm:w-12 h-10 sm:h-12 rounded-xl flex items-center justify-center mb-3 sm:mb-4"
         style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}
       >
-        <Sparkles size={20} style={{ color: "var(--seed-primary)" }} />
+        <Sparkles size={16} style={{ color: "var(--seed-primary)" }} />
       </div>
-      <h2 className="text-heading mb-2" style={{ color: "var(--seed-fg)" }}>
+      <h2 className="text-sm sm:text-heading mb-1.5 sm:mb-2 text-center" style={{ color: "var(--seed-fg)" }}>
         {t("recommend.empty_title")}
       </h2>
-      <p className="text-body text-center max-w-md mb-6" style={{ color: "var(--fg-muted)" }}>
+      <p className="text-xs sm:text-body text-center max-w-md mb-4 sm:mb-6" style={{ color: "var(--fg-muted)" }}>
         {t("recommend.empty_desc")}
       </p>
 
       {/* ── Strategy Selector Grid ────────────────────────── */}
-      <div className="w-full max-w-[520px] mb-6">
-        <p className="text-label mb-3 text-center" style={{ color: "var(--fg-dim)" }}>
+      <div className="w-full max-w-[520px] mb-4 sm:mb-6">
+        <p className="text-label mb-2 sm:mb-3 text-center" style={{ color: "var(--fg-dim)" }}>
           {t("recommend.strategy_label")}
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2">
           {STRATEGIES.map((s) => {
             const Icon = s.icon;
             const isActive = strategy === s.id;

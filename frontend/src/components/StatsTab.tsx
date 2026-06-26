@@ -291,7 +291,7 @@ export function StatsTab() {
                     {t("stats.total", "部")}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                   {/* 已看 badge */}
                   <StatBadge
                     color="--color-green"

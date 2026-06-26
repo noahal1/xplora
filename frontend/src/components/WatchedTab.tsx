@@ -277,8 +277,8 @@ export function WatchedTab() {
               </svg>
               {t("watched.title")}
             </h2>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-input)] p-0.5">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1">
+              <div className="inline-flex items-center shrink-0 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-input)] p-0.5">
                 <button
                   className={`inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
                     viewMode === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
@@ -300,7 +300,7 @@ export function WatchedTab() {
                   <LayoutGrid size={15} />
                 </button>
               </div>
-              <span className="badge font-mono text-xs">
+              <span className="badge font-mono text-xs shrink-0">
                 {t("watched.movie_count", { count: 0 }).replace("0", "")}<CountUp end={total} />
               </span>
             </div>

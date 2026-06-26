@@ -70,7 +70,7 @@ function MainApp() {
   return (
     <HistoryProvider>
       <EnrichProvider>
-        <div className="max-w-[1024px] mx-auto px-4 sm:px-5 py-3 sm:py-6 pb-20 sm:pb-6">
+        <div className="max-w-[1024px] mx-auto px-4 sm:px-5 py-3 sm:py-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:pb-6">
           <div className="fixed inset-0 pointer-events-none z-[-1] opacity-15">
             <Aurora
               colorStops={['#e8a838', '#f59e0b', '#e8a838']}
