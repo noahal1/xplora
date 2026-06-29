@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail, MediaSearchResult, SortField } from "../../types";
 import * as api from "../../api";
@@ -29,7 +29,11 @@ import { MarkWatchedModal } from "./MarkWatchedModal";
 import { GenreEditModal } from "./GenreEditModal";
 import { ManageTableRow } from "./ManageTableRow";
 import { ManageMobileCard } from "./ManageMobileCard";
+import { TVSeriesManageRow } from "./TVSeriesManageRow";
+import { TVSeriesGroupItem } from "../tabs/watched/TVSeriesGroupItem";
 import { FilterBar } from "../shared/FilterBar";
+import { groupTVSeries } from "../../utils/groupTVSeries";
+import type { TVSeriesGroup } from "../../utils/groupTVSeries";
 
 const MANAGE_PAGE_SIZE = 16;
 
@@ -85,6 +89,12 @@ export function ManageTab() {
   /* ── Enriching IDs ───────────────────────────────────────────── */
   const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
 
+  // ── Group TV series by tv_series_id ──
+  const { standalone: standaloneMedia, groups: tvGroups } = useMemo(
+    () => groupTVSeries(mediaList),
+    [mediaList]
+  );
+
   const fetchData = useCallback(async (signal?: AbortSignal, quiet?: boolean) => {
     if (!quiet) setLoading(true);
     setError("");
@@ -126,23 +136,53 @@ export function ManageTab() {
   useEnrichReload(() => { fetchData(); });
 
   useEffect(() => {
-    if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && selected.size < mediaList.length;
-  }, [selected, mediaList.length]);
+    const allItems = [...standaloneMedia, ...tvGroups.flatMap((g) => g.seasons)];
+    if (selectAllRef.current) selectAllRef.current.indeterminate = selected.size > 0 && selected.size < allItems.length;
+  }, [selected, standaloneMedia, tvGroups]);
 
   const toggleSelection = useCallback((id: number) => {
     setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   }, []);
 
   const toggleSelectAll = useCallback(() => {
-    if (mediaList.length === 0) return;
-    const allSelected = mediaList.every((m) => selected.has(m.id));
+    const allItems = [...standaloneMedia, ...tvGroups.flatMap((g) => g.seasons)];
+    if (allItems.length === 0) return;
+    const allSelected = allItems.every((m) => selected.has(m.id));
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allSelected) mediaList.forEach((m) => next.delete(m.id));
-      else mediaList.forEach((m) => next.add(m.id));
+      if (allSelected) allItems.forEach((m) => next.delete(m.id));
+      else allItems.forEach((m) => next.add(m.id));
       return next;
     });
-  }, [mediaList, selected]);
+  }, [standaloneMedia, tvGroups, selected]);
+
+  const toggleGroup = useCallback((tvSeriesId: string) => {
+    const group = tvGroups.find((g) => g.tvSeriesId === tvSeriesId);
+    if (!group) return;
+    const seasonIds = group.seasons.map((s) => s.id);
+    const allSelected = seasonIds.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) seasonIds.forEach((id) => next.delete(id));
+      else seasonIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [tvGroups, selected]);
+
+  const removeGroup = useCallback(async (seasonIds: number[]) => {
+    try {
+      const result = await api.batchDeleteMedia(seasonIds);
+      showToast(t("manage.deleted_count", { count: result.count }), "success");
+      setSelected((prev) => {
+        const next = new Set(prev);
+        seasonIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      fetchData(undefined, true);
+    } catch (err: any) {
+      showToast(t("manage.delete_failed", { message: err.message }), "error");
+    }
+  }, [fetchData, showToast, t]);
 
   /* ── Delete handlers with modal confirmation ─────────────────── */
   const confirmDelete = useCallback((movieId: number, title: string) => setDeleteConfirm({ type: "single", movieId, title }), []);
@@ -474,7 +514,7 @@ export function ManageTab() {
                 </tr>
               </thead>
               <tbody>
-                {mediaList.map((m) => (
+                {standaloneMedia.map((m) => (
                   <ManageTableRow
                     key={m.id}
                     movie={m}
@@ -487,6 +527,28 @@ export function ManageTab() {
                     onSetDetailMovie={setDetailMovie}
                     onSetRematchMovie={setRematchMovie}
                     onEnrich={handleEnrich}
+                    onSetMarkWatchedMovie={setMarkWatchedMovie}
+                    onStartInlineEdit={startInlineEdit}
+                    onSaveInlineEdit={saveInlineEdit}
+                    onCancelEdit={cancelInlineEdit}
+                  />
+                ))}
+                {tvGroups.map((g) => (
+                  <TVSeriesManageRow
+                    key={g.tvSeriesId}
+                    group={g}
+                    isSelected={g.seasons.every((s) => selected.has(s.id))}
+                    editingCell={editingCell}
+                    sliderValue={sliderValue}
+                    selected={selected}
+                    enrichingIds={enrichingIds}
+                    onToggleGroup={toggleGroup}
+                    onToggle={toggleSelection}
+                    onOpenDetail={setDetailMovie}
+                    onSetRematchMovie={setRematchMovie}
+                    onEnrich={handleEnrich}
+                    onRemoveGroup={removeGroup}
+                    onConfirmDelete={confirmDelete}
                     onSetMarkWatchedMovie={setMarkWatchedMovie}
                     onStartInlineEdit={startInlineEdit}
                     onSaveInlineEdit={saveInlineEdit}
@@ -506,7 +568,7 @@ export function ManageTab() {
       {/* ── Mobile Card List ──────────────────────────────────── */}
       {!loading && !error && mediaList.length > 0 && (
         <div className="sm:hidden space-y-2.5">
-          {mediaList.map((m) => (
+          {standaloneMedia.map((m) => (
             <ManageMobileCard
               key={m.id}
               movie={m}
@@ -519,6 +581,20 @@ export function ManageTab() {
               onEnrich={handleEnrich}
               onSetMarkWatchedMovie={setMarkWatchedMovie}
               onStartInlineEdit={startInlineEdit}
+            />
+          ))}
+          {tvGroups.map((g) => (
+            <TVSeriesGroupItem
+              key={g.tvSeriesId}
+              group={g}
+              isSelected={g.seasons.every((s) => selected.has(s.id))}
+              onToggleGroup={toggleGroup}
+              onRemoveSeason={(id) => {
+                const movie = mediaList.find((m) => m.id === id);
+                if (movie) confirmDelete(id, movie.title);
+              }}
+              onRemoveGroup={removeGroup}
+              onOpenDetail={setDetailMovie}
             />
           ))}
           <Pagination currentPage={page} totalPages={totalPages}

@@ -582,6 +582,9 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
     # Use genre IDs to map to English names instead of TMDB's localized names
     genre_ids = [g["id"] for g in data.get("genres", []) if g.get("id")]
     genres = _map_tmdb_tv_genres(genre_ids)
+    # Episode runtime: TMDB returns an array of episode runtimes (e.g., [44])
+    episode_runtimes = data.get("episode_run_time") or []
+    episode_runtime = episode_runtimes[0] if episode_runtimes else None
     # Number of seasons as a proxy for "runtime" for TV series
     seasons = data.get("number_of_seasons", 0)
     episodes = data.get("number_of_episodes", 0)
@@ -594,7 +597,7 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
         "overview": data.get("overview", ""),
         "rating": data.get("vote_average"),
         "vote_count": data.get("vote_count"),
-        "runtime": None,  # TV series don't have a single runtime
+        "runtime": episode_runtime,  # Per-episode average runtime for TV series
         "tagline": data.get("tagline", ""),
         "homepage": data.get("homepage", ""),
         "original_language": data.get("original_language", ""),

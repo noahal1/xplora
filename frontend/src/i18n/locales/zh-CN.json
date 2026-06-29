@@ -76,7 +76,12 @@
     "view_list": "列表",
     "view_grid": "网格",
     "edit": "编辑",
-    "edit_rating": "修改评分"
+    "edit_rating": "修改评分",
+    "remove_all_seasons": "删除所有季",
+    "avg_rating": "平均评分",
+    "seasons_count": "{{count}} 季",
+    "delete_failed": "删除失败：{{message}}",
+    "deleted_count": "已删除 {{count}} 项"
   },
   "watched_import": {
     "sample_data_loaded": "已加载示例数据！",

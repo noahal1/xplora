@@ -211,6 +211,28 @@ def get_media(
                 .limit(page_size)
             ).all()
         )
+
+        # ── TV series grouping: ensure no season group is split across pages ──
+        # If the last item(s) on this page belong to a TV series, fetch any
+        # additional seasons from subsequent pages so the frontend can group
+        # them correctly regardless of pagination.
+        if records:
+            last_tv_series_id = records[-1].tv_series_id
+            if last_tv_series_id is not None:
+                existing_ids = {r.id for r in records}
+                extra = list(
+                    session.exec(
+                        select(MediaItemRecord)
+                        .where(
+                            MediaItemRecord.user_id == user_id,
+                            MediaItemRecord.tv_series_id == last_tv_series_id,
+                            MediaItemRecord.id.notin_(existing_ids),
+                        )
+                        .order_by(order_fn())
+                    ).all()
+                )
+                records.extend(extra)
+
         return records, total
     finally:
         if close_db:
@@ -943,8 +965,14 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
         top_rated = get_top_rated(user_id, db=session)
 
         # ── Total watch time (minutes, watched only) ───────────
+        # For movies: runtime = movie length (e.g. 142 min)
+        # For TV series: runtime = per-episode, so multiply by episode_count
         total_watch_time = sum(
-            r.runtime for r in watched if r.runtime is not None
+            (r.runtime * r.episode_count)
+            if (r.media_type == "tv" and r.episode_count and r.runtime)
+            else r.runtime
+            for r in watched
+            if r.runtime is not None
         )
 
         # ── Avg rating ────────────────────────────────────────

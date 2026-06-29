@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaImport, MediaDetail } from "../types";
 import * as api from "../api";
@@ -13,6 +13,8 @@ import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { useEnrichReload } from "../hooks/useEnrichReload";
 import { usePagination } from "../hooks/usePagination";
 import { useSort } from "../hooks/useSort";
+import { groupTVSeries } from "../utils/groupTVSeries";
+import type { TVSeriesGroup } from "../utils/groupTVSeries";
 import FadeContent from "./FadeContent";
 import { EmptyState } from "./EmptyState";
 import { GenreFilter } from "./GenreFilter";
@@ -23,6 +25,8 @@ import { FilterBar } from "./shared/FilterBar";
 import { MovieGridCard } from "./tabs/watched/MovieGridCard";
 import { MovieListItem } from "./tabs/watched/MovieListItem";
 import { WatchedMobileCard } from "./tabs/watched/WatchedMobileCard";
+import { TVSeriesGroupItem } from "./tabs/watched/TVSeriesGroupItem";
+import { TVSeriesGroupCard } from "./tabs/watched/TVSeriesGroupCard";
 import { ImportModal } from "./tabs/watched/ImportModal";
 import { SearchModal } from "./tabs/watched/SearchModal";
 import { BatchRatingModal } from "./tabs/watched/BatchRatingModal";
@@ -49,6 +53,12 @@ export function WatchedTab() {
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
   const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
+
+  // ── Group TV series by tv_series_id ──
+  const { standalone: standaloneMedia, groups: tvGroups } = useMemo(
+    () => groupTVSeries(media),
+    [media]
+  );
 
   // Rating editing is localised inside MovieGridCard / MovieListItem to avoid
   // re-rendering all 30 rows on every slider drag (sliderValue changes on each onChange).
@@ -168,14 +178,28 @@ export function WatchedTab() {
   }, []);
 
   const toggleSelectAll = useCallback(() => {
-    const allSelected = media.every((m) => selectedIds.has(m.id));
+    const allMedia = [...standaloneMedia, ...tvGroups.flatMap((g) => g.seasons)];
+    const allSelected = allMedia.every((m) => selectedIds.has(m.id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allSelected) media.forEach((m) => next.delete(m.id));
-      else media.forEach((m) => next.add(m.id));
+      if (allSelected) allMedia.forEach((m) => next.delete(m.id));
+      else allMedia.forEach((m) => next.add(m.id));
       return next;
     });
-  }, [media, selectedIds]);
+  }, [standaloneMedia, tvGroups, selectedIds]);
+
+  const toggleGroup = useCallback((tvSeriesId: string) => {
+    const group = tvGroups.find((g) => g.tvSeriesId === tvSeriesId);
+    if (!group) return;
+    const seasonIds = group.seasons.map((s) => s.id);
+    const allSelected = seasonIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) seasonIds.forEach((id) => next.delete(id));
+      else seasonIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [tvGroups, selectedIds]);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
@@ -227,6 +251,24 @@ export function WatchedTab() {
       }
     },
     [media.length, currentPage, reloadCurrentPage, showToast, t]
+  );
+
+  const removeGroup = useCallback(
+    async (seasonIds: number[]) => {
+      try {
+        await api.batchDeleteMedia(seasonIds);
+        showToast(t("watched.deleted_count", { count: seasonIds.length }), "success");
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          seasonIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        reloadCurrentPage();
+      } catch (err: any) {
+        showToast(t("watched.delete_failed", { message: err.message }), "error");
+      }
+    },
+    [reloadCurrentPage, showToast, t]
   );
 
   const handleSaveRating = useCallback(
@@ -426,7 +468,7 @@ export function WatchedTab() {
               )}
 
               {/* Movie List / Grid */}
-              {media.length === 0 ? (
+              {standaloneMedia.length === 0 && tvGroups.length === 0 ? (
                 <EmptyState
                   hasActiveFilters
                   searchQuery={search.debouncedValue}
@@ -442,7 +484,7 @@ export function WatchedTab() {
                 />
               ) : viewMode === "grid" ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
-                  {media.map((m) => (
+                  {standaloneMedia.map((m) => (
                     <MovieGridCard
                       key={m.id}
                       movie={m}
@@ -453,12 +495,21 @@ export function WatchedTab() {
                       onOpenDetail={setDetailMovie}
                     />
                   ))}
+                  {tvGroups.map((g) => (
+                    <TVSeriesGroupCard
+                      key={g.tvSeriesId}
+                      group={g}
+                      isSelected={g.seasons.every((s) => selectedIds.has(s.id))}
+                      onToggleGroup={toggleGroup}
+                      onOpenDetail={setDetailMovie}
+                    />
+                  ))}
                 </div>
               ) : (
                 <>
                   {/* Mobile cards */}
                   <div className="sm:hidden space-y-2.5">
-                    {media.map((m) => (
+                    {standaloneMedia.map((m) => (
                       <WatchedMobileCard
                         key={m.id}
                         movie={m}
@@ -469,10 +520,21 @@ export function WatchedTab() {
                         onOpenDetail={setDetailMovie}
                       />
                     ))}
+                    {tvGroups.map((g) => (
+                      <TVSeriesGroupItem
+                        key={g.tvSeriesId}
+                        group={g}
+                        isSelected={g.seasons.every((s) => selectedIds.has(s.id))}
+                        onToggleGroup={toggleGroup}
+                        onRemoveSeason={removeMovie}
+                        onRemoveGroup={removeGroup}
+                        onOpenDetail={setDetailMovie}
+                      />
+                    ))}
                   </div>
                   {/* Desktop list */}
                   <div className="max-sm:hidden space-y-1.5">
-                    {media.map((m) => (
+                    {standaloneMedia.map((m) => (
                       <MovieListItem
                         key={m.id}
                         movie={m}
@@ -480,6 +542,17 @@ export function WatchedTab() {
                         onToggle={toggleSelection}
                         onRemove={removeMovie}
                         onSaveRating={handleSaveRating}
+                        onOpenDetail={setDetailMovie}
+                      />
+                    ))}
+                    {tvGroups.map((g) => (
+                      <TVSeriesGroupItem
+                        key={g.tvSeriesId}
+                        group={g}
+                        isSelected={g.seasons.every((s) => selectedIds.has(s.id))}
+                        onToggleGroup={toggleGroup}
+                        onRemoveSeason={removeMovie}
+                        onRemoveGroup={removeGroup}
                         onOpenDetail={setDetailMovie}
                       />
                     ))}
