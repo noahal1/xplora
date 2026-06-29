@@ -3,6 +3,7 @@ import type { TFunction } from "i18next";
 import type { DBSession } from "../../../types";
 import * as api from "../../../api";
 import { useToast } from "../../../context/ToastContext";
+import { getErrMsg } from "../../../lib/utils";
 import { Modal } from "../../Modal";
 import FadeContent from "../../FadeContent";
 import { History, Brain, Bot, Trash2, ChevronRight, Clock } from "lucide-react";
@@ -36,8 +37,8 @@ export function SessionList({
       await api.deleteSession(id);
       showToast(t("history.deleted"), "success");
       onDeletedSession(id);
-    } catch (err: any) {
-      showToast(t("history.delete_failed", { message: err.message }), "error");
+    } catch (err: unknown) {
+      showToast(t("history.delete_failed", { message: getErrMsg(err) }), "error");
     }
   }, [deleteTarget, onDeletedSession, showToast, t]);
 

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { MediaDetail, DBSession, DBSessionDetail } from "../types";
 import * as api from "../api";
 import { useToast } from "../context/ToastContext";
+import { getErrMsg } from "../lib/utils";
 import { useHistory } from "../context/HistoryContext";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -116,8 +117,8 @@ export function HistorySidebar() {
         loadSessions();
       }
       showToast(t("history.deleted"), "success");
-    } catch (err: any) {
-      showToast(t("history.delete_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("history.delete_failed", { message: getErrMsg(err) }), "error");
     }
   }, [deleteTarget, loadMovies, loadSessions, showToast, t]);
 

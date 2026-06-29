@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { getErrMsg } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
 import LineWaves from "../components/LineWaves";
 import { Logo } from "../components/Logo";
@@ -26,8 +27,8 @@ export function LoginPage() {
     try {
       await login(username.trim(), password);
       navigate("/");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(getErrMsg(err));
     } finally {
       setLoading(false);
     }

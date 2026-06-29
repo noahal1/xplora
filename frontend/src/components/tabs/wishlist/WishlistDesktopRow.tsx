@@ -4,6 +4,7 @@ import { Badge } from "../../ui/badge";
 import { ProgressiveImage } from "../../ProgressiveImage";
 import { Film, ChevronRight } from "lucide-react";
 import { translateGenres } from "../../../utils/genre";
+import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 
 interface WishlistDesktopRowProps {
   item: WishlistEntry;
@@ -35,7 +36,7 @@ export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail
             {item.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
             {item.season_number != null && (
               <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
-                S{item.season_number}
+                {formatSeasonLabel(item.season_number, t("season_specials"))}
                 {item.episode_count != null && <span className="ml-0.5 opacity-70">· {item.episode_count}ep</span>}
               </Badge>
             )}

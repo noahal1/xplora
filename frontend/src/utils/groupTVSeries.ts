@@ -4,6 +4,23 @@
 
 import type { MediaDetail } from "../types";
 
+/**
+ * Format a season number for display.
+ *
+ * - ``null`` / ``undefined`` → ``"?"``
+ * - ``0`` (Specials) → the provided i18n label (e.g. ``"特别篇"``)
+ * - Others → ``"S{number}"`` (e.g. ``"S4"``)
+ */
+export function formatSeasonLabel(
+  seasonNumber: number | null | undefined,
+  specialsLabel: string,
+): string {
+  if (seasonNumber == null) return "?";
+  if (seasonNumber === 0) return specialsLabel;
+  return `S${seasonNumber}`;
+}
+
+
 export interface TVSeriesGroup {
   tvSeriesId: string;
   title: string;

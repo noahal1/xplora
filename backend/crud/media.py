@@ -232,6 +232,9 @@ def get_media(
                     ).all()
                 )
                 records.extend(extra)
+                # 当前页实际展示 items 数已超出 page_size，同步上调 total
+                # 使前端分页计算 (ceil(total / page_size)) 保持一致
+                total += len(extra)
 
         return records, total
     finally:

@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import type { MediaSearchResult } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
+import { getErrMsg } from "../../lib/utils";
 import { Badge } from "../ui/badge";
+import { formatSeasonLabel } from "../../utils/groupTVSeries";
 import { Modal } from "../Modal";
 import { Search, Loader2, Plus, X, ExternalLink, Film } from "lucide-react";
 
@@ -37,8 +39,8 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
     try {
       const data = await api.searchMedia(q, "auto");
       setSearchResults(data.results);
-    } catch (err: any) {
-      showToast(err.message, "error");
+    } catch (err: unknown) {
+      showToast(getErrMsg(err), "error");
     } finally {
       setSearchLoading(false);
     }
@@ -50,8 +52,8 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
       try { await api.enrichMedia(movie.id); } catch {}
       showToast(t("manage.imported_from_search", { title: result.title }), "success");
       onImportComplete();
-    } catch (err: any) {
-      showToast(t("manage.import_failed", { message: err.message }), "error");
+    } catch (err: unknown) {
+      showToast(t("manage.import_failed", { message: getErrMsg(err) }), "error");
     }
   }, [showToast, t, onImportComplete]);
 
@@ -186,7 +188,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
                       {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground truncate max-w-[120px]">{result.genre}</span>}
                       {result.season_number != null && (
                         <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
-                          S{result.season_number}
+                          {formatSeasonLabel(result.season_number, t("season_specials"))}
                           {result.episode_count != null && <span className="ml-0.5 opacity-70">· {result.episode_count}ep</span>}
                         </Badge>
                       )}

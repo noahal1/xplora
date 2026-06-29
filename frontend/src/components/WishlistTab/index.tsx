@@ -14,6 +14,7 @@ import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { usePagination } from "../../hooks/usePagination";
 import { useSort } from "../../hooks/useSort";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
+import { getErrMsg, isAbortError } from "../../lib/utils";
 
 import FadeContent from "../FadeContent";
 import { EmptyState } from "../EmptyState";
@@ -92,8 +93,8 @@ export function WishlistTab() {
       if (signal?.aborted) return;
       setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, poster_url: m.poster_url, overview: m.overview, director: m.director, actors: m.actors, runtime: m.runtime, imdb_id: m.imdb_id, tmdb_id: m.tmdb_id, country: m.country, awards: m.awards, tagline: m.tagline, series_poster_url: m.series_poster_url, season_number: m.season_number, episode_count: m.episode_count })));
       setTotal(data.total);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
+    } catch (err: unknown) {
+      if (isAbortError(err)) return;
     }
     finally {
       if (!signal?.aborted) {
@@ -126,7 +127,7 @@ export function WishlistTab() {
       const willBeEmpty = items.length <= 1;
       if (willBeEmpty && currentPage > 0) setCurrentPage((p) => p - 1);
       else setReloadTrigger((n) => n + 1);
-    } catch (err: any) { showToast(t("wishlist.delete_failed", { message: err.message }), "error"); }
+    } catch (err: unknown) { showToast(t("wishlist.delete_failed", { message: getErrMsg(err) }), "error"); }
   }, [items.length, currentPage, showToast, t]);
 
   const confirmMarkAsWatched = useCallback(async (movieId: number, rating: number) => {
@@ -137,7 +138,7 @@ export function WishlistTab() {
       const willBeEmpty = items.length <= 1;
       if (willBeEmpty && currentPage > 0) setCurrentPage((p) => p - 1);
       else setReloadTrigger((n) => n + 1);
-    } catch (err: any) { showToast(t("wishlist.mark_failed", { message: err.message }), "error"); }
+    } catch (err: unknown) { showToast(t("wishlist.mark_failed", { message: getErrMsg(err) }), "error"); }
   }, [items, currentPage, showToast, t]);
 
   return (

@@ -5,6 +5,7 @@ import { useToast } from "../context/ToastContext";
 import { exportAllData, adminDeleteUser, adminResetPassword, listOperationLogs } from "../api";
 import { Modal } from "../components/Modal";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import { getErrMsg } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import { formatDate, formatDateTime } from "../utils/date";
 import FadeContent from "../components/FadeContent";
@@ -132,8 +133,8 @@ export function AdminPanel() {
       setNewUsername("");
       setNewPassword("");
       loadUsers();
-    } catch (err: any) {
-      showToast(err.message, "error");
+    } catch (err) {
+      showToast(getErrMsg(err), "error");
     } finally {
       setCreating(false);
     }
@@ -147,8 +148,8 @@ export function AdminPanel() {
       showToast(t("admin.user_deleted", { username: deleteConfirm.username }), "success");
       setDeleteConfirm(null);
       loadUsers();
-    } catch (err: any) {
-      showToast(err.message, "error");
+    } catch (err) {
+      showToast(getErrMsg(err), "error");
     } finally {
       setDeleting(false);
     }
@@ -166,8 +167,8 @@ export function AdminPanel() {
       showToast(t("admin.pwd_reset", { username: resetTarget.username }), "success");
       setResetTarget(null);
       setResetPassword("");
-    } catch (err: any) {
-      showToast(err.message, "error");
+    } catch (err) {
+      showToast(getErrMsg(err), "error");
     } finally {
       setResetting(false);
     }
@@ -178,7 +179,7 @@ export function AdminPanel() {
     try {
       await exportAllData();
       showToast(t("admin.export_success"), "success");
-    } catch (err: any) {
+    } catch (err) {
       showToast(t("admin.export_failed"), "error");
     } finally {
       setExporting(false);

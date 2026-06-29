@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import type { Recommendation } from "../../../types";
 import { exportScreenshot } from "../../../utils/export";
 import { useToast } from "../../../context/ToastContext";
+import { getErrMsg } from "../../../lib/utils";
 import FadeContent from "../../FadeContent";
 import { RecommendationCard } from "./RecommendationCard";
 
@@ -33,7 +34,7 @@ export function ResultsSection({
     try {
       await exportScreenshot(resultsRef.current);
       showToast(t("recommend.export_screenshot_success"), "success");
-    } catch (err: any) { showToast(err.message, "error"); }
+    } catch (err: unknown) { showToast(getErrMsg(err), "error"); }
   }, [showToast, t]);
 
   return (

@@ -7,6 +7,7 @@ import { useToast } from "../context/ToastContext";
 import { SkeletonCard } from "./Skeleton";
 import FadeContent from "./FadeContent";
 import { Sparkles } from "lucide-react";
+import { isAbortError, getErrMsg } from "../lib/utils";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { ChatPanel } from "./tabs/recommend/ChatPanel";
 import { StrategySelector } from "./tabs/recommend/StrategySelector";
@@ -77,7 +78,7 @@ export function RecommendTab() {
           media_type: m.media_type,
         }))
       );
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load watched movies:", err);
       toastRef.current(tRef.current("recommend.load_error"), "error");
     } finally {
@@ -98,7 +99,7 @@ export function RecommendTab() {
       setSessions(data.sessions);
       setSessionsTotal(data.total);
       setSessionsPage(p);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load sessions:", err);
       toastRef.current(tRef.current("recommend.load_error"), "error");
     } finally {
@@ -132,7 +133,7 @@ export function RecommendTab() {
         })
       );
       setSessionPosterMap(posterMap);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to load session detail:", err);
     } finally {
       setSelectedSessionLoading(false);
@@ -148,8 +149,8 @@ export function RecommendTab() {
       if (selectedSession?.id === id) setSelectedSession(null);
       showToast(t("history.deleted"), "success");
       loadSessions(sessionsPage);
-    } catch (err: any) {
-      showToast(t("history.delete_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("history.delete_failed", { message: getErrMsg(err) }), "error");
     }
   }, [deleteTargetId, selectedSession, sessionsPage, loadSessions, showToast, t]);
 
@@ -159,8 +160,8 @@ export function RecommendTab() {
     try {
       await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null });
       showToast(t("wishlist.added_to_wishlist", { title: rec.title }), "success");
-    } catch (err: any) {
-      showToast(t("wishlist.add_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("wishlist.add_failed", { message: getErrMsg(err) }), "error");
     } finally {
       setAddingFromSession((prev) => ({ ...prev, [idx]: false }));
     }
@@ -304,9 +305,9 @@ export function RecommendTab() {
         setRecommendations(recs);
         setShowChat(true);
       }
-    } catch (err: any) {
-      if (err.name === "AbortError") showToast(t("recommend.timeout"), "error");
-      else showToast(t("recommend.error", { message: err.message }), "error");
+    } catch (err) {
+      if (isAbortError(err)) showToast(t("recommend.timeout"), "error");
+      else showToast(t("recommend.error", { message: getErrMsg(err) }), "error");
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);
@@ -400,8 +401,8 @@ export function RecommendTab() {
       if (!accumulatedText.trim()) {
         setChatMessages((prev) => [...prev, { role: "assistant", content: t("recommend.chat_error") }]);
       }
-    } catch (err: any) {
-      if (err.name !== "AbortError") showToast(t("recommend.error", { message: err.message }), "error");
+    } catch (err) {
+      if (!isAbortError(err)) showToast(t("recommend.error", { message: getErrMsg(err) }), "error");
     } finally {
       clearTimeout(timeoutId);
       setIsChatProcessing(false);
@@ -437,9 +438,9 @@ export function RecommendTab() {
         } else {
           setDetailError(t("wishlist.search_empty", { query: detailRec.title }));
         }
-      } catch (err: any) {
+      } catch (err) {
         if (cancelled) return;
-        setDetailError(err.message);
+        setDetailError(getErrMsg(err));
       } finally {
         if (!cancelled) setDetailLoading(false);
       }
@@ -473,8 +474,8 @@ export function RecommendTab() {
     try {
       await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null });
       showToast(t("wishlist.added_to_wishlist", { title: rec.title }), "success");
-    } catch (err: any) {
-      showToast(t("wishlist.add_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("wishlist.add_failed", { message: getErrMsg(err) }), "error");
     } finally {
       setAddingToWishlist((prev) => ({ ...prev, [idx]: false }));
     }

@@ -5,6 +5,7 @@ import { BarChart3, Star, RefreshCw, Calendar, TrendingUp, Clock } from "lucide-
 import { translateGenreName } from "../utils/genre";
 import CountUp from "./CountUp";
 import FadeContent from "./FadeContent";
+import { getErrMsg } from "../lib/utils";
 import { fetchStats } from "../api";
 import type { StatsData } from "../types";
 
@@ -187,8 +188,8 @@ export function StatsTab() {
       const data = await fetchStats();
       setStats(data);
       setCachedStats(data);
-    } catch (err: any) {
-      setError(err.message || "加载统计数据失败");
+    } catch (err: unknown) {
+      setError(getErrMsg(err) || "加载统计数据失败");
     } finally { setLoading(false); }
   }, []);
 

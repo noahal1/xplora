@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
-import type { TVSeriesGroup } from "../../../utils/groupTVSeries";
+import type { TVSeriesGroup, formatSeasonLabel } from "../../../utils/groupTVSeries";
 import { ProgressiveImage } from "../../ProgressiveImage";
 import { Film, Trash2, Info } from "lucide-react";
 import { Badge } from "../../ui/badge";
@@ -95,7 +95,7 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
                   title={`${season.title} — ${t("watched.click_to_edit")}`}
                 >
                   <span className="text-amber text-[10px]">★</span>
-                  <span>S{season.season_number ?? "?"}</span>
+                  <span>{formatSeasonLabel(season.season_number, t("season_specials"))}</span>
                   <span className="text-amber font-semibold">
                     {season.rating.toFixed(1)}
                   </span>

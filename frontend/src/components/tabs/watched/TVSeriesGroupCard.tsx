@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
-import type { TVSeriesGroup } from "../../../utils/groupTVSeries";
+import type { TVSeriesGroup, formatSeasonLabel } from "../../../utils/groupTVSeries";
 import TiltedCard from "../../TiltedCard";
 import { Film } from "lucide-react";
 import { Badge } from "../../ui/badge";
@@ -26,8 +26,8 @@ export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
     group.seasons.reduce((sum, s) => sum + s.rating, 0) / group.seasons.length;
   const seasonRange =
     group.seasons.length >= 2
-      ? `S${group.seasons[0].season_number}–S${group.seasons[group.seasons.length - 1].season_number}`
-      : `S${group.seasons[0].season_number}`;
+      ? `${formatSeasonLabel(group.seasons[0].season_number, t("season_specials"))}–${formatSeasonLabel(group.seasons[group.seasons.length - 1].season_number, t("season_specials"))}`
+      : formatSeasonLabel(group.seasons[0].season_number, t("season_specials"));
 
   return (
     <div
@@ -94,7 +94,7 @@ export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
                       >
                         <span className="text-amber">★</span>
                         <span className="text-white/90">
-                          S{season.season_number ?? "?"}
+                          {formatSeasonLabel(season.season_number, t("season_specials"))}
                         </span>
                         <span className="text-amber font-semibold">
                           {season.rating.toFixed(1)}

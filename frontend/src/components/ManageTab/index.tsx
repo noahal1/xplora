@@ -19,6 +19,7 @@ import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles,
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../../hooks/useGenreExtractor";
 import { useSort } from "../../hooks/useSort";
+import { isAbortError, getErrMsg } from "../../lib/utils";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
 
 import { EmptyState } from "../EmptyState";
@@ -114,9 +115,9 @@ export function ManageTab() {
       if (signal?.aborted) return;
       setMediaList(data.media);
       setTotal(data.total);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      setError(err.message);
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setError(getErrMsg(err));
     } finally {
       if (!signal?.aborted && !quiet) {
         setLoading(false);
@@ -179,8 +180,8 @@ export function ManageTab() {
         return next;
       });
       fetchData(undefined, true);
-    } catch (err: any) {
-      showToast(t("manage.delete_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("manage.delete_failed", { message: getErrMsg(err) }), "error");
     }
   }, [fetchData, showToast, t]);
 
@@ -209,9 +210,8 @@ export function ManageTab() {
         setSelected(new Set());
         setPage(0);
       }
-      fetchData(undefined, true);
-    } catch (err: any) {
-      showToast(t("manage.delete_failed", { message: err.message }), "error");
+      fetchData(undefined, true);      } catch (err) {
+      showToast(t("manage.delete_failed", { message: getErrMsg(err) }), "error");
     }
   }, [deleteConfirm, selected, fetchData, showToast, t]);
 
@@ -259,7 +259,7 @@ export function ManageTab() {
       showToast(t("manage.updated"), "success");
       cancelInlineEdit();
       fetchData(undefined, true);
-    } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); cancelInlineEdit(); }
+    } catch (err) { showToast(t("manage.save_failed", { message: getErrMsg(err) }), "error"); cancelInlineEdit(); }
   }, [mediaList, fetchData, showToast, cancelInlineEdit, t]);
 
   /* ── Enrich operations ───────────────────────────────────────── */
@@ -273,7 +273,7 @@ export function ManageTab() {
       setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
       showToast(t("manage.enrich_success"), "success");
       fetchData(undefined, true);
-    } catch (err: any) { showToast(t("manage.enrich_failed", { message: err.message }), "error"); }
+    } catch (err) { showToast(t("manage.enrich_failed", { message: getErrMsg(err) }), "error"); }
     finally { setEnrichingIds(prev => { const next = new Set(prev); next.delete(movieId); return next; }); }
   }, [fetchData, showToast, t, enrichSource]);
 
@@ -291,7 +291,7 @@ export function ManageTab() {
         showToast(t("manage.batch_all_started", { count: totalEnqueued }), "success");
         startPolling();
       } else showToast(t("manage.batch_all_none"), "info");
-    } catch (err: any) { showToast(t("manage.batch_all_failed", { message: err.message }), "error"); }
+    } catch (err) { showToast(t("manage.batch_all_failed", { message: getErrMsg(err) }), "error"); }
     finally { setBatchLoading(false); }
   }, [showToast, startPolling, t]);
 
@@ -319,8 +319,8 @@ export function ManageTab() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
-      showToast(t("manage.export_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("manage.export_failed", { message: getErrMsg(err) }), "error");
     }
   }, [total, search.debouncedValue, statusFilter, sortField, sortDir, errorFilter, mediaTypeFilter, genreFilter, showToast, t]);
 
@@ -644,7 +644,7 @@ export function ManageTab() {
             showToast(t("wishlist.marked_as_watched", { title: mediaList.find(m => m.id === movieId)?.title || "", rating: rounded }), "success");
             setMarkWatchedMovie(null);
             fetchData(undefined, true);
-          } catch (err: any) { showToast(t("wishlist.mark_failed", { message: err.message }), "error"); }
+          } catch (err) { showToast(t("wishlist.mark_failed", { message: getErrMsg(err) }), "error"); }
         }}
       />
 
@@ -662,7 +662,7 @@ export function ManageTab() {
             showToast(t("manage.genre_updated"), "success");
             setGenreDialogMovie(null);
             fetchData(undefined, true);
-          } catch (err: any) { showToast(t("manage.save_failed", { message: err.message }), "error"); }
+          } catch (err) { showToast(t("manage.save_failed", { message: getErrMsg(err) }), "error"); }
         }}
       />
     </FadeContent>

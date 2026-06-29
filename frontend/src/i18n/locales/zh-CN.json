@@ -81,7 +81,8 @@
     "avg_rating": "平均评分",
     "seasons_count": "{{count}} 季",
     "delete_failed": "删除失败：{{message}}",
-    "deleted_count": "已删除 {{count}} 项"
+    "deleted_count": "已删除 {{count}} 项",
+    "season_specials": "特别篇"
   },
   "watched_import": {
     "sample_data_loaded": "已加载示例数据！",

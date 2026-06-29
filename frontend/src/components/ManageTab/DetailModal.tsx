@@ -7,6 +7,7 @@ import { ProgressiveImage } from "../ProgressiveImage";
 import { Film, Sparkles, Pencil, X, Loader2 } from "lucide-react";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
+import { getErrMsg } from "../../lib/utils";
 import { translateGenres } from "../../utils/genre";
 
 interface DetailModalProps {
@@ -106,8 +107,8 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       showToast(t("manage.updated"), "success");
       onSave?.();
       setEditing(false);
-    } catch (err: any) {
-      showToast(t("manage.save_failed", { message: err.message }), "error");
+    } catch (err: unknown) {
+      showToast(t("manage.save_failed", { message: getErrMsg(err) }), "error");
     } finally {
       setSaving(false);
     }

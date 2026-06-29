@@ -8,6 +8,7 @@ import { UpdateModal } from "../components/UpdateModal";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
+import { getErrMsg } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useEnrich } from "../context/EnrichContext";
 import FadeContent from "../components/FadeContent";
@@ -109,8 +110,8 @@ export function ProfilePage() {
       setHealth((prev) => prev ? { ...prev, api_keys: data.api_keys } : prev);
       setKeyConfigOpen(false);
       showToast(t("profile.api_saved"), "success");
-    } catch (err: any) {
-      showToast(t("profile.api_save_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("profile.api_save_failed", { message: getErrMsg(err) }), "error");
     } finally {
       setSavingKeys(false);
     }
@@ -134,8 +135,8 @@ export function ProfilePage() {
         if (!res.ok) throw new Error(t("profile.health_failed"));
         const data = await res.json();
         setHealth(data);
-      } catch (err: any) {
-        setHealthError(err.message);
+      } catch (err) {
+        setHealthError(getErrMsg(err));
       } finally {
         setHealthLoading(false);
       }
@@ -173,8 +174,8 @@ export function ProfilePage() {
       setNewPassword("");
       setConfirmPassword("");
       showToast(t("profile.password_success"), "success");
-    } catch (err: any) {
-      setPwError(err.message);
+    } catch (err) {
+      setPwError(getErrMsg(err));
     } finally {
       setPwLoading(false);
     }
@@ -205,8 +206,8 @@ export function ProfilePage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast(t("profile.export_success"), "success");
-    } catch (err: any) {
-      showToast(t("profile.export_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("profile.export_failed", { message: getErrMsg(err) }), "error");
     } finally {
       setExporting(false);
     }
@@ -251,10 +252,11 @@ export function ProfilePage() {
       showToast(t("profile.import_success", { count: data.count, type: typeLabel }), "success");
       // Start polling for background metadata enrichment
       startPolling();
-    } catch (err: any) {
-      setImportResult(t("profile.import_failed", { message: err.message }));
+    } catch (err) {
+      const msg = getErrMsg(err);
+      setImportResult(t("profile.import_failed", { message: msg }));
       setImportSuccess(false);
-      showToast(t("profile.import_failed", { message: err.message }), "error");
+      showToast(t("profile.import_failed", { message: msg }), "error");
     } finally {
       setImporting(false);
       e.target.value = "";

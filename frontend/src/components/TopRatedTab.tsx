@@ -15,7 +15,7 @@ import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { TopRatedCard } from "./tabs/top_rated/TopRatedCard";
 import { TopRatedMobileCard } from "./tabs/top_rated/TopRatedMobileCard";
 import { useToast } from "../context/ToastContext";
-
+import { getErrMsg } from "../lib/utils";
 
 
 export function TopRatedTab() {
@@ -69,8 +69,8 @@ export function TopRatedTab() {
     try {
       const data = await fetchTopRated();
       setMovies(data);
-    } catch (err: any) {
-      setError(err.message || "加载失败");
+    } catch (err: unknown) {
+      setError(getErrMsg(err) || "加载失败");
     } finally {
       setLoading(false);
     }
@@ -143,8 +143,8 @@ export function TopRatedTab() {
       const updated = await fetchTopRated();
       setMovies(updated);
       showToast(`已将「${newTitle}」加入排行榜`, "success");
-    } catch (e: any) {
-      showToast(e.message || "替换失败，请重试", "error");
+    } catch (err: unknown) {
+      showToast(getErrMsg(err) || "替换失败，请重试", "error");
     }
     setReplacePending(null);
     setReplacing(false);

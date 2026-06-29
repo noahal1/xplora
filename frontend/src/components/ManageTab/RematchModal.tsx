@@ -3,10 +3,12 @@ import { useTranslation } from "react-i18next";
 import type { MediaDetail, MediaSearchResult } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
+import { getErrMsg } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
 import { Search, X, Film, AlertCircle, RefreshCw, Check, Loader2 } from "lucide-react";
 import { translateGenres } from "../../utils/genre";
+import { formatSeasonLabel } from "../../utils/groupTVSeries";
 
 interface RematchModalProps {
   open: boolean;
@@ -57,8 +59,8 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
       await api.rematchMedia(movie.id, result.source, result.source_id, result.media_type);
       showToast(t("manage.rematch_success", { title: result.title }), "success");
       onSuccess();
-    } catch (err: any) {
-      showToast(t("manage.rematch_failed", { message: err.message }), "error");
+    } catch (err: unknown) {
+      showToast(t("manage.rematch_failed", { message: getErrMsg(err) }), "error");
     }
   }, [movie, onClose, onSuccess, showToast, t]);
 
@@ -255,7 +257,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                           {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground truncate max-w-[120px]">{translateGenres(result.genre)}</span>}
                           {result.season_number != null && (
                             <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
-                              S{result.season_number}
+                              {formatSeasonLabel(result.season_number, t("season_specials"))}
                               {result.episode_count != null && <span className="ml-0.5 opacity-70">· {result.episode_count}ep</span>}
                             </Badge>
                           )}

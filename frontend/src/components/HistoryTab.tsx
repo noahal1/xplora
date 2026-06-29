@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { Recommendation, ExternalDetail, DBSessionDetail } from "../types";
 import * as api from "../api";
+import { getErrMsg } from "../lib/utils";
 import { useToast } from "../context/ToastContext";
 import { TMDBDetailModal } from "./shared/TMDBDetailModal";
 import { SessionList } from "./tabs/history/SessionList";
@@ -88,8 +89,8 @@ export function HistoryTab() {
     try {
       await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null });
       showToast(t("wishlist.added_to_wishlist", { title: rec.title }), "success");
-    } catch (err: any) {
-      showToast(t("wishlist.add_failed", { message: err.message }), "error");
+    } catch (err) {
+      showToast(t("wishlist.add_failed", { message: getErrMsg(err) }), "error");
     } finally {
       setAddingToWishlist((prev) => ({ ...prev, [idx]: false }));
     }
@@ -113,8 +114,8 @@ export function HistoryTab() {
       } else {
         setDetailError(t("wishlist.search_empty", { query: rec.title }));
       }
-    } catch (err: any) {
-      setDetailError(err.message);
+    } catch (err) {
+      setDetailError(getErrMsg(err));
     } finally {
       setTmdbLoading(false);
     }

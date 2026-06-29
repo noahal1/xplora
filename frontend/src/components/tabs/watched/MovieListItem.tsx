@@ -6,6 +6,7 @@ import { Film, X } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
 import CountUp from "../../CountUp";
+import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 import { RatingSlider } from "../../shared/RatingSlider";
 import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
@@ -63,7 +64,7 @@ export const MovieListItem = memo(function MovieListItem({ movie, isSelected, on
           )}
           {movie.season_number != null && (
             <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
-              S{movie.season_number}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
+              {formatSeasonLabel(movie.season_number, t("season_specials"))}{movie.episode_count != null && <span className="ml-0.5 opacity-70">· {movie.episode_count}ep</span>}
             </Badge>
           )}
         </div>

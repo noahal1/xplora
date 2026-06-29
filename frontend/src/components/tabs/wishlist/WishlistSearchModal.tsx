@@ -4,6 +4,7 @@ import type { MediaSearchResult, ExternalDetail } from "../../../types";
 import * as api from "../../../api";
 import { useToast } from "../../../context/ToastContext";
 import { useEnrich } from "../../../context/EnrichContext";
+import { getErrMsg } from "../../../lib/utils";
 import { Badge } from "../../ui/badge";
 import { Modal } from "../../Modal";
 import { ProgressiveImage } from "../../ProgressiveImage";
@@ -53,7 +54,7 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
       const data = await api.searchMedia(q.trim(), searchSourceRef.current);
       setSearchResults(data.results);
       setSearchDone(true);
-    } catch (err: any) { setSearchError(err.message); setSearchResults([]); setSearchDone(true); }
+    } catch (err: unknown) { setSearchError(getErrMsg(err)); setSearchResults([]); setSearchDone(true); }
     finally { setSearchLoading(false); }
   }, [externalQuery]);
 
@@ -69,7 +70,7 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
     try {
       const data = await api.getExternalDetail(result.source, result.source_id);
       setDetailData(data);
-    } catch (err: any) { setDetailError(err.message); }
+    } catch (err: unknown) { setDetailError(getErrMsg(err)); }
     finally { setDetailLoading(false); }
   }, []);
 
@@ -84,7 +85,7 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
       showToast(t("wishlist.added_to_wishlist", { title: result.title }), "success");
       startPolling();
       onAddSuccess();
-    } catch (err: any) { showToast(t("wishlist.add_failed", { message: err.message }), "error"); }
+    } catch (err: unknown) { showToast(t("wishlist.add_failed", { message: getErrMsg(err) }), "error"); }
     finally { setAddingIds((prev) => { const next = new Set(prev); next.delete(key); return next; }); }
   }, [addingIds, showToast, startPolling, onAddSuccess, t]);
 

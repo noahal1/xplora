@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../types";
-import type { TVSeriesGroup } from "../../utils/groupTVSeries";
+import type { TVSeriesGroup, formatSeasonLabel } from "../../utils/groupTVSeries";
 import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import {
@@ -153,7 +153,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
                 title={season.title}
               >
                 <span className="text-amber text-[9px]">★</span>
-                <span>S{season.season_number ?? "?"}</span>
+                <span>{formatSeasonLabel(season.season_number, t("season_specials"))}</span>
                 <span className="text-amber font-semibold">
                   {season.rating.toFixed(1)}
                 </span>
@@ -272,7 +272,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-xs font-medium truncate">{season.title}</span>
               <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 shrink-0 leading-none px-1">
-                S{season.season_number}
+                {formatSeasonLabel(season.season_number, t("season_specials"))}
               </Badge>
               {season.episode_count != null && (
                 <span className="text-[9px] text-muted-foreground/60 shrink-0">

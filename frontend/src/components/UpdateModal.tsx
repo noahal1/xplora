@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Modal } from "./Modal";
 import { triggerUpdate } from "../api";
 import { useToast } from "../context/ToastContext";
+import { getErrMsg } from "../lib/utils";
 
 interface UpdateInfo {
   current_version: string;
@@ -58,8 +59,8 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
     try {
       const result = await triggerUpdate();
       showToast(result.message, "success");
-    } catch (err: any) {
-      showToast(err.message, "error");
+    } catch (err: unknown) {
+      showToast(getErrMsg(err), "error");
     } finally {
       setUpdating(false);
     }

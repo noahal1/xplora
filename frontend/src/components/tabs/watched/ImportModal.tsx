@@ -3,6 +3,7 @@ import type { TFunction } from "i18next";
 import type { MediaImport } from "../../../types";
 import { parseCSV, parseMovieData } from "../../../utils/csv";
 import { useToast } from "../../../context/ToastContext";
+import { getErrMsg } from "../../../lib/utils";
 import { Modal } from "../../Modal";
 import { Separator } from "../../ui/separator";
 import { Upload } from "lucide-react";
@@ -45,8 +46,8 @@ export function ImportModal({ open, onClose, onImport, onLoadSample, t }: Import
             movies = parseCSV(text);
           }
           importMovies(movies);
-        } catch (err: any) {
-          showToast && showToast(t("watched_import.parse_failed", { message: err.message }), "error");
+        } catch (err: unknown) {
+          showToast && showToast(t("watched_import.parse_failed", { message: getErrMsg(err) }), "error");
         }
       };
       reader.onerror = () => showToast && showToast(t("watched_import.read_failed"), "error");
@@ -81,8 +82,8 @@ export function ImportModal({ open, onClose, onImport, onLoadSample, t }: Import
       const data = JSON.parse(jsonText);
       const movies = parseMovieData(data);
       importMovies(movies);
-    } catch (err: any) {
-      showToast && showToast(t("watched_import.json_parse_failed", { message: err.message }), "error");
+    } catch (err: unknown) {
+      showToast && showToast(t("watched_import.json_parse_failed", { message: getErrMsg(err) }), "error");
     }
   }, [jsonText, showToast, t]);
 

@@ -81,7 +81,8 @@
     "avg_rating": "Average Rating",
     "seasons_count": "{{count}} seasons",
     "delete_failed": "Delete failed: {{message}}",
-    "deleted_count": "Deleted {{count}} items"
+    "deleted_count": "Deleted {{count}} items",
+    "season_specials": "Specials"
   },
   "watched_import": {
     "sample_data_loaded": "Sample data loaded!",

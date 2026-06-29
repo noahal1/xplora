@@ -4,6 +4,7 @@ import type { MediaSearchResult } from "../../../types";
 import * as api from "../../../api";
 import { useToast } from "../../../context/ToastContext";
 import { useEnrich } from "../../../context/EnrichContext";
+import { getErrMsg } from "../../../lib/utils";
 import { Modal } from "../../Modal";
 import { SearchSourceSelector } from "../../SearchSourceSelector";
 import { ProgressiveImage } from "../../ProgressiveImage";
@@ -41,8 +42,8 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
       const data = await api.searchMedia(q.trim(), searchSourceRef.current);
       setSearchResults(data.results);
       setSearchDone(true);
-    } catch (err: any) {
-      setSearchError(err.message);
+    } catch (err: unknown) {
+      setSearchError(getErrMsg(err));
       setSearchResults([]);
       setSearchDone(true);
     } finally {
@@ -63,8 +64,8 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
       showToast(t("watched.added", { title: result.title }), "success");
       startPolling();
       onAddSuccess();
-    } catch (err: any) {
-      showToast(t("watched.add_failed", { message: err.message }), "error");
+    } catch (err: unknown) {
+      showToast(t("watched.add_failed", { message: getErrMsg(err) }), "error");
     } finally {
       setAddingSearchIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
     }

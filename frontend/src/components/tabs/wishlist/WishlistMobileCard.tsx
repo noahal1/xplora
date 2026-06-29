@@ -4,6 +4,7 @@ import { ProgressiveImage } from "../../ProgressiveImage";
 import { Film, ChevronRight, Check, Info, Trash2 } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
+import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 import type { WishlistEntry } from "../../WishlistTab/index";
 
 /* ── Memo-ized mobile card — compact card layout for small screens ── */
@@ -50,7 +51,7 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
                 {item.genre && <span className="truncate">{translateGenres(item.genre)}</span>}
                 {item.season_number != null && (
                   <Badge variant="outline" className="text-[9px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0">
-                    S{item.season_number}{item.episode_count != null && <span className="ml-0.5 opacity-70">· {item.episode_count}ep</span>}
+                    {formatSeasonLabel(item.season_number, t("season_specials"))}{item.episode_count != null && <span className="ml-0.5 opacity-70">· {item.episode_count}ep</span>}
                   </Badge>
                 )}
               </div>

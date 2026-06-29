@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import * as api from "../../../api";
 import { useToast } from "../../../context/ToastContext";
 import { useEnrich } from "../../../context/EnrichContext";
+import { getErrMsg } from "../../../lib/utils";
 import { Modal } from "../../Modal";
 import { GenreInput } from "../../GenreInput";
 import { Separator } from "../../ui/separator";
@@ -34,7 +35,7 @@ export function WishlistAddModal({ open, onClose, onAddSuccess }: WishlistAddMod
       startPolling();
       onAddSuccess();
       onClose();
-    } catch (err: any) { showToast(t("wishlist.add_failed", { message: err.message }), "error"); }
+    } catch (err: unknown) { showToast(t("wishlist.add_failed", { message: getErrMsg(err) }), "error"); }
   }, [newTitle, newYear, newGenre, showToast, startPolling, onAddSuccess, onClose, t]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); addMovie(); } }, [addMovie]);
@@ -60,7 +61,7 @@ export function WishlistAddModal({ open, onClose, onAddSuccess }: WishlistAddMod
       onAddSuccess();
       setJsonText("");
       onClose();
-    } catch (err: any) { showToast(t("wishlist.json_parse_failed", { message: err.message }), "error"); }
+    } catch (err: unknown) { showToast(t("wishlist.json_parse_failed", { message: getErrMsg(err) }), "error"); }
   }, [jsonText, showToast, onAddSuccess, onClose, t, startPolling]);
 
   const handleClose = useCallback(() => {

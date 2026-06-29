@@ -10,6 +10,7 @@ import { List, LayoutGrid } from "lucide-react";
 import CountUp from "./CountUp";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
+import { isAbortError, getErrMsg } from "../lib/utils";
 import { useEnrichReload } from "../hooks/useEnrichReload";
 import { usePagination } from "../hooks/usePagination";
 import { useSort } from "../hooks/useSort";
@@ -100,8 +101,8 @@ export function WatchedTab() {
       if (signal?.aborted) return;
       setMedia(data.media);
       setTotal(data.total);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
+    } catch (err) {
+      if (isAbortError(err)) return;
     } finally {
       if (!signal?.aborted) {
         setLoading(false);
@@ -140,8 +141,8 @@ export function WatchedTab() {
         setSelectedIds(new Set());
         setReloadTrigger((n) => n + 1);
         return true;
-      } catch (err: any) {
-        showToast(t("watched_import.save_failed", { message: err.message }), "error");
+      } catch (err) {
+        showToast(t("watched_import.save_failed", { message: getErrMsg(err) }), "error");
         return false;
       }
     },
@@ -246,8 +247,8 @@ export function WatchedTab() {
         } else {
           reloadCurrentPage();
         }
-      } catch (err: any) {
-        showToast(t("watched.delete_failed", { message: err.message }), "error");
+      } catch (err) {
+        showToast(t("watched.delete_failed", { message: getErrMsg(err) }), "error");
       }
     },
     [media.length, currentPage, reloadCurrentPage, showToast, t]
@@ -264,8 +265,8 @@ export function WatchedTab() {
           return next;
         });
         reloadCurrentPage();
-      } catch (err: any) {
-        showToast(t("watched.delete_failed", { message: err.message }), "error");
+      } catch (err) {
+        showToast(t("watched.delete_failed", { message: getErrMsg(err) }), "error");
       }
     },
     [reloadCurrentPage, showToast, t]
@@ -284,8 +285,8 @@ export function WatchedTab() {
           year: movie.year,
           genre: movie.genre,
         });
-      } catch (err: any) {
-        showToast(t("watched.save_rating_failed", { message: err.message }), "error");
+      } catch (err) {
+        showToast(t("watched.save_rating_failed", { message: getErrMsg(err) }), "error");
       }
     },
     [showToast, t]
