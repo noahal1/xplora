@@ -159,6 +159,7 @@
     "source_info_loading": "Based on {{count}} watched movies, AI is analyzing...",
     "source_info_done": "Based on {{count}} watched movies, here are {{recs}} recommendations for you",
     "source_info_filtered": " ({{count}} already watched filtered out)",
+    "load_error": "Failed to load data, please check the backend service",
     "loading_movies": "Loading watched movies...",
     "analyzing": "AI is analyzing your watch history...",
     "no_results": "No recommendations received, please try again",

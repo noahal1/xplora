@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaItem, Recommendation, ChatMessage, ExternalDetail, DBSession, DBSessionDetail } from "../types";
 import * as api from "../api";
@@ -18,7 +18,10 @@ import { ResultsSection } from "./tabs/recommend/ResultsSection";
 export function RecommendTab() {
   const { t } = useTranslation();
   const { showToast } = useToast();
-
+  const toastRef = useRef(showToast);
+  toastRef.current = showToast;
+  const tRef = useRef(t);
+  tRef.current = t;
 
   const [movies, setMovies] = useState<MediaItem[]>([]);
   const [loadingMovies, setLoadingMovies] = useState(true);
@@ -63,7 +66,7 @@ export function RecommendTab() {
   const loadMoviesFromDB = useCallback(async () => {
     setLoadingMovies(true);
     try {
-      const data = await api.listMedia({ page: 0, page_size: 10000, status: "watched" });
+      const data = await api.listMedia({ page: 0, page_size: 5000, status: "watched" });
       setMovies(
         data.media.map((m, i) => ({
           id: i,
@@ -74,7 +77,10 @@ export function RecommendTab() {
           media_type: m.media_type,
         }))
       );
-    } catch {} finally {
+    } catch (err: any) {
+      console.error("Failed to load watched movies:", err);
+      toastRef.current(tRef.current("recommend.load_error"), "error");
+    } finally {
       setLoadingMovies(false);
     }
   }, []);
@@ -92,7 +98,10 @@ export function RecommendTab() {
       setSessions(data.sessions);
       setSessionsTotal(data.total);
       setSessionsPage(p);
-    } catch {} finally {
+    } catch (err: any) {
+      console.error("Failed to load sessions:", err);
+      toastRef.current(tRef.current("recommend.load_error"), "error");
+    } finally {
       setSessionsLoading(false);
     }
   }, []);
@@ -117,11 +126,15 @@ export function RecommendTab() {
             const fallback = matches.find((m) => m.poster_url);
             const match = yearMatch ?? fallback ?? matches[0];
             if (match?.poster_url) posterMap[idx] = match.poster_url;
-          } catch {}
+          } catch {
+            // Poster resolution is best-effort — silently skip failures
+          }
         })
       );
       setSessionPosterMap(posterMap);
-    } catch {} finally {
+    } catch (err: any) {
+      console.error("Failed to load session detail:", err);
+    } finally {
       setSelectedSessionLoading(false);
     }
   }, []);
@@ -279,7 +292,9 @@ export function RecommendTab() {
               case "error":
                 throw new Error(data.message);
             }
-          } catch {}
+          } catch {
+            console.warn("SSE parse warning: invalid event data", eventData);
+          }
         }
       }
 
@@ -304,8 +319,6 @@ export function RecommendTab() {
     setIsChatProcessing(true);
 
     // Use the same filters (media type + genre) as the main recommendation
-    const followUpMovies = filteredMovies
-
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -315,7 +328,7 @@ export function RecommendTab() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          movies: followUpMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
+          movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
           previous_recommendations: recommendations,
           conversation: chatMessages,
           question: text,
@@ -378,7 +391,9 @@ export function RecommendTab() {
               case "error":
                 throw new Error(data.message);
             }
-          } catch {}
+          } catch {
+            console.warn("SSE parse warning (followup): invalid event data", eventData);
+          }
         }
       }
 
@@ -399,15 +414,17 @@ export function RecommendTab() {
     setDetailError("");
   }, []);
 
-  // Fetch TMDB detail when recommendation detail modal opens
+  // Fetch TMDB detail when recommendation detail modal opens (with race condition guard)
   useEffect(() => {
     if (!detailRec) return;
+    let cancelled = false;
     setDetailData(null);
     setDetailError("");
     setDetailLoading(true);
     (async () => {
       try {
         const searchData = await api.searchMedia(detailRec.title, "tmdb");
+        if (cancelled) return;
         const matches = searchData.results ?? [];
         const yearMatch = detailRec.year
           ? matches.find((m) => m.year === detailRec.year)
@@ -415,27 +432,34 @@ export function RecommendTab() {
         const match = yearMatch ?? matches[0];
         if (match?.source && match?.source_id) {
           const data = await api.getExternalDetail(match.source, match.source_id);
+          if (cancelled) return;
           setDetailData(data);
         } else {
           setDetailError(t("wishlist.search_empty", { query: detailRec.title }));
         }
       } catch (err: any) {
+        if (cancelled) return;
         setDetailError(err.message);
       } finally {
-        setDetailLoading(false);
+        if (!cancelled) setDetailLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [detailRec, t]);
 
 
 
+  // Stable ref to avoid frequent keydown rebind
+  const generateRef = useRef(generateRecommendations);
+  generateRef.current = generateRecommendations;
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !isLoading && movies.length >= 2) generateRecommendations();
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !isLoading && movies.length >= 2) generateRef.current();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isLoading, movies.length, generateRecommendations]);
+  }, [isLoading, movies.length]);
 
   const handleExportJSON = useCallback(() => {
     if (recommendations.length === 0) { showToast(t("recommend.export_no_results"), "error"); return; }
