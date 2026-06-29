@@ -732,13 +732,23 @@ body {
 }
 
 /* ============================================
-   Theme Transition — smooth color changes
-   Only compositor-friendly properties (no box-shadow which triggers Layout+Paint).
-   Components with hover shadows (cards, inputs, etc.) set their own transition.
+   Theme Transition — smooth color changes on theme toggle
+   Targeted selectors instead of universal * for performance.
+   Component classes (card, btn, pill, input-field, etc.)
+   already define their own transitions for hover/active states.
    ============================================ */
-*,
-*::before,
-*::after {
+body {
+  transition: background-color 0.25s ease, color 0.2s ease;
+}
+
+/* Theme-relevant classes that don't have their own transitions */
+.badge,
+.spinner,
+.empty-state,
+.text-caption,
+.section-header,
+.section-title,
+.count-badge {
   transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
 }
 
@@ -829,8 +839,8 @@ input[type="number"].no-spinner {
     padding-bottom: 0.625rem !important;
   }
 
-  /* Prevent horizontal overflow on body */
-  body {
+  /* Prevent horizontal overflow on #root (NOT body, which would break fixed positioning on iOS) */
+  #root {
     overflow-x: hidden;
   }
 }

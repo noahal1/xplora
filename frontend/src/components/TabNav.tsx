@@ -59,7 +59,7 @@ export function TabNav() {
       {/* ── Bottom Tab Bar (mobile only, portal to body) ──────── */}
       {createPortal(
         <nav
-          className="sm:hidden fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around overflow-x-auto no-scrollbar py-1.5 animate-bottom-nav-enter"
+          className="sm:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around py-1.5 px-1 animate-bottom-nav-enter"
           style={{
             background: "var(--seed-bg)",
             borderTop: "1px solid var(--border-default)",
