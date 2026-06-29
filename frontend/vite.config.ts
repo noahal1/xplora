@@ -44,24 +44,15 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Core React framework
-          vendor: ["react", "react-dom", "react-router-dom"],
-
-          // UI icons (radix-ui now uses individual packages, tree-shaken naturally)
-          ui: ["lucide-react"],
-
-          // Charting (only used in StatsTab)
-          charts: ["recharts"],
-
-          // Animation (GSAP — used in FadeContent, SplitText)
-          animation: ["gsap", "@gsap/react"],
-
-          // WebGL (used in Aurora, LineWaves backgrounds)
-          webgl: ["ogl"],
-
-          // i18n
-          i18n: ["i18next", "react-i18next"],
+        manualChunks(id: string) {
+          // Match on package name only (not path separator), works cross-platform
+          if (id.includes("/react-dom") || id.includes("/react-router-dom")) return "vendor";
+          if (id.includes("/lucide-react")) return "ui";
+          if (id.includes("/recharts")) return "charts";
+          if (id.includes("/gsap")) return "animation";
+          if (id.includes("/ogl")) return "webgl";
+          if (id.includes("/i18next") || id.includes("/react-i18next")) return "i18n";
+          // react stays in main entry for fast first paint
         },
       },
     },
