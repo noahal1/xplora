@@ -18,6 +18,7 @@ import { YearChart } from "./tabs/stats/YearChart";
 import { DecadeChart } from "./tabs/stats/DecadeChart";
 import { formatMonthLabel, MonthlyTrendChart } from "./tabs/stats/MonthlyTrendChart";
 import { GenreBarChart } from "./tabs/stats/GenreBarChart";
+import { WorldMapChart } from "./tabs/stats/WorldMapChart";
 import { DonutSection } from "./tabs/stats/DonutSection";
 import { RecentRow } from "./tabs/stats/RecentRow";
 
@@ -460,6 +461,26 @@ export function StatsTab() {
                 }
               </button>
             )}
+          </ChartCard>
+        </FadeContent>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+          WORLD MAP — movie/TV origin countries
+         ════════════════════════════════════════════════════════ */}
+      {(s.country_distribution?.length ?? 0) > 0 && (
+        <FadeContent delay={320}>
+          <ChartCard
+            title={t("stats.world_map", "产地分布")}
+            icon={
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M2 12h20" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+            }
+          >
+            <WorldMapChart data={s.country_distribution} />
           </ChartCard>
         </FadeContent>
       )}

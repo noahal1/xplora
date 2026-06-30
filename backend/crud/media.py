@@ -937,6 +937,20 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             for d, c in sorted(decade_counter.items(), reverse=True)
         ]
 
+        # ── Country distribution ────────────────────────────
+        country_counter: Counter = Counter()
+        for r in records:
+            if r.country:
+                # Normalize: split by "/" (e.g. "United States / China")
+                for c in r.country.split("/"):
+                    c = c.strip()
+                    if c:
+                        country_counter[c] += 1
+        country_distribution = [
+            {"country": c, "count": n}
+            for c, n in country_counter.most_common()
+        ]
+
         # ── Genre distribution (split by " / ") ───────────────
         genre_counter: Counter = Counter()
         for r in records:
@@ -1003,6 +1017,7 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             "rating_distribution": rating_distribution,
             "year_distribution": year_distribution,
             "decade_distribution": decade_distribution,
+            "country_distribution": country_distribution,
             "genre_distribution": genre_distribution,
             "media_type_distribution": media_type_distribution,
             "monthly_trend": monthly_trend,

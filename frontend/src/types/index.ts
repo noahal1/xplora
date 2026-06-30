@@ -146,6 +146,7 @@ export interface StatsData {
   year_distribution: Array<{ year: number; count: number }>;
   decade_distribution: Array<{ decade: string; count: number }>;
   genre_distribution: Array<{ genre: string; count: number }>;
+  country_distribution: Array<{ country: string; count: number }>;
   media_type_distribution: Array<{ type: string; count: number }>;
   monthly_trend: Array<{ month: string; count: number }>;
   top_rated: Array<{

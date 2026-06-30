@@ -500,6 +500,19 @@ def _get_tmdb_detail(movie_id: str, api_key: str) -> dict:
     genre_ids = [g["id"] for g in data.get("genres", []) if g.get("id")]
     genres = _map_tmdb_genres(genre_ids)
 
+    # Extract country from production_countries
+    production_countries = data.get("production_countries", [])
+    country = ""
+    if production_countries:
+        # Pick the first country name (e.g. "United States of America")
+        country = production_countries[0].get("name", "")
+    # Use origin_country as fallback (rare for movies but TMDB sometimes uses it)
+    if not country:
+        origin = data.get("origin_country", [])
+        if origin:
+            iso = origin[0]
+            country = _ISO2_TO_COUNTRY.get(iso, iso)
+
     return {
         "title": data.get("title", ""),
         "year": year,
@@ -515,6 +528,7 @@ def _get_tmdb_detail(movie_id: str, api_key: str) -> dict:
         "source": "tmdb",
         "source_id": movie_id,
         "tmdb_id": movie_id,
+        "country": country or None,
     }
 
 
@@ -589,6 +603,18 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
     seasons = data.get("number_of_seasons", 0)
     episodes = data.get("number_of_episodes", 0)
 
+    # Extract country from origin_country (array of ISO codes, e.g. ["US"])
+    origin_country = data.get("origin_country", [])
+    country = ""
+    if origin_country:
+        iso = origin_country[0]
+        country = _ISO2_TO_COUNTRY.get(iso, iso)
+    # Fallback: production_countries (some TV entries have this instead)
+    if not country:
+        production_countries = data.get("production_countries", [])
+        if production_countries:
+            country = production_countries[0].get("name", "")
+
     result = {
         "title": data.get("name", ""),
         "year": year,
@@ -607,6 +633,7 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
         "media_type": "tv",
         "tv_series_id": tv_id,
         "series_poster_url": f"{TMDB_IMAGE_BASE}{poster}" if poster else None,
+        "country": country or None,
         "seasons": seasons,
         "episodes": episodes,
     }
@@ -700,6 +727,100 @@ def _get_tvmaze_detail(show_id: str) -> dict:
         "episodes": None,
     }
 
+
+# ============================================
+# ISO alpha-2 → country name (for origin_country)
+# ============================================
+
+_ISO2_TO_COUNTRY: dict[str, str] = {
+    "US": "United States",
+    "CA": "Canada",
+    "GB": "United Kingdom",
+    "CN": "China",
+    "JP": "Japan",
+    "KR": "South Korea",
+    "FR": "France",
+    "DE": "Germany",
+    "IN": "India",
+    "AU": "Australia",
+    "BR": "Brazil",
+    "IT": "Italy",
+    "ES": "Spain",
+    "RU": "Russia",
+    "SE": "Sweden",
+    "DK": "Denmark",
+    "NO": "Norway",
+    "NL": "Netherlands",
+    "BE": "Belgium",
+    "CH": "Switzerland",
+    "AT": "Austria",
+    "PL": "Poland",
+    "TR": "Turkey",
+    "MX": "Mexico",
+    "AR": "Argentina",
+    "CO": "Colombia",
+    "CL": "Chile",
+    "TH": "Thailand",
+    "TW": "Taiwan",
+    "HK": "Hong Kong",
+    "SG": "Singapore",
+    "NZ": "New Zealand",
+    "ZA": "South Africa",
+    "IL": "Israel",
+    "IE": "Ireland",
+    "PT": "Portugal",
+    "GR": "Greece",
+    "CZ": "Czech Republic",
+    "HU": "Hungary",
+    "RO": "Romania",
+    "UA": "Ukraine",
+    "FI": "Finland",
+    "IS": "Iceland",
+    "PH": "Philippines",
+    "ID": "Indonesia",
+    "MY": "Malaysia",
+    "VN": "Vietnam",
+    "EG": "Egypt",
+    "NG": "Nigeria",
+    "KE": "Kenya",
+    "MA": "Morocco",
+    "IR": "Iran",
+    "SA": "Saudi Arabia",
+    "AE": "United Arab Emirates",
+    "PK": "Pakistan",
+    "BD": "Bangladesh",
+    "PE": "Peru",
+    "VE": "Venezuela",
+    "CU": "Cuba",
+    "HR": "Croatia",
+    "RS": "Serbia",
+    "BG": "Bulgaria",
+    "SK": "Slovakia",
+    "SI": "Slovenia",
+    "LT": "Lithuania",
+    "LV": "Latvia",
+    "EE": "Estonia",
+    "LU": "Luxembourg",
+    "GE": "Georgia",
+    "LB": "Lebanon",
+    "JO": "Jordan",
+    "QA": "Qatar",
+    "PR": "Puerto Rico",
+    "CR": "Costa Rica",
+    "PA": "Panama",
+    "UY": "Uruguay",
+    "MM": "Myanmar",
+    "KH": "Cambodia",
+    "NP": "Nepal",
+    "LK": "Sri Lanka",
+    "MN": "Mongolia",
+    "KZ": "Kazakhstan",
+    "DZ": "Algeria",
+    "TN": "Tunisia",
+    "ET": "Ethiopia",
+    "GH": "Ghana",
+    "TZ": "Tanzania",
+}
 
 # ============================================
 # Genre ID mapping
