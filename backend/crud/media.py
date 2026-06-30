@@ -213,28 +213,35 @@ def get_media(
         )
 
         # ── TV series grouping: ensure no season group is split across pages ──
-        # If the last item(s) on this page belong to a TV series, fetch any
-        # additional seasons from subsequent pages so the frontend can group
-        # them correctly regardless of pagination.
-        if records:
-            last_tv_series_id = records[-1].tv_series_id
-            if last_tv_series_id is not None:
-                existing_ids = {r.id for r in records}
-                extra = list(
+        # Collect ALL tv_series_ids that appear on this page and fetch their
+        # remaining seasons from any page, so the frontend can group them
+        # correctly regardless of pagination. This handles:
+        #   - Forward overflow: seasons on subsequent pages
+        #   - Backward overflow: seasons on previous pages
+        #   - Multiple series crossing page boundaries simultaneously
+        tv_series_ids: set[str | None] = {r.tv_series_id for r in records}
+        tv_series_ids.discard(None)
+        if tv_series_ids:
+            existing_ids = {r.id for r in records}
+            extra_records: list[MediaItemRecord] = []
+            for series_id in tv_series_ids:
+                extras = list(
                     session.exec(
                         select(MediaItemRecord)
                         .where(
                             MediaItemRecord.user_id == user_id,
-                            MediaItemRecord.tv_series_id == last_tv_series_id,
+                            MediaItemRecord.tv_series_id == series_id,
                             MediaItemRecord.id.notin_(existing_ids),
                         )
                         .order_by(order_fn())
                     ).all()
                 )
-                records.extend(extra)
-                # 当前页实际展示 items 数已超出 page_size，同步上调 total
-                # 使前端分页计算 (ceil(total / page_size)) 保持一致
-                total += len(extra)
+                extra_records.extend(extras)
+                existing_ids.update(r.id for r in extras)
+            records.extend(extra_records)
+            # 当前页实际展示 items 数已超出 page_size，同步上调 total
+            # 使前端分页计算 (ceil(total / page_size)) 保持一致
+            total += len(extra_records)
 
         return records, total
     finally:
