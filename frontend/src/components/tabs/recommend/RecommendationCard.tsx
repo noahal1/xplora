@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import { Percent, Plus, Loader2, Film } from "lucide-react";
+import { Percent, Plus, Loader2, Film, Check } from "lucide-react";
 import type { Recommendation } from "../../../types";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
@@ -71,20 +71,31 @@ export function RecommendationCard({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Add to wishlist button */}
-          <button
-            className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-all disabled:opacity-50 hover:bg-accent"
-            style={{ color: addingToWishlist ? "var(--seed-primary)" : "var(--fg-dim)" }}
-            disabled={addingToWishlist}
-            onClick={(e) => { e.stopPropagation(); onAddToWishlist(); }}
-            title={t("wishlist.add")}
-          >
-            {addingToWishlist ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <Plus size={12} />
-            )}
-          </button>
+          {/* Add to wishlist button / already in wishlist indicator */}
+          {rec.inWishlist ? (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium"
+              style={{ color: "var(--seed-primary)", background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}
+              title={t("recommend.already_in_wishlist")}
+            >
+              <Check size={10} />
+              {t("recommend.already_in_wishlist")}
+            </span>
+          ) : (
+            <button
+              className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-all disabled:opacity-50 hover:bg-accent"
+              style={{ color: addingToWishlist ? "var(--seed-primary)" : "var(--fg-dim)" }}
+              disabled={addingToWishlist}
+              onClick={(e) => { e.stopPropagation(); onAddToWishlist(); }}
+              title={t("wishlist.add")}
+            >
+              {addingToWishlist ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Plus size={12} />
+              )}
+            </button>
+          )}
           <div className="flex items-center gap-1">
             <Percent size={11} style={{ color: "var(--seed-primary)" }} />
             <span className="text-xs font-[590]" style={{ color: "var(--seed-primary)" }}>

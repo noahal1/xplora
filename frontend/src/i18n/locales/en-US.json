@@ -188,6 +188,7 @@
     "empty_desc": "Based on your watched films and ratings, our AI will suggest movies you will love.",
     "ctrl_enter_hint": "Ctrl+Enter for quick generate",
     "new_session": "New Session",
+    "already_in_wishlist": "In Wishlist",
     "strategy_label": "Recommendation Strategy",
     "strategy_taste": "By Taste",
     "strategy_classics": "Classics",

@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
-import type { TVSeriesGroup, formatSeasonLabel } from "../../../utils/groupTVSeries";
+import type { TVSeriesGroup } from "../../../utils/groupTVSeries";
+import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 import { ProgressiveImage } from "../../ProgressiveImage";
 import { Film, Trash2, Info } from "lucide-react";
 import { Badge } from "../../ui/badge";

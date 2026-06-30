@@ -190,6 +190,7 @@
     "empty_desc": "基于你的观影记录和评分，AI 将为你推荐可能喜欢的电影",
     "ctrl_enter_hint": "Ctrl+Enter 快捷生成",
     "new_session": "新会话",
+    "already_in_wishlist": "已添加",
     "strategy_label": "推荐策略",
     "strategy_taste": "按口味推荐",
     "strategy_classics": "经典必看",

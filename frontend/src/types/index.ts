@@ -39,6 +39,8 @@ export interface Recommendation {
   poster_url?: string | null;
   /** Whether this movie is already in the user's watched library. */
   watched?: boolean;
+  /** Whether this movie is already in the user's wishlist. */
+  inWishlist?: boolean;
 }
 
 export interface ChatMessage {

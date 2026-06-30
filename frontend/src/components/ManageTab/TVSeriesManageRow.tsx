@@ -1,7 +1,8 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../types";
-import type { TVSeriesGroup, formatSeasonLabel } from "../../utils/groupTVSeries";
+import type { TVSeriesGroup } from "../../utils/groupTVSeries";
+import { formatSeasonLabel } from "../../utils/groupTVSeries";
 import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import {

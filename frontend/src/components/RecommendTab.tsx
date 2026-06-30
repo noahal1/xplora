@@ -25,6 +25,7 @@ export function RecommendTab() {
   tRef.current = t;
 
   const [movies, setMovies] = useState<MediaItem[]>([]);
+  const [wishlistTitles, setWishlistTitles] = useState<Set<string>>(new Set());
   const [loadingMovies, setLoadingMovies] = useState(true);
 
   const [selectedModel, setSelectedModel] = useState("deepseek");
@@ -63,13 +64,16 @@ export function RecommendTab() {
   const [sessionPosterMap, setSessionPosterMap] = useState<Record<number, string | null>>({});
   const [addingFromSession, setAddingFromSession] = useState<Record<number, boolean>>({});
 
-  // Load watched movies from DB on mount
+  // Load watched movies + wishlist titles from DB on mount
   const loadMoviesFromDB = useCallback(async () => {
     setLoadingMovies(true);
     try {
-      const data = await api.listMedia({ page: 0, page_size: 5000, status: "watched" });
+      const [watchedData, wishlistData] = await Promise.all([
+        api.listMedia({ page: 0, page_size: 5000, status: "watched" }),
+        api.listMedia({ page: 0, page_size: 5000, status: "wish" }),
+      ]);
       setMovies(
-        data.media.map((m, i) => ({
+        watchedData.media.map((m, i) => ({
           id: i,
           title: m.title,
           rating: m.rating,
@@ -78,8 +82,11 @@ export function RecommendTab() {
           media_type: m.media_type,
         }))
       );
+      setWishlistTitles(
+        new Set(wishlistData.media.map((m) => m.title.toLowerCase()))
+      );
     } catch (err) {
-      console.error("Failed to load watched movies:", err);
+      console.error("Failed to load movies:", err);
       toastRef.current(tRef.current("recommend.load_error"), "error");
     } finally {
       setLoadingMovies(false);
@@ -274,11 +281,14 @@ export function RecommendTab() {
                   confidence: data.confidence,
                   poster_url: data.poster_url || null,
                 };
+                const titleLower = (data.title || "").toLowerCase();
                 // Try to find media_type from all watched movies
-                const matched = movies.find((m) => m.title.toLowerCase() === (data.title || "").toLowerCase());
+                const matched = movies.find((m) => m.title.toLowerCase() === titleLower);
                 if (matched?.media_type) rec.media_type = matched.media_type;
                 // Mark if already in watched library
                 if (matched) rec.watched = true;
+                // Mark if already in wishlist
+                rec.inWishlist = wishlistTitles.has(titleLower);
                 recs.push(rec);
                 setRecommendations([...recs]);
                 break;
@@ -469,11 +479,18 @@ export function RecommendTab() {
   }, [recommendations, modelUsed, sourceInfo, showToast, t]);
 
   const addToWishlist = useCallback(async (rec: Recommendation, idx: number) => {
-    if (addingToWishlist[idx]) return;
+    if (addingToWishlist[idx] || rec.inWishlist) return;
     setAddingToWishlist((prev) => ({ ...prev, [idx]: true }));
     try {
       await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null });
       showToast(t("wishlist.added_to_wishlist", { title: rec.title }), "success");
+      // Mark as inWishlist immediately so the card shows "已添加"
+      setRecommendations((prev) => {
+        const next = [...prev];
+        if (next[idx]) next[idx] = { ...next[idx], inWishlist: true };
+        return next;
+      });
+      setWishlistTitles((prev) => new Set(prev).add(rec.title.toLowerCase()));
     } catch (err) {
       showToast(t("wishlist.add_failed", { message: getErrMsg(err) }), "error");
     } finally {
