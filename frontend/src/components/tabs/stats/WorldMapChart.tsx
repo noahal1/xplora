@@ -102,6 +102,26 @@ const COUNTRY_TO_ISO: Record<string, string> = {
   "Czechoslovakia": "CZ", "Yugoslavia": "RS", "East Germany": "DE",
 };
 
+/* ── Build ISO → Chinese name reverse map ────────────────────
+   Extracted automatically from COUNTRY_TO_ISO to display Chinese
+   country names instead of English on the chart. */
+function buildIsoToChinese(): Record<string, string> {
+  const CJK_RE = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f]/;
+  const map: Record<string, string> = {};
+  for (const [name, iso] of Object.entries(COUNTRY_TO_ISO)) {
+    if (CJK_RE.test(name) && !map[iso]) {
+      map[iso] = name;
+    }
+  }
+  return map;
+}
+
+const ISO_TO_CHINESE = buildIsoToChinese();
+
+function getDisplayName(iso: string, fallback: string): string {
+  return ISO_TO_CHINESE[iso] || fallback;
+}
+
 /* ── TopoJSON URL (110m resolution, lightweight) ────────────── */
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
@@ -291,7 +311,7 @@ export function WorldMapChart({ data }: Props) {
       if (!svg) return;
       const rect = svg.getBoundingClientRect();
       setTooltip({
-        country: entry.names[0],
+        country: getDisplayName(entry.code, entry.names[0]),
         count,
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
@@ -409,7 +429,7 @@ export function WorldMapChart({ data }: Props) {
           {sortedCountries.slice(0, 10).map(([iso, entry]) => (
             <span key={iso} className="inline-flex items-center gap-1 text-xs" style={{ color: "var(--fg-dim)" }}>
               <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ background: getColor(entry.count) }} />
-              <span>{entry.names[0]}</span>
+              <span>{getDisplayName(iso, entry.names[0])}</span>
               <span className="tabular-nums font-medium" style={{ color: "var(--fg-muted)" }}>{entry.count}</span>
             </span>
           ))}
@@ -439,7 +459,7 @@ function MobileCountryList({ sortedCountries, maxBar, getColor }: {
         return (
           <div key={iso} className="flex items-center gap-2 py-1.5">
             <span className="text-xs font-medium truncate shrink-0" style={{ width: "5.5rem", color: "var(--fg-secondary)" }}>
-              {entry.names[0]}
+              {getDisplayName(iso, entry.names[0])}
             </span>
             <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
               <div

@@ -496,7 +496,13 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         MATCH_THRESHOLD = 0.70
 
         def _match_score(a: str, b: str) -> float:
-            """Jaccard-based similarity sans substring match."""
+            """Jaccard-based similarity sans substring match.
+
+            For CJK text where word-level Jaccard fails due to lack of
+            whitespace (e.g. "荒蛮故事" vs "蛮荒故事"), falls back to
+            character-level Jaccard — comparing the set of unique CJK
+            characters rather than words.
+            """
             a_norm = normalize(a)
             b_norm = normalize(b)
             if not a_norm or not b_norm:
@@ -509,11 +515,32 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 return 0.9
             words_a = title_words(a_norm)
             words_b = title_words(b_norm)
-            if not words_a or not words_b:
-                return 0.0
-            intersection = words_a & words_b
-            union = words_a | words_b
-            return len(intersection) / len(union)
+            word_jaccard = 0.0
+            if words_a and words_b:
+                intersection = words_a & words_b
+                union = words_a | words_b
+                word_jaccard = len(intersection) / len(union)
+
+            # CJK character-level fallback: if both strings contain CJK
+            # and word Jaccard is below threshold, compare by character
+            # set.  Catches swapped-word-order cases like "荒蛮故事" vs
+            # "蛮荒故事" (same 4 characters, different ordering).
+            if word_jaccard < 0.70 and (has_cjk(a_norm) or has_cjk(b_norm)):
+                chars_a = set(a_norm.replace(" ", ""))
+                chars_b = set(b_norm.replace(" ", ""))
+                if chars_a and chars_b:
+                    # Require similar character set size to prevent
+                    # matching different movies that happen to share
+                    # common characters (e.g. "我和我的祖国" vs "我的祖国").
+                    size_ratio = min(len(chars_a), len(chars_b)) / max(len(chars_a), len(chars_b))
+                    if size_ratio < 0.80:
+                        return word_jaccard
+                    char_intersection = chars_a & chars_b
+                    char_union = chars_a | chars_b
+                    char_jaccard = len(char_intersection) / len(char_union)
+                    return max(word_jaccard, char_jaccard)
+
+            return word_jaccard
 
         # Cache: CJK title -> English title (from TMDB), avoids repeated API calls
         # across retry attempts when the same title appears again.
@@ -549,10 +576,20 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             if any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean):
                 return True
             # Step 2: If title has CJK, search TMDB for English original and retry
+            # Also resolve CJK watched titles to English for proper cross-CJK comparison.
+            # Catches e.g. AI output "七人の侍" vs watched "七武士" — both are CJK but
+            # neither has Latin words to match against, so we resolve BOTH to English
+            # ("Seven Samurai") and compare English vs English.
             if has_cjk(title):
                 en_title = _resolve_en_title(title)
                 if en_title and en_title != title:
-                    return any(_match_score(en_title, wt) >= MATCH_THRESHOLD for wt in watched_clean)
+                    for wt in watched_clean:
+                        if has_cjk(wt):
+                            en_wt = _resolve_en_title(wt)
+                            if en_wt and _match_score(en_title, en_wt) >= MATCH_THRESHOLD:
+                                return True
+                        elif _match_score(en_title, wt) >= MATCH_THRESHOLD:
+                            return True
             # Step 3: If title is Latin but some watched titles have CJK,
             # resolve each CJK watched title to English and compare against the rec title
             # This catches the reverse case: AI outputs "Inception" but user has "盗梦空间"
@@ -598,9 +635,21 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             # Also check CJK titles via their English names
             if has_cjk(title):
                 en_title = _resolve_en_title(title)
-                if en_title and any(_match_score(st, en_title) >= MATCH_THRESHOLD for st in seen_titles):
-                    logger.info("[FilterDebug] FILTERED OUT (CJK duplicate): '%s'", title)
-                    continue  # CJK duplicate of an already-seen English title
+                if en_title:
+                    # Compare against seen titles — also resolve CJK seen titles
+                    for st in seen_titles:
+                        if has_cjk(st):
+                            en_st = _resolve_en_title(st)
+                            if en_st and _match_score(en_title, en_st) >= MATCH_THRESHOLD:
+                                logger.info("[FilterDebug] FILTERED OUT (CJK dup, both resolved): '%s' ≡ '%s'", title, st)
+                                is_dup = True
+                                break
+                        elif _match_score(st, en_title) >= MATCH_THRESHOLD:
+                            logger.info("[FilterDebug] FILTERED OUT (CJK duplicate): '%s'", title)
+                            is_dup = True
+                            break
+            if is_dup:
+                continue
             # Reverse direction: if title is Latin, check against CJK seen titles
             # via their English names. Catches e.g. "Inception" vs already-seen "盗梦空间".
             if not has_cjk(title):
