@@ -580,6 +580,9 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         # Also deduplicate within the same batch — AI sometimes returns the same
         # movie twice in one response (exact title or fuzzy match).
         # CJK titles are resolved via cache if already queried above.
+        # Handles both directions:
+        #   CJK → English: "盗梦空间" vs "Inception"
+        #   English → CJK: "Inception" vs "盗梦空间"
         seen_titles: list[str] = []
         deduped = []
         for r in filtered:
@@ -592,12 +595,24 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             if is_dup:
                 logger.info("[FilterDebug] FILTERED OUT (duplicate in batch): '%s'", title)
                 continue
-            # Also check CJK seen titles via their English names
+            # Also check CJK titles via their English names
             if has_cjk(title):
                 en_title = _resolve_en_title(title)
                 if en_title and any(_match_score(st, en_title) >= MATCH_THRESHOLD for st in seen_titles):
                     logger.info("[FilterDebug] FILTERED OUT (CJK duplicate): '%s'", title)
                     continue  # CJK duplicate of an already-seen English title
+            # Reverse direction: if title is Latin, check against CJK seen titles
+            # via their English names. Catches e.g. "Inception" vs already-seen "盗梦空间".
+            if not has_cjk(title):
+                for st in seen_titles:
+                    if has_cjk(st):
+                        en_st = _resolve_en_title(st)
+                        if en_st and _match_score(title, en_st) >= MATCH_THRESHOLD:
+                            logger.info("[FilterDebug] FILTERED OUT (EN duplicate of CJK): '%s' ≡ '%s'", title, st)
+                            is_dup = True
+                            break
+            if is_dup:
+                continue
             seen_titles.append(title)
             deduped.append(r)
 

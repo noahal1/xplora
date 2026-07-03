@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Xplora 快添",
+  "version": "1.0.0",
+  "description": "在 TMDB、IMDb、豆瓣等网站一键添加电影/剧集到 Xplora 的想看列表",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.themoviedb.org/*",
+        "*://www.imdb.com/title/*",
+        "*://movie.douban.com/subject/*",
+        "*://www.douban.com/movie/subject/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Xplora 快添",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

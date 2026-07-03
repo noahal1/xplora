@@ -1,0 +1,73 @@
+/**
+ * Xplora 快添 — Injected button styles
+ */
+
+.xplora-btn-container {
+  display: flex !important;
+  gap: 8px !important;
+  margin: 12px 0 !important;
+  flex-wrap: wrap !important;
+}
+
+.xplora-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 8px 16px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  line-height: 1 !important;
+  outline: none !important;
+}
+
+.xplora-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Wishlist button */
+.xplora-wishlist {
+  background: #6366f1 !important;
+  color: #fff !important;
+}
+.xplora-wishlist:hover {
+  background: #4f46e5 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4) !important;
+}
+
+/* Watched button */
+.xplora-watched {
+  background: #10b981 !important;
+  color: #fff !important;
+}
+.xplora-watched:hover {
+  background: #059669 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+}
+
+/* Added state */
+.xplora-added {
+  opacity: 0.8 !important;
+  cursor: default !important;
+  pointer-events: none !important;
+}
+
+/* Disabled state */
+.xplora-btn:disabled {
+  opacity: 0.7 !important;
+  cursor: wait !important;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .xplora-btn {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  }
+}

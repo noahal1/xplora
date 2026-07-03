@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { getErrMsg } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import LineWaves from "../components/LineWaves";
 import { Logo } from "../components/Logo";
 import SplitText from "../components/SplitText";
@@ -34,16 +35,19 @@ export function LoginPage() {
     }
   };
 
+  const { theme } = useTheme();
+  const isLight = theme === "light";
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-page relative overflow-hidden">
-      {/* LineWaves background — amber waves */}
-      <div className="absolute inset-0 z-0 opacity-45 max-sm:opacity-60">
+      {/* LineWaves background — amber waves (dark) / monochrome lines (light) */}
+      <div className={`absolute inset-0 z-0 ${isLight ? "opacity-20" : "opacity-45 max-sm:opacity-60"}`}>
         <LineWaves
           speed={0.3}
-          brightness={0.5}
-          color1="#f59e0b"
-          color2="#d97706"
-          color3="#78350f"
+          brightness={isLight ? 0.4 : 0.5}
+          color1={isLight ? "#000000" : "#f59e0b"}
+          color2={isLight ? "#555555" : "#d97706"}
+          color3={isLight ? "#cccccc" : "#78350f"}
           enableMouseInteraction={true}
           mouseInfluence={1.5}
           rotation={-45}
@@ -57,10 +61,15 @@ export function LoginPage() {
       <div
         className="absolute inset-0 z-[1] pointer-events-none sm:hidden"
         style={{
-          background: [
-            'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(8,9,10,0.4) 70%, rgba(8,9,10,0.85) 100%)',
-            'radial-gradient(ellipse at 50% 60%, transparent 20%, rgba(8,9,10,0.3) 60%, transparent 100%)',
-          ].join(', '),
+          background: isLight
+            ? [
+                'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(250,250,250,0.6) 70%, rgba(250,250,250,1) 100%)',
+                'radial-gradient(ellipse at 50% 60%, transparent 20%, rgba(250,250,250,0.3) 60%, transparent 100%)',
+              ].join(', ')
+            : [
+                'radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(8,9,10,0.4) 70%, rgba(8,9,10,0.85) 100%)',
+                'radial-gradient(ellipse at 50% 60%, transparent 20%, rgba(8,9,10,0.3) 60%, transparent 100%)',
+              ].join(', '),
         }}
       />
 
