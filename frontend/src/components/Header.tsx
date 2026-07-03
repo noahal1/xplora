@@ -28,7 +28,7 @@ export function Header() {
         </button>
         <LanguageSwitcher />
         <button
-          onClick={toggleTheme}
+          onClick={(e) => toggleTheme(e)}
           className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors active:scale-95"
           aria-label={theme === "dark" ? t("header.switch_to_light") : t("header.switch_to_dark")}
           title={theme === "dark" ? t("header.switch_to_light") : t("header.switch_to_dark")}

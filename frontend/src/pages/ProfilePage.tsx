@@ -346,7 +346,7 @@ export function ProfilePage() {
             </p>
           </div>
           <button
-            onClick={toggleTheme}
+            onClick={(e) => toggleTheme(e)}
             className={`relative w-12 h-6 rounded-full transition-colors ${
               theme === "dark" ? "bg-primary" : "bg-muted-foreground/30"
             }`}
