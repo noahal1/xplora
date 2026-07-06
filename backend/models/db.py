@@ -51,7 +51,6 @@ class MediaItemRecord(SQLModel, table=True):
     imdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
     tmdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
     country: Optional[str] = Field(default=None, max_length=100, nullable=True)
-    awards: Optional[str] = Field(default=None, max_length=500, nullable=True)
     tagline: Optional[str] = Field(default=None, max_length=500, nullable=True)
     scrape_error: Optional[str] = Field(default=None, nullable=True)
     media_type: str = Field(default="movie", max_length=10, nullable=False, index=True)

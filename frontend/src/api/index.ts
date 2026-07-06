@@ -106,7 +106,6 @@ export async function updateMedia(
     imdb_id?: string | null;
     tmdb_id?: string | null;
     country?: string | null;
-    awards?: string | null;
     tagline?: string | null;
     poster_url?: string | null;
     status?: string;

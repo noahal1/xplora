@@ -40,7 +40,6 @@ export interface WishlistEntry {
   imdb_id?: string | null;
   tmdb_id?: string | null;
   country?: string | null;
-  awards?: string | null;
   tagline?: string | null;
   series_poster_url?: string | null;
 }
@@ -91,7 +90,7 @@ export function WishlistTab() {
         signal,
       });
       if (signal?.aborted) return;
-      setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, poster_url: m.poster_url, overview: m.overview, director: m.director, actors: m.actors, runtime: m.runtime, imdb_id: m.imdb_id, tmdb_id: m.tmdb_id, country: m.country, awards: m.awards, tagline: m.tagline, series_poster_url: m.series_poster_url, season_number: m.season_number, episode_count: m.episode_count })));
+      setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, poster_url: m.poster_url, overview: m.overview, director: m.director, actors: m.actors, runtime: m.runtime, imdb_id: m.imdb_id, tmdb_id: m.tmdb_id, country: m.country, tagline: m.tagline, series_poster_url: m.series_poster_url, season_number: m.season_number, episode_count: m.episode_count })));
       setTotal(data.total);
     } catch (err: unknown) {
       if (isAbortError(err)) return;
@@ -285,7 +284,6 @@ export function WishlistTab() {
             imdb_id: detailSaved.imdb_id ?? null,
             tmdb_id: detailSaved.tmdb_id ?? null,
             country: detailSaved.country ?? null,
-            awards: detailSaved.awards ?? null,
             tagline: detailSaved.tagline ?? null,
             scrape_error: null,
             tv_series_id: null,

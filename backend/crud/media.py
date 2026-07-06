@@ -326,7 +326,6 @@ def update_media(
     imdb_id: Optional[str] = None,
     tmdb_id: Optional[str] = None,
     country: Optional[str] = None,
-    awards: Optional[str] = None,
     tagline: Optional[str] = None,
     media_type: Optional[str] = None,
     tv_series_id: Optional[str] = None,
@@ -375,8 +374,6 @@ def update_media(
             record.tmdb_id = tmdb_id
         if country is not None:
             record.country = country
-        if awards is not None:
-            record.awards = awards
         if tagline is not None:
             record.tagline = tagline
         # TV series-specific fields
@@ -456,7 +453,6 @@ def enrich_media_metadata(
             "imdb_id": "imdb_id",
             "tmdb_id": "tmdb_id",
             "country": "country",
-            "awards": "awards",
             "tagline": "tagline",
             "media_type": "media_type",
             "genre": "genre",
@@ -869,7 +865,6 @@ def _media_to_dict(r: MediaItemRecord) -> dict:
         "imdb_id": r.imdb_id,
         "tmdb_id": r.tmdb_id,
         "country": r.country,
-        "awards": r.awards,
         "tagline": r.tagline,
         "scrape_error": r.scrape_error,
         "season_number": r.season_number,

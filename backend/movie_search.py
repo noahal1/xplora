@@ -717,7 +717,6 @@ def _get_tvmaze_detail(show_id: str) -> dict:
         "director": "",
         "actors": "",
         "writer": "",
-        "awards": "",
         "country": network.get("country", {}).get("name", "") if network else "",
         "status": data.get("status", ""),
         "network": channel,

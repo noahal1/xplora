@@ -37,7 +37,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         director: movie.director ?? "",
         actors: movie.actors ?? "",
         country: movie.country ?? "",
-        awards: movie.awards ?? "",
         tagline: movie.tagline ?? "",
         runtime: movie.runtime,
         year: movie.year,
@@ -74,7 +73,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         director: form.director || null,
         actors: form.actors || null,
         country: form.country || null,
-        awards: form.awards || null,
         tagline: form.tagline || null,
         runtime: form.runtime != null ? form.runtime : null,
       });
@@ -85,7 +83,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         director: updated.director ?? "",
         actors: updated.actors ?? "",
         country: updated.country ?? "",
-        awards: updated.awards ?? "",
         tagline: updated.tagline ?? "",
         runtime: updated.runtime,
         year: updated.year,
@@ -98,7 +95,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         director: updated.director,
         actors: updated.actors,
         country: updated.country,
-        awards: updated.awards,
         tagline: updated.tagline,
         runtime: updated.runtime,
         media_type: updated.media_type,
@@ -121,7 +117,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         director: movie.director ?? "",
         actors: movie.actors ?? "",
         country: movie.country ?? "",
-        awards: movie.awards ?? "",
         tagline: movie.tagline ?? "",
         runtime: movie.runtime,
         year: movie.year,
@@ -195,11 +190,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
               <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.actors ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, actors: e.target.value }))} />
-            </EditField>
-            <EditField label={t("detail_modal.awards")} className="sm:col-span-2">
-              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
-                value={form.awards ?? ""}
-                onChange={(e) => setForm(f => ({ ...f, awards: e.target.value }))} />
             </EditField>
             <EditField label={t("detail_modal.runtime")}>
               <input type="number" className="input-field w-full text-sm px-3 py-2.5 sm:py-2 no-spinner"
@@ -279,12 +269,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
               <div>
                 <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.country")}</p>
                 <p className="text-sm">{movie.country}</p>
-              </div>
-            )}
-            {movie.awards && (
-              <div className="sm:col-span-2">
-                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.awards")}</p>
-                <p className="text-sm line-clamp-2">{movie.awards}</p>
               </div>
             )}
             {movie.runtime && (

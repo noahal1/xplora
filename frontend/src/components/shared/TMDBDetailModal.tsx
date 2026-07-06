@@ -204,7 +204,7 @@ export function TMDBDetailModal({
           )}
 
           {/* Credits */}
-          {(data.director || data.actors || data.writer || data.awards) && (
+          {(data.director || data.actors || data.writer) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {data.director && (
                 <div>
@@ -228,14 +228,6 @@ export function TMDBDetailModal({
                     {t("detail_modal.actors")}
                   </h4>
                   <p className="text-sm">{data.actors}</p>
-                </div>
-              )}
-              {data.awards && (
-                <div className="col-span-2">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>
-                    {t("detail_modal.awards")}
-                  </h4>
-                  <p className="text-sm">{data.awards}</p>
                 </div>
               )}
             </div>

@@ -64,7 +64,6 @@ export interface MediaDetail {
   imdb_id: string | null;
   tmdb_id: string | null;
   country: string | null;
-  awards: string | null;
   tagline: string | null;
   scrape_error: string | null;
   pinned?: boolean;
@@ -130,7 +129,6 @@ export interface ExternalDetail {
   director?: string;
   actors?: string;
   writer?: string;
-  awards?: string;
   country?: string;
   box_office?: string;
   ratings?: Record<string, string>;
@@ -165,7 +163,6 @@ export interface StatsData {
     imdb_id: string | null;
     tmdb_id: string | null;
     country: string | null;
-    awards: string | null;
     tagline: string | null;
     scrape_error: string | null;
     season_number: number | null;

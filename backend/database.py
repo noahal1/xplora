@@ -522,7 +522,6 @@ def _run_column_migrations():
         ("imdb_id", "VARCHAR(50)"),
         ("tmdb_id", "VARCHAR(50)"),
         ("country", "VARCHAR(100)"),
-        ("awards", "VARCHAR(500)"),
         ("tagline", "VARCHAR(500)"),
         ("scrape_error", "TEXT"),
         ("media_type", "VARCHAR(10) NOT NULL DEFAULT 'movie'"),
