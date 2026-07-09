@@ -237,10 +237,11 @@ async def list_media(
     has_error: Optional[bool] = Query(None, description="Filter by scrape error: True=only errors, None=all"),
     media_type: str = "",
     genre: str = "",
+    country: str = "",
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """List saved media items for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv'), genre."""
+    """List saved media items for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv'), genre, country."""
     status_filter = status if status in ("watched", "wish") else None
     media_type_filter = media_type if media_type in ("movie", "tv") else None
     records, total = db_get_media(
@@ -256,6 +257,7 @@ async def list_media(
         has_error=has_error,
         media_type=media_type_filter,
         genre=genre or None,
+        country=country or None,
         db=db,
     )
     return {

@@ -306,8 +306,10 @@
     "media_type_tv": "📺 TV",
     "scrape_source": "Scrape source:",
     "genre_filter": "Genre:",
+    "country_filter": "Country:",
     "genre_more": "more",
     "genre_collapse": "Collapse",
+    "clear_filter": "Clear filter",
     "filter_expand": "Show Filters",
     "filter_collapse": "Hide Filters"
   },

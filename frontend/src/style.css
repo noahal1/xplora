@@ -676,14 +676,14 @@ body {
   }
   @media (min-width: 640px) {
     .section-card {
-      padding: 1.5rem;
+      padding: 2rem;
     }
   }
   .section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
   }
   .section-title {
     font-size: 1rem;

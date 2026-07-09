@@ -44,7 +44,7 @@ export function WatchedTab() {
   const [total, setTotal] = useState(0);
   const [ratingFilter, setRatingFilter] = useState("all");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
-  const [genreFilter, setGenreFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState<Set<string>>(new Set());
 
   const search = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
@@ -75,7 +75,7 @@ export function WatchedTab() {
 
   // ── Load data from API ──
 
-  const loadMovies = useCallback(async (page: number, q: string, sortF: string, sortD: string, rating: string, mediaType: string, genre: string, signal?: AbortSignal) => {
+  const loadMovies = useCallback(async (page: number, q: string, sortF: string, sortD: string, rating: string, mediaType: string, genre: Set<string>, signal?: AbortSignal) => {
     setLoading(true);
     let ratingMin: number | undefined;
     let ratingMax: number | undefined;
@@ -95,7 +95,7 @@ export function WatchedTab() {
         rating_min: ratingMin,
         rating_max: ratingMax,
         media_type: (mediaType !== "all" ? mediaType : undefined),
-        genre: (genre !== "all" ? genre : undefined),
+        genre: (genre.size > 0 ? Array.from(genre).join(",") : undefined),
         signal,
       });
       if (signal?.aborted) return;
@@ -305,7 +305,7 @@ export function WatchedTab() {
 
   // ── Render ──
 
-  const hasActiveFilters = !!(search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter !== "all");
+  const hasActiveFilters = !!(search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter.size > 0);
 
   return (
     <div className="space-y-5">
@@ -425,6 +425,17 @@ export function WatchedTab() {
                 selected={genreFilter}
                 onSelect={(g) => { setGenreFilter(g); setCurrentPage(0); }}
               />
+              {/* Show active genre count */}
+              {genreFilter.size > 0 && (
+                <div className="flex items-center gap-1 mb-2 sm:mb-3">
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => { setGenreFilter(new Set()); setCurrentPage(0); }}
+                  >
+                    {t("manage.clear_filter")}
+                  </button>
+                </div>
+              )}
             </div>
           </FilterBar>
 
@@ -477,7 +488,7 @@ export function WatchedTab() {
                     search.clear();
                     setRatingFilter("all");
                     setMediaTypeFilter("all");
-                    setGenreFilter("all");
+                    setGenreFilter(new Set());
                     setCurrentPage(0);
                   }}
                   noMatchKey="watched.no_match"

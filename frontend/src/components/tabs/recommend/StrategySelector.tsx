@@ -21,8 +21,8 @@ interface StrategySelectorProps {
   onYearEndChange: (v: string) => void;
   mediaTypeFilter: string;
   onMediaTypeFilterChange: (v: string) => void;
-  genreFilter: string;
-  onGenreFilterChange: (v: string) => void;
+  genreFilter: Set<string>;
+  onGenreFilterChange: (v: Set<string>) => void;
   uniqueGenres: string[];
   filteredCount: number;
   onGenerate: () => void;

@@ -9,6 +9,7 @@ import { SkeletonTable } from "../Skeleton";
 import CountUp from "../CountUp";
 import { Modal } from "../Modal";
 import { GenreFilter } from "../GenreFilter";
+import { CountryFilter } from "../CountryFilter";
 import { MediaTypeFilter } from "../MediaTypeFilter";
 import { SortControls } from "../SortControls";
 import { StatusFilter } from "../StatusFilter";
@@ -61,7 +62,8 @@ export function ManageTab() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [errorFilter, setErrorFilter] = useState(false);
   const [mediaTypeFilter, setMediaTypeFilter] = useState("");
-  const [genreFilter, setGenreFilter] = useState("");
+  const [genreFilter, setGenreFilter] = useState<Set<string>>(new Set());
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const [editingCell, setEditingCell] = useState<{ movieId: number; field: string } | null>(null);
@@ -109,7 +111,8 @@ export function ManageTab() {
         sort_dir: sortDir,
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
-        genre: genreFilter || undefined,
+        genre: genreFilter.size > 0 ? Array.from(genreFilter).join(",") : undefined,
+        country: countryFilter.size > 0 ? Array.from(countryFilter).join(",") : undefined,
         signal,
       });
       if (signal?.aborted) return;
@@ -123,7 +126,7 @@ export function ManageTab() {
         setLoading(false);
       }
     }
-  }, [search.debouncedValue, page, statusFilter, mediaTypeFilter, genreFilter, errorFilter, sortField, sortDir]);
+  }, [search.debouncedValue, page, statusFilter, mediaTypeFilter, genreFilter, countryFilter, errorFilter, sortField, sortDir]);
 
 
 
@@ -306,7 +309,8 @@ export function ManageTab() {
         sort_dir: sortDir,
         has_error: errorFilter || undefined,
         media_type: mediaTypeFilter || undefined,
-        genre: genreFilter || undefined,
+        genre: genreFilter.size > 0 ? Array.from(genreFilter).join(",") : undefined,
+        country: countryFilter.size > 0 ? Array.from(countryFilter).join(",") : undefined,
       });
       if (allData.media.length === 0) return;
       const data = JSON.stringify({ movies: allData.media, exported_at: new Date().toISOString(), total: allData.total }, null, 2);
@@ -330,9 +334,27 @@ export function ManageTab() {
   // Derive unique genre tags from loaded media list
   const uniqueGenres = useGenreExtractor(mediaList);
 
+  // Derive unique country tags from loaded media list
+  const uniqueCountries = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const item of mediaList) {
+      if (item.country) {
+        for (const c of item.country.split("/")) {
+          const normalized = c.trim();
+          if (normalized && !seen.has(normalized)) {
+            seen.add(normalized);
+            result.push(normalized);
+          }
+        }
+      }
+    }
+    return result.sort((a, b) => a.localeCompare(b));
+  }, [mediaList]);
+
   const VISIBLE_GENRES = 6;
 
-  const hasActiveFilters = !!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter || errorFilter);
+  const hasActiveFilters = !!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter.size > 0 || countryFilter.size > 0 || errorFilter);
 
   const SortArrow = ({ field }: { field: SortField }) => {
     return (
@@ -435,10 +457,35 @@ export function ManageTab() {
           <GenreFilter
             genres={uniqueGenres}
             selected={genreFilter}
-            allValue=""
             visibleCount={VISIBLE_GENRES}
             onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
           />
+          {genreFilter.size > 0 && (
+            <div className="flex items-center gap-1 mb-2 sm:mb-3">
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                onClick={() => { setGenreFilter(new Set()); setPage(0); setSelected(new Set()); }}
+              >
+                {t("manage.clear_filter")}
+              </button>
+            </div>
+          )}
+          <CountryFilter
+            countries={uniqueCountries}
+            selected={countryFilter}
+            visibleCount={VISIBLE_GENRES}
+            onSelect={(c) => { setCountryFilter(c); setPage(0); setSelected(new Set()); }}
+          />
+          {countryFilter.size > 0 && (
+            <div className="flex items-center gap-1 mb-2 sm:mb-3">
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                onClick={() => { setCountryFilter(new Set()); setPage(0); setSelected(new Set()); }}
+              >
+                {t("manage.clear_filter")}
+              </button>
+            </div>
+          )}
         </div>
       </FilterBar>
 
@@ -477,7 +524,8 @@ export function ManageTab() {
             setStatusFilter("");
             setErrorFilter(false);
             setMediaTypeFilter("");
-            setGenreFilter("");
+            setGenreFilter(new Set());
+            setCountryFilter(new Set());
             setPage(0);
             setSelected(new Set());
           }}

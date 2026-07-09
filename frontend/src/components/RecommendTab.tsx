@@ -32,7 +32,7 @@ export function RecommendTab() {
   const [recCount, setRecCount] = useState(5);
   const [strategy, setStrategy] = useState("taste");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
-  const [genreFilter, setGenreFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState<Set<string>>(new Set());
 
   // Strategy-specific inputs
   const [strategyMood, setStrategyMood] = useState("");
@@ -194,8 +194,8 @@ export function RecommendTab() {
 
   const filteredMovies = useMemo(() => {
     let result = mediaTypeFilter === "all" ? movies : movies.filter((m) => m.media_type === mediaTypeFilter);
-    if (genreFilter !== "all") {
-      result = result.filter((m) => m.genre && m.genre.toLowerCase().includes(genreFilter.toLowerCase()));
+    if (genreFilter.size > 0) {
+      result = result.filter((m) => m.genre && Array.from(genreFilter).some((g) => m.genre!.toLowerCase().includes(g.toLowerCase())));
     }
     return result;
   }, [movies, mediaTypeFilter, genreFilter]);

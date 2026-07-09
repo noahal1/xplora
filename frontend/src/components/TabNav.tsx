@@ -23,7 +23,7 @@ export function TabNav() {
     <>
       {/* ── Top Navigation (hidden on mobile) ──────────────────── */}
       <nav
-        className="relative flex items-center gap-1 mb-6 pb-3 max-sm:hidden"
+        className="relative flex items-center gap-1 mb-5 pb-2.5 max-sm:hidden"
         style={{ borderBottom: "1px solid var(--border-subtle)" }}
       >
         {/* Sliding indicator */}

@@ -74,6 +74,7 @@ export async function listMedia(params: {
   has_error?: boolean;
   media_type?: string;
   genre?: string;
+  country?: string;
   signal?: AbortSignal;
 }): Promise<{ media: MediaDetail[]; total: number }> {
   const qs = new URLSearchParams();
@@ -88,6 +89,7 @@ export async function listMedia(params: {
   if (params.has_error) qs.set("has_error", "true");
   if (params.media_type) qs.set("media_type", params.media_type);
   if (params.genre) qs.set("genre", params.genre);
+  if (params.country) qs.set("country", params.country);
   return fetchJSON(`${API_BASE}/media?${qs.toString()}`, { headers: getAuthHeaders(), signal: params.signal });
 }
 

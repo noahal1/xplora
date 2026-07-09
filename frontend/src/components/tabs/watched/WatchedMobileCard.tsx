@@ -64,7 +64,7 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
               <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/80">
                 {movie.year && <span>{movie.year}</span>}
                 {movie.genre && <span className="truncate">{translateGenres(movie.genre)}</span>}
-                {movie.runtime && <span>{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
+                {movie.runtime && <span className="whitespace-nowrap">{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
               </div>
               {movie.director && (
                 <p className="text-[11px] text-muted-foreground/50 mt-0.5 truncate">{movie.director}</p>

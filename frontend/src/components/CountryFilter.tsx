@@ -1,48 +1,47 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { translateGenreName } from "../utils/genre";
 
-interface GenreFilterProps {
-  /** List of unique genre strings to display as pills. */
-  genres: string[];
-  /** Currently selected genre values. Empty set = "all". */
+interface CountryFilterProps {
+  /** List of unique country strings to display as pills. */
+  countries: string[];
+  /** Currently selected country values. Empty set = "all". */
   selected: Set<string>;
   /** Called when selection changes. Receives the new Set<string>. */
-  onSelect: (genres: Set<string>) => void;
+  onSelect: (countries: Set<string>) => void;
   /**
-   * How many genres to show before the "more" toggle.
+   * How many countries to show before the "more" toggle.
    * @default 6
    */
   visibleCount?: number;
 }
 
-export function GenreFilter({
-  genres,
+export function CountryFilter({
+  countries,
   selected,
   onSelect,
   visibleCount = 6,
-}: GenreFilterProps) {
+}: CountryFilterProps) {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const effectiveVisibleCount = isMobile ? Math.min(4, visibleCount) : visibleCount;
   const { t } = useTranslation();
   const [showAll, setShowAll] = useState(false);
 
-  const hasMore = genres.length > effectiveVisibleCount;
-  const visibleGenres = showAll ? genres : genres.slice(0, effectiveVisibleCount);
+  const hasMore = countries.length > effectiveVisibleCount;
+  const visibleCountries = showAll ? countries : countries.slice(0, effectiveVisibleCount);
 
   const toggleShowAll = useCallback(() => setShowAll((v) => !v), []);
 
-  const toggleGenre = useCallback((g: string) => {
+  const toggleCountry = useCallback((c: string) => {
     const next = new Set(selected);
-    if (next.has(g)) {
-      next.delete(g);
+    if (next.has(c)) {
+      next.delete(c);
     } else {
-      next.add(g);
+      next.add(c);
     }
     onSelect(next);
   }, [selected, onSelect]);
 
-  if (genres.length === 0) return null;
+  if (countries.length === 0) return null;
 
   // Calculate which pills are "new" (appearing after expand) for stagger animation
   const isNew = (idx: number) => showAll && idx >= effectiveVisibleCount;
@@ -51,7 +50,7 @@ export function GenreFilter({
     <div className="mb-2 sm:mb-3 pb-0.5 w-full">
       <div className="flex items-center gap-1 sm:gap-1.5 pb-0.5 flex-wrap">
         <span className="text-xs text-muted-foreground mr-1 shrink-0 max-sm:hidden">
-          {t("manage.genre_filter")}
+          {t("manage.country_filter")}
         </span>
         {selected.size > 0 && (
           <button
@@ -62,14 +61,14 @@ export function GenreFilter({
             <span className="ml-1 text-[10px]">✕</span>
           </button>
         )}
-        {visibleGenres.map((g, i) => (
+        {visibleCountries.map((c, i) => (
           <button
-            key={g}
-            className={`pill shrink-0 ${selected.has(g) ? "active" : ""}${isNew(i) ? " animate-pill-enter" : ""}`}
+            key={c}
+            className={`pill shrink-0 ${selected.has(c) ? "active" : ""}${isNew(i) ? " animate-pill-enter" : ""}`}
             style={isNew(i) ? { animationDelay: `${(i - effectiveVisibleCount) * 30}ms` } : undefined}
-            onClick={() => toggleGenre(g)}
+            onClick={() => toggleCountry(c)}
           >
-            {translateGenreName(g)}
+            {c}
           </button>
         ))}
         {hasMore && (
@@ -80,7 +79,7 @@ export function GenreFilter({
             {showAll ? (
               <><span className="text-[10px]">▲</span> {t("manage.genre_collapse")}</>
             ) : (
-              <><span className="text-[10px]">▼</span> +{genres.length - effectiveVisibleCount} {t("manage.genre_more")}</>
+              <><span className="text-[10px]">▼</span> +{countries.length - effectiveVisibleCount} {t("manage.genre_more")}</>
             )}
           </button>
         )}

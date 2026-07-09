@@ -309,8 +309,10 @@
     "media_type_movie": "🎬 电影",
     "media_type_tv": "📺 剧集",
     "genre_filter": "类型筛选：",
+    "country_filter": "国家：",
     "genre_more": "更多",
     "genre_collapse": "收起",
+    "clear_filter": "清除筛选",
     "filter_expand": "展开筛选",
     "filter_collapse": "收起筛选"
   },

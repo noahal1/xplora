@@ -5,7 +5,7 @@ export function Footer() {
   const { t } = useTranslation();
   return (
     <footer
-      className="py-6 sm:py-8 mt-10 sm:mt-12 text-center space-y-3"
+      className="py-6 sm:py-8 mt-8 sm:mt-10 text-center space-y-3"
       style={{ borderTop: "1px solid var(--border-subtle)" }}
     >
       <div style={{ color: "var(--fg-dim)" }}>

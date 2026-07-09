@@ -70,7 +70,7 @@ function MainApp() {
   return (
     <HistoryProvider>
       <EnrichProvider>
-        <div className="max-w-[1024px] mx-auto px-4 sm:px-5 py-3 sm:py-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:pb-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:pb-8">
           <div className="fixed inset-0 pointer-events-none z-[-1] opacity-15">
             <Aurora
               colorStops={['#e8a838', '#f59e0b', '#e8a838']}
@@ -83,7 +83,7 @@ function MainApp() {
           <UpdateBanner />
           <EnrichBanner />
           <TabNav />
-          <div className="flex flex-col gap-3 sm:gap-6 py-3 sm:py-6">
+          <div className="flex flex-col gap-4 sm:gap-8 py-3 sm:py-6">
             {/* Re-key on pathname to re-trigger entrance animation on every tab switch */}
             <div key={location.pathname} className={pageAnimClass}>
               <Suspense fallback={

@@ -164,10 +164,11 @@ def get_media(
     has_error: Optional[bool] = None,
     media_type: Optional[str] = None,
     genre: Optional[str] = None,
+    country: Optional[str] = None,
     db: Optional[Session] = None,
 ) -> tuple[list[MediaItemRecord], int]:
     """List saved media items for a user with optional search, status filter, rating range,
-    scrape_error filter, media_type filter, genre filter, pagination, and sort."""
+    scrape_error filter, media_type filter, genre filter, country filter, pagination, and sort."""
     session, close_db = _resolve_db(db)
     try:
         query = select(MediaItemRecord).where(MediaItemRecord.user_id == user_id)
@@ -176,8 +177,31 @@ def get_media(
         if media_type:
             query = query.where(MediaItemRecord.media_type == media_type)
         if genre:
-            escaped_genre = genre.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            query = query.where(MediaItemRecord.genre.ilike(f"%{escaped_genre}%", escape="\\"))
+            # Support comma-separated genres (OR logic)
+            genre_list = [g.strip() for g in genre.split(",") if g.strip()]
+            if len(genre_list) == 1:
+                escaped_genre = genre_list[0].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                query = query.where(MediaItemRecord.genre.ilike(f"%{escaped_genre}%", escape="\\"))
+            else:
+                from sqlalchemy import or_
+                conditions = []
+                for g in genre_list:
+                    escaped = g.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                    conditions.append(MediaItemRecord.genre.ilike(f"%{escaped}%", escape="\\"))
+                query = query.where(or_(*conditions))
+        if country:
+            # Support comma-separated countries (OR logic)
+            country_list = [c.strip() for c in country.split(",") if c.strip()]
+            if len(country_list) == 1:
+                escaped_country = country_list[0].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                query = query.where(MediaItemRecord.country.ilike(f"%{escaped_country}%", escape="\\"))
+            else:
+                from sqlalchemy import or_
+                conditions = []
+                for c in country_list:
+                    escaped = c.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                    conditions.append(MediaItemRecord.country.ilike(f"%{escaped}%", escape="\\"))
+                query = query.where(or_(*conditions))
         if search:
             # Escape SQL LIKE wildcards in user input
             escaped_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
