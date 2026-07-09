@@ -198,7 +198,9 @@
     "strategy_explore": "Explore New",
     "strategy_mood_placeholder": "Describe your current mood...",
     "strategy_era_start": "From",
-    "strategy_era_end": "To"
+    "strategy_era_end": "To",
+    "cancel_generating": "Cancel",
+    "cancelled": "Cancelled"
   },
   "manage": {
     "title": "Movie Manager",

@@ -200,7 +200,9 @@
     "strategy_explore": "探索新类型",
     "strategy_mood_placeholder": "描述你此刻的心情...",
     "strategy_era_start": "起始",
-    "strategy_era_end": "结束"
+    "strategy_era_end": "结束",
+    "cancel_generating": "取消",
+    "cancelled": "已取消"
   },
   "manage": {
     "title": "电影管理",

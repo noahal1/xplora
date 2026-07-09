@@ -41,9 +41,13 @@ export function RecommendTab() {
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [modelUsed, setModelUsed] = useState("");
   const [sourceInfo, setSourceInfo] = useState("");
   const [addingToWishlist, setAddingToWishlist] = useState<Record<number, boolean>>({});
+
+  const cancelRef = useRef<AbortController | null>(null);
+  const cancelledByUserRef = useRef(false);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatProcessing, setIsChatProcessing] = useState(false);
@@ -210,119 +214,88 @@ export function RecommendTab() {
       return;
     }
     setIsLoading(true);
+    setElapsedSeconds(0);
     setRecommendations([]);
     setChatMessages([]);
     setShowChat(false);
     setAddingToWishlist({});
     const modelNames: Record<string, string> = { deepseek: "DeepSeek", openai: "OpenAI (GPT-4o)" };
     setModelUsed(modelNames[selectedModel] || selectedModel);
-    setSourceInfo(t("recommend.source_info_loading", { count: filteredMovies.length }));
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    cancelRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     try {
-      const payload: Record<string, unknown> = {
+      const sp = getStrategyParams();
+      const data = await api.getRecommendations({
         movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
         model: selectedModel,
         count: recCount,
         strategy,
-      };
-      const sp = getStrategyParams();
-      if (sp) payload.strategy_params = sp;
-
-      const token = localStorage.getItem("xplora-token");
-      const response = await fetch("/api/recommend/stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
+        strategy_params: sp || undefined,
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ detail: t("recommend.server_error") }));
-        throw new Error(err.detail || t("recommend.request_failed"));
-      }
 
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const recs: Recommendation[] = [];
+      // Enrich each recommendation with watched/wishlist info
+      const recs: Recommendation[] = data.recommendations.map((rec) => {
+        const titleLower = rec.title.toLowerCase();
+        const matched = movies.find((m) => m.title.toLowerCase() === titleLower);
+        return {
+          ...rec,
+          poster_url: rec.poster_url || null,
+          media_type: matched?.media_type || rec.media_type,
+          watched: !!matched,
+          inWishlist: wishlistTitles.has(titleLower),
+        };
+      });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() || "";
+      setSourceInfo(t("recommend.source_info_done", { count: data.source_count, recs: recs.length }));
 
-        for (const eventBlock of events) {
-          const lines = eventBlock.split("\n");
-          let eventType = "message";
-          let eventData = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-            else if (line.startsWith("data: ")) eventData = line.slice(6).trim();
-          }
-          if (!eventData) continue;
-          try {
-            const data = JSON.parse(eventData);
-            switch (eventType) {
-              case "start":
-                setSourceInfo(t("recommend.source_info_loading", { count: data.source_count }));
-                break;
-              case "recommendation": {
-                const rec: Recommendation = {
-                  title: data.title,
-                  year: data.year,
-                  genre: data.genre,
-                  reason: data.reason,
-                  confidence: data.confidence,
-                  poster_url: data.poster_url || null,
-                };
-                const titleLower = (data.title || "").toLowerCase();
-                // Try to find media_type from all watched movies
-                const matched = movies.find((m) => m.title.toLowerCase() === titleLower);
-                if (matched?.media_type) rec.media_type = matched.media_type;
-                // Mark if already in watched library
-                if (matched) rec.watched = true;
-                // Mark if already in wishlist
-                rec.inWishlist = wishlistTitles.has(titleLower);
-                recs.push(rec);
-                setRecommendations([...recs]);
-                break;
-              }
-              case "done":
-                let infoMsg = t("recommend.source_info_done", { count: data.source_count, recs: recs.length });
-                if (data.filtered_count > 0) {
-                  infoMsg += t("recommend.source_info_filtered", { count: data.filtered_count });
-                }
-                setSourceInfo(infoMsg);
-                break;
-              case "error":
-                throw new Error(data.message);
-            }
-          } catch {
-            console.warn("SSE parse warning: invalid event data", eventData);
-          }
-        }
-      }
-
-      if (recs.length === 0) showToast(t("recommend.no_results"), "error");
-      else {
-        // Poster URLs are now resolved on the backend — shown immediately
+      if (recs.length === 0) {
+        showToast(t("recommend.no_results"), "error");
+      } else {
         setRecommendations(recs);
         setShowChat(true);
       }
     } catch (err) {
-      if (isAbortError(err)) showToast(t("recommend.timeout"), "error");
-      else showToast(t("recommend.error", { message: getErrMsg(err) }), "error");
+      if (isAbortError(err)) {
+        if (!cancelledByUserRef.current) {
+          showToast(t("recommend.timeout"), "error");
+        }
+        cancelledByUserRef.current = false;
+      } else {
+        showToast(t("recommend.error", { message: getErrMsg(err) }), "error");
+      }
     } finally {
       clearTimeout(timeoutId);
+      cancelRef.current = null;
+      cancelledByUserRef.current = false;
       setIsLoading(false);
     }
   }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
+
+  // ── Cancel loading handler ──
+  const handleCancel = useCallback(() => {
+    cancelledByUserRef.current = true;
+    cancelRef.current?.abort();
+    cancelRef.current = null;
+    setIsLoading(false);
+  }, []);
+
+  // ── Elapsed time counter while loading ──
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const sendFollowUp = useCallback(async (text: string) => {
     if (!text.trim() || isChatProcessing) return;
@@ -542,17 +515,28 @@ export function RecommendTab() {
 
       {/* === Loading State === */}
       {isLoading && recommendations.length === 0 && (
-        <FadeContent className="section-card">
-          <div className="flex flex-col items-center justify-center py-12">
+        <FadeContent className="section-card overflow-hidden">
+          {/* Indeterminate progress bar */}
+          <div className="progress-bar mb-6" />
+
+          <div className="flex flex-col items-center justify-center py-10">
             <div className="spinner mb-4" />
             <p className="text-sm font-[510]" style={{ color: "var(--fg-secondary)" }}>
               {t("recommend.analyzing")}
             </p>
-            <div className="typing-dots flex justify-center gap-1 mt-2">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
+            {/* Elapsed time */}
+            <p className="text-xs mt-3 tabular-nums" style={{ color: "var(--fg-muted)" }}>
+              {elapsedSeconds < 60
+                ? `${elapsedSeconds}s`
+                : `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`}
+            </p>
+            {/* Cancel button */}
+            <button
+              onClick={handleCancel}
+              className="btn btn-xs btn-ghost mt-5"
+            >
+              {t("recommend.cancel_generating")}
+            </button>
           </div>
           <SkeletonCard count={3} />
         </FadeContent>

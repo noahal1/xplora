@@ -365,7 +365,34 @@ export async function triggerUpdate(): Promise<{ status: string; message: string
   });
 }
 
-/** Get health status */
+/** Get movie recommendations (non-streaming, bypasses Cloudflare SSE issues) */
+export async function getRecommendations(params: {
+  movies: { title: string; rating: number; year?: number | null; genre?: string | null }[];
+  model: string;
+  count: number;
+  strategy: string;
+  strategy_params?: Record<string, unknown>;
+  signal?: AbortSignal;
+}): Promise<{
+  recommendations: Recommendation[];
+  model_used: string;
+  source_count: number;
+}> {
+  return fetchJSON(`${API_BASE}/recommend`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      movies: params.movies,
+      model: params.model,
+      count: params.count,
+      strategy: params.strategy,
+      strategy_params: params.strategy_params,
+    }),
+    signal: params.signal,
+  });
+}
+
+/** Fetch health status */
 export async function getHealth(): Promise<{
   status: string;
   version: string;
