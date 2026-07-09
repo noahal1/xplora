@@ -33,12 +33,15 @@ def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
     return [m.title for m in movies if m.title]
 
 
-def _get_all_excluded_titles(db: Session, user_id: int) -> list[str]:
+def _get_all_excluded_and_wishlist(db: Session, user_id: int) -> tuple[list[str], set[str]]:
     """Query ALL watched + wishlist titles from the DB in a single query.
 
-    Returns a deduplicated list of movie titles that the AI should exclude:
-    - Watched movies (already seen)
-    - Wishlist movies (already planning to watch)
+    Returns a tuple:
+        (excluded_titles, wishlist_titles)
+
+    - excluded_titles: deduplicated list of all watched + wishlist movie titles
+      that the AI should exclude from recommendations.
+    - wishlist_titles: set of JUST wishlist titles for feedback analysis.
 
     Unlike ``_extract_watched_titles`` which only returns titles from the
     request payload (may be filtered by genre/media_type), this queries
@@ -57,37 +60,39 @@ def _get_all_excluded_titles(db: Session, user_id: int) -> list[str]:
     ).all()
     # Deduplicate by title (user could theoretically have same title in both lists)
     seen: set[str] = set()
-    result: list[str] = []
+    excluded: list[str] = []
+    wishlist: set[str] = set()
     for item in rows:
         if item.title and item.title not in seen:
             seen.add(item.title)
-            result.append(item.title)
-    return result
+            excluded.append(item.title)
+            if item.status == "wish":
+                wishlist.add(item.title)
+    return excluded, wishlist
 
 
-def _get_wishlist_titles(db: Session, user_id: int) -> set[str]:
-    """Get just the wishlist titles for a user, as a set."""
-    rows = db.exec(
-        select(MediaItemRecord.title).where(
-            MediaItemRecord.status == "wish",
-            MediaItemRecord.user_id == user_id,
-        )
-    ).all()
-    return {r for r in rows if r}
-
-
-def _build_previous_feedback(db: Session, user_id: int) -> dict:
+def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str] | None = None) -> dict:
     """Build feedback from past recommendation sessions.
 
     Cross-references past AI recommendations with the user's current
     wishlist to determine which recommendations were "liked" (added to
     wishlist) vs "ignored" (not acted upon).
 
+    When ``wishlist_titles`` is provided, reuses the already-queried set
+    instead of making a separate DB query.
+
     Returns a dict with:
         liked_titles: list[str] — recommendations the user appreciated
         ignored_titles: list[str] — recommendations the user didn't act on
     """
-    wishlist_titles = _get_wishlist_titles(db, user_id)
+    if wishlist_titles is None:
+        rows = db.exec(
+            select(MediaItemRecord.title).where(
+                MediaItemRecord.status == "wish",
+                MediaItemRecord.user_id == user_id,
+            )
+        ).all()
+        wishlist_titles = {r for r in rows if r}
 
     # Get last 5 sessions (most recent first)
     past_sessions, _ = db_get_sessions(user_id, page=0, page_size=5, db=db)
@@ -201,9 +206,9 @@ async def recommend(
     api_key = get_api_key(request.model)
     try:
         service = AIService(api_key=api_key, model_type=request.model)
-        # Single DB query for all watched + wishlist titles
-        all_excluded = _get_all_excluded_titles(db, current_user["id"])
-        previous_feedback = _build_previous_feedback(db, current_user["id"])
+        # Single DB query for all watched + wishlist titles + wishlist titles for feedback
+        all_excluded, wishlist_titles = _get_all_excluded_and_wishlist(db, current_user["id"])
+        previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
         taste_analysis = service._analyze_user_taste(movies)
         recommendations = service.get_recommendations(
             movies, request.count, request.strategy,
@@ -232,9 +237,9 @@ async def recommend_stream(
     """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
-    # Single DB query for all watched + wishlist titles
-    all_excluded = _get_all_excluded_titles(db, current_user["id"])
-    previous_feedback = _build_previous_feedback(db, current_user["id"])
+    # Single DB query for all watched + wishlist titles + wishlist titles for feedback
+    all_excluded, wishlist_titles = _get_all_excluded_and_wishlist(db, current_user["id"])
+    previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
     return StreamingResponse(
         _stream_with_persistence(
             movies, request.count, request.model, api_key, current_user["id"],
@@ -263,7 +268,7 @@ async def followup_stream(
     api_key = get_api_key(request.model)
     service = AIService(api_key=api_key, model_type=request.model)
     # Single DB query for all watched + wishlist titles
-    all_excluded = _get_all_excluded_titles(db, current_user["id"])
+    all_excluded, _ = _get_all_excluded_and_wishlist(db, current_user["id"])
     taste_analysis = service._analyze_user_taste(movies)
     return StreamingResponse(
         service.get_followup_stream(

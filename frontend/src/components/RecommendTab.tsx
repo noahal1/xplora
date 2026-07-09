@@ -7,7 +7,7 @@ import { useToast } from "../context/ToastContext";
 import { SkeletonCard } from "./Skeleton";
 import FadeContent from "./FadeContent";
 import { Sparkles } from "lucide-react";
-import { isAbortError, getErrMsg } from "../lib/utils";
+import { isAbortError, getErrMsg, titleMatches, titleInSet } from "../lib/utils";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { ChatPanel } from "./tabs/recommend/ChatPanel";
 import { StrategySelector } from "./tabs/recommend/StrategySelector";
@@ -239,16 +239,16 @@ export function RecommendTab() {
 
       clearTimeout(timeoutId);
 
-      // Enrich each recommendation with watched/wishlist info
+      // Enrich each recommendation with watched/wishlist info (fuzzy matching)
+      const wishlistTitlesArray = Array.from(wishlistTitles);
       const recs: Recommendation[] = data.recommendations.map((rec) => {
-        const titleLower = rec.title.toLowerCase();
-        const matched = movies.find((m) => m.title.toLowerCase() === titleLower);
+        const matched = movies.find((m) => titleMatches(m.title, rec.title));
         return {
           ...rec,
           poster_url: rec.poster_url || null,
           media_type: matched?.media_type || rec.media_type,
           watched: !!matched,
-          inWishlist: wishlistTitles.has(titleLower),
+          inWishlist: titleInSet(rec.title, wishlistTitlesArray),
         };
       });
 

@@ -430,26 +430,35 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
     @staticmethod
     def _resolve_posters(recs: list) -> list:
-        """Search TMDB for each recommendation's poster URL (sequential).
+        """Search TMDB for each recommendation's poster URL (parallel).
 
         Works with both ``list[MediaRecommendation]`` and ``list[dict]``.
         If TMDB is not configured, returns recs unchanged.
+        Uses ``ThreadPoolExecutor`` to resolve all posters in parallel.
+
+        **TMDB API optimization:**
+        Searches with ``media_type="movie"`` first (covers most AI
+        recommendations). If no poster is found, falls back to
+        ``media_type="tv"`` for the specific title — avoiding the
+        wasteful double-search of both endpoints for every rec.
         """
         tmdb_key = get_config_api_key("tmdb")
         if not tmdb_key or not recs:
             return recs
 
+        from concurrent.futures import ThreadPoolExecutor
+
         is_dict = isinstance(recs[0], dict)
 
-        for rec in recs:
+        def resolve_one(rec):
             title = rec.get("title", "") if is_dict else getattr(rec, "title", "")
             year = rec.get("year") if is_dict else getattr(rec, "year", None)
             if not title:
-                continue
+                return
             try:
-                results = search_external_movies(title, "tmdb")
+                # Step 1: Search movies only (covers vast majority of AI recommendations)
+                results = search_external_movies(title, "tmdb", media_type="movie")
                 if results:
-                    # Prefer year match, otherwise first result with poster
                     year_match = next(
                         (r for r in results if r.get("year") == year and r.get("poster_url")),
                         None,
@@ -457,13 +466,35 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     fallback = next((r for r in results if r.get("poster_url")), None)
                     match = year_match or fallback or results[0]
                     poster_url = match.get("poster_url")
+                    # If movie search found a poster, we're done
+                    if poster_url:
+                        if is_dict:
+                            rec["poster_url"] = poster_url
+                        else:
+                            rec.poster_url = poster_url
+                        return
+
+                # Step 2: Fallback — if movie search didn't find anything, try TV
+                # (catches TV-only titles like "Resident Alien")
+                tv_results = search_external_movies(title, "tmdb", media_type="tv")
+                if tv_results:
+                    year_match = next(
+                        (r for r in tv_results if r.get("year") == year and r.get("poster_url")),
+                        None,
+                    )
+                    fallback = next((r for r in tv_results if r.get("poster_url")), None)
+                    match = year_match or fallback or tv_results[0]
+                    poster_url = match.get("poster_url")
                     if poster_url:
                         if is_dict:
                             rec["poster_url"] = poster_url
                         else:
                             rec.poster_url = poster_url
             except Exception:
-                continue
+                pass
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            list(pool.map(resolve_one, recs))
 
         return recs
 
@@ -547,11 +578,16 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         _cjk_en_cache: dict[str, str | None] = {}
 
         def _resolve_en_title(cjk_title: str) -> str | None:
-            """Resolve a CJK movie title to its English original via TMDB."""
+            """Resolve a CJK movie title to its English original via TMDB.
+
+            Only searches the movie endpoint — CJK titles are almost always
+            movies, and for TV shows the movie search is sufficient to get
+            the English original name for fuzzy matching.
+            """
             if cjk_title in _cjk_en_cache:
                 return _cjk_en_cache[cjk_title]
             try:
-                tmdb_results = search_external_movies(cjk_title, "tmdb")
+                tmdb_results = search_external_movies(cjk_title, "tmdb", media_type="movie")
                 for result in tmdb_results:
                     en_title = result.get("original_title") or result.get("title", "")
                     if en_title and en_title != cjk_title:

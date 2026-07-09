@@ -276,7 +276,16 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text).strip()
 
 
-def search_movies(query: str, source: str = "tmdb", dual_language: bool = False) -> list[dict]:
+def search_movies(query: str, source: str = "tmdb", dual_language: bool = False, media_type: str | None = None) -> list[dict]:
+    """Search movies/TV via external sources.
+
+    Args:
+        query: Search query string.
+        source: ``"tmdb"``, ``"tvmaze"``, or ``"auto"``.
+        dual_language: If True, search in both zh-CN and en-US and merge.
+        media_type: When set to ``"movie"`` or ``"tv"``, only search that
+            specific endpoint (saves API calls). ``None`` searches both.
+    """
     original_query = query.strip()
     if not original_query:
         return []
@@ -309,7 +318,7 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False)
     results: list[MovieSearchResult] = []
 
     if source == "tmdb" and tmdb_key:
-        _search_tmdb_variants(search_queries, tmdb_key, dual_language, results)
+        _search_tmdb_variants(search_queries, tmdb_key, dual_language, results, media_type=media_type)
     elif source == "tvmaze":
         _search_tvmaze_variants(search_queries, results)
     elif source == "auto":
@@ -394,34 +403,48 @@ def _search_tmdb_variants(
     tmdb_key: str,
     dual_language: bool,
     results: list[MovieSearchResult],
+    media_type: str | None = None,
 ):
     """Search TMDB movies + TV, trying each query variant.
+
+    When ``media_type`` is ``"movie"`` or ``"tv"``, only searches the
+    corresponding endpoint — saving a wasteful API call.
+    When ``None`` (default), searches both movie and TV endpoints.
+
     Stops trying new variants once we have results.
     """
     for q in search_queries:
-        movie_results: list[MovieSearchResult] = []
-        if dual_language:
-            movie_results = search_tmdb_dual(q, tmdb_key)
-        else:
-            movie_results = search_tmdb(q, tmdb_key)
-        tv_results: list[MovieSearchResult] = []
-        try:
-            if dual_language:
-                tv_results = search_tmdb_tv_dual(q, tmdb_key)
-            else:
-                tv_results = search_tmdb_tv(q, tmdb_key)
-        except RuntimeError as e:
-            logger.warning("TMDB TV search failed for '%s' (movie results still returned): %s", q, e)
-        # Merge q's movie + tv results (dedup by title within this query)
         q_results: list[MovieSearchResult] = []
         seen_titles: set[str] = set()
-        for r in movie_results:
-            seen_titles.add(r.title.lower().strip())
-            q_results.append(r)
-        for r in tv_results:
-            key = r.title.lower().strip()
-            if key not in seen_titles:
-                q_results.append(r)
+
+        # Movie search (skip when media_type="tv")
+        if media_type != "tv":
+            try:
+                if dual_language:
+                    movie_results = search_tmdb_dual(q, tmdb_key)
+                else:
+                    movie_results = search_tmdb(q, tmdb_key)
+                for r in movie_results:
+                    seen_titles.add(r.title.lower().strip())
+                    q_results.append(r)
+            except RuntimeError as e:
+                logger.warning("TMDB movie search failed for '%s': %s", q, e)
+
+        # TV search (skip when media_type="movie")
+        if media_type != "movie":
+            try:
+                if dual_language:
+                    tv_results = search_tmdb_tv_dual(q, tmdb_key)
+                else:
+                    tv_results = search_tmdb_tv(q, tmdb_key)
+                for r in tv_results:
+                    key = r.title.lower().strip()
+                    if key not in seen_titles:
+                        seen_titles.add(key)
+                        q_results.append(r)
+            except RuntimeError as e:
+                logger.warning("TMDB TV search failed for '%s': %s", q, e)
+
         _merge_results(q_results, results)
         # Stop trying more variants if we already have results
         if results:
