@@ -50,6 +50,7 @@ def save_session(
                 genre=rec.genre,
                 reason=rec.reason,
                 confidence=rec.confidence,
+                tmdb_id=rec.tmdb_id,
                 session_id=sess.id,
                 created_at=now,
             )

@@ -16,7 +16,9 @@ import "./style.css";
 
 // Lazy-loaded route-level chunks (pages & tabs)
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
-const AdminPanel = lazy(() => import("./pages/AdminPanel").then((m) => ({ default: m.AdminPanel })));
+const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage").then((m) => ({ default: m.AdminUsersPage })));
+const AdminLogsPage = lazy(() => import("./pages/AdminLogsPage").then((m) => ({ default: m.AdminLogsPage })));
+const AdminDiagnosticsPage = lazy(() => import("./pages/AdminDiagnosticsPage").then((m) => ({ default: m.AdminDiagnosticsPage })));
 const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 const WatchedTab = lazy(() => import("./components/WatchedTab").then((m) => ({ default: m.WatchedTab })));
 const WishlistTab = lazy(() => import("./components/WishlistTab").then((m) => ({ default: m.WishlistTab })));
@@ -121,14 +123,10 @@ export default function App() {
       }>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <AdminPanel />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/admin/users" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} />
+          <Route path="/admin/logs" element={<ProtectedRoute><AdminLogsPage /></ProtectedRoute>} />
+          <Route path="/admin/diagnostics" element={<ProtectedRoute><AdminDiagnosticsPage /></ProtectedRoute>} />
+          <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
           <Route
             path="/profile"
             element={

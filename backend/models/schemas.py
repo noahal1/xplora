@@ -115,6 +115,9 @@ class MediaRecommendation(SQLModel):
     poster_url: Optional[str] = Field(
         None, description="Poster image URL from TMDB"
     )
+    tmdb_id: Optional[str] = Field(
+        None, description="TMDB ID for exact matching against library"
+    )
 
 
 class RecommendationResponse(SQLModel):

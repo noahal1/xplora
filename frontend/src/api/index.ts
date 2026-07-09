@@ -392,6 +392,39 @@ export async function getRecommendations(params: {
   });
 }
 
+/** Run media diagnostics — checks metadata completeness, scrape errors, etc. */
+export async function getMediaDiagnostics(): Promise<{
+  summary: {
+    total: number;
+    healthy: number;
+    has_issues: number;
+    missing_poster_url: number;
+    missing_overview: number;
+    missing_director: number;
+    missing_actors: number;
+    missing_runtime: number;
+    missing_tmdb_id: number;
+    missing_country: number;
+    missing_tagline: number;
+    has_scrape_error: number;
+  };
+  items: Array<{
+    id: number;
+    title: string;
+    year: number | null;
+    media_type: string;
+    status: string;
+    rating: number;
+    missing_fields: Array<{ field: string; label: string }>;
+    missing_count: number;
+    has_scrape_error: boolean;
+    scrape_error: string | null;
+    created_at: string;
+  }>;
+}> {
+  return fetchJSON(`${API_BASE}/media/diagnostics`, { headers: getAuthHeaders() });
+}
+
 /** Fetch health status */
 export async function getHealth(): Promise<{
   status: string;

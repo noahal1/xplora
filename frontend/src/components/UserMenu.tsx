@@ -9,6 +9,8 @@ import {
   LogOut,
   ChevronDown,
   Info,
+  FileText,
+  Activity,
 } from "lucide-react";
 import { AboutModal } from "./AboutModal";
 
@@ -130,13 +132,25 @@ export function UserMenu() {
               onClick={() => handleNavigate("/profile")}
             />
 
-            {/* Admin panel (admin only) */}
+            {/* Admin panel — expanded sub-nav (admin only) */}
             {user?.is_admin && (
-              <MenuItem
-                icon={<Shield size={14} />}
-                label={t("admin.title")}
-                onClick={() => handleNavigate("/admin")}
-              />
+              <>
+                <MenuItem
+                  icon={<Shield size={14} />}
+                  label={t("admin.tab_users")}
+                  onClick={() => handleNavigate("/admin/users")}
+                />
+                <MenuItem
+                  icon={<FileText size={14} />}
+                  label={t("admin.tab_logs")}
+                  onClick={() => handleNavigate("/admin/logs")}
+                />
+                <MenuItem
+                  icon={<Activity size={14} />}
+                  label="媒体诊断"
+                  onClick={() => handleNavigate("/admin/diagnostics")}
+                />
+              </>
             )}
           </div>
 

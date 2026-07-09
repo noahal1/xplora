@@ -26,6 +26,8 @@ export function RecommendTab() {
 
   const [movies, setMovies] = useState<MediaItem[]>([]);
   const [wishlistTitles, setWishlistTitles] = useState<Set<string>>(new Set());
+  const [watchedTmdbIds, setWatchedTmdbIds] = useState<Set<string>>(new Set());
+  const [wishlistTmdbIds, setWishlistTmdbIds] = useState<Set<string>>(new Set());
   const [loadingMovies, setLoadingMovies] = useState(true);
 
   const [selectedModel, setSelectedModel] = useState("deepseek");
@@ -88,6 +90,12 @@ export function RecommendTab() {
       );
       setWishlistTitles(
         new Set(wishlistData.media.map((m) => m.title.toLowerCase()))
+      );
+      setWatchedTmdbIds(
+        new Set(watchedData.media.map((m) => m.tmdb_id).filter(Boolean))
+      );
+      setWishlistTmdbIds(
+        new Set(wishlistData.media.map((m) => m.tmdb_id).filter(Boolean))
       );
     } catch (err) {
       console.error("Failed to load movies:", err);
@@ -239,9 +247,19 @@ export function RecommendTab() {
 
       clearTimeout(timeoutId);
 
-      // Enrich each recommendation with watched/wishlist info (fuzzy matching)
+      // Enrich each recommendation with watched/wishlist info
+      // Priority: TMDB ID exact match > title fuzzy match
       const wishlistTitlesArray = Array.from(wishlistTitles);
       const recs: Recommendation[] = data.recommendations.map((rec) => {
+        // TMDB ID exact match (preferred — handles cross-language)
+        if (rec.tmdb_id) {
+          const watched = watchedTmdbIds.has(rec.tmdb_id);
+          const inWishlist = wishlistTmdbIds.has(rec.tmdb_id);
+          if (watched || inWishlist) {
+            return { ...rec, poster_url: rec.poster_url || null, watched, inWishlist };
+          }
+        }
+        // Fallback: title fuzzy match for items without tmdb_id or no match
         const matched = movies.find((m) => titleMatches(m.title, rec.title));
         return {
           ...rec,

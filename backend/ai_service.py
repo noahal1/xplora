@@ -429,12 +429,13 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         ]
 
     @staticmethod
-    def _resolve_posters(recs: list) -> list:
-        """Search TMDB for each recommendation's poster URL (parallel).
+    def _resolve_metadata(recs: list) -> list:
+        """Search TMDB for each recommendation's poster URL + TMDB ID (parallel).
 
         Works with both ``list[MediaRecommendation]`` and ``list[dict]``.
         If TMDB is not configured, returns recs unchanged.
-        Uses ``ThreadPoolExecutor`` to resolve all posters in parallel.
+        Attaches ``poster_url`` and ``tmdb_id`` to each recommendation
+        from the TMDB search results (``source_id`` field).
 
         **TMDB API optimization:**
         Searches with ``media_type="movie"`` first (covers most AI
@@ -449,6 +450,12 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         from concurrent.futures import ThreadPoolExecutor
 
         is_dict = isinstance(recs[0], dict)
+
+        def set_field(rec, key, value):
+            if is_dict:
+                rec[key] = value
+            else:
+                setattr(rec, key, value)
 
         def resolve_one(rec):
             title = rec.get("title", "") if is_dict else getattr(rec, "title", "")
@@ -466,16 +473,13 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     fallback = next((r for r in results if r.get("poster_url")), None)
                     match = year_match or fallback or results[0]
                     poster_url = match.get("poster_url")
-                    # If movie search found a poster, we're done
+                    source_id = match.get("source_id")
                     if poster_url:
-                        if is_dict:
-                            rec["poster_url"] = poster_url
-                        else:
-                            rec.poster_url = poster_url
+                        set_field(rec, "poster_url", poster_url)
+                        set_field(rec, "tmdb_id", source_id)
                         return
 
                 # Step 2: Fallback — if movie search didn't find anything, try TV
-                # (catches TV-only titles like "Resident Alien")
                 tv_results = search_external_movies(title, "tmdb", media_type="tv")
                 if tv_results:
                     year_match = next(
@@ -485,11 +489,10 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     fallback = next((r for r in tv_results if r.get("poster_url")), None)
                     match = year_match or fallback or tv_results[0]
                     poster_url = match.get("poster_url")
+                    source_id = match.get("source_id")
                     if poster_url:
-                        if is_dict:
-                            rec["poster_url"] = poster_url
-                        else:
-                            rec.poster_url = poster_url
+                        set_field(rec, "poster_url", poster_url)
+                        set_field(rec, "tmdb_id", source_id)
             except Exception:
                 pass
 
@@ -497,6 +500,31 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             list(pool.map(resolve_one, recs))
 
         return recs
+
+    @staticmethod
+    def _filter_by_tmdb_id(recs: list, excluded_tmdb_ids: set[str] | None) -> list:
+        """Filter out recommendations whose TMDB ID is in the excluded set.
+
+        Runs **after** ``_resolve_metadata()`` has attached ``tmdb_id`` to
+        each rec.  Catches cross-language duplicates (e.g. "Inception" vs
+        "盗梦空间") that title-based fuzzy matching cannot handle.
+
+        Works with both ``list[MediaRecommendation]`` and ``list[dict]``.
+        Items without a TMDB ID are kept as-is (title-based fallback).
+        """
+        if not excluded_tmdb_ids:
+            return recs
+
+        is_dict = isinstance(recs[0], dict) if recs else False
+        filtered = []
+        for rec in recs:
+            tmdb_id = rec.get("tmdb_id", "") if is_dict else getattr(rec, "tmdb_id", "")
+            if tmdb_id and tmdb_id in excluded_tmdb_ids:
+                title = rec.get("title", "") if is_dict else getattr(rec, "title", "")
+                logger.info("[TMDB-ID] FILTERED OUT: '%s' (tmdb_id=%s)", title, tmdb_id)
+                continue
+            filtered.append(rec)
+        return filtered
 
     @staticmethod
     def _filter_watched(recs: list, watched_titles: Optional[list[str]]) -> list:
@@ -573,69 +601,16 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
             return word_jaccard
 
-        # Cache: CJK title -> English title (from TMDB), avoids repeated API calls
-        # across retry attempts when the same title appears again.
-        _cjk_en_cache: dict[str, str | None] = {}
-
-        def _resolve_en_title(cjk_title: str) -> str | None:
-            """Resolve a CJK movie title to its English original via TMDB.
-
-            Only searches the movie endpoint — CJK titles are almost always
-            movies, and for TV shows the movie search is sufficient to get
-            the English original name for fuzzy matching.
-            """
-            if cjk_title in _cjk_en_cache:
-                return _cjk_en_cache[cjk_title]
-            try:
-                tmdb_results = search_external_movies(cjk_title, "tmdb", media_type="movie")
-                for result in tmdb_results:
-                    en_title = result.get("original_title") or result.get("title", "")
-                    if en_title and en_title != cjk_title:
-                        _cjk_en_cache[cjk_title] = en_title
-                        return en_title
-                _cjk_en_cache[cjk_title] = None
-            except Exception:
-                _cjk_en_cache[cjk_title] = None
-            return None
-
         def _is_watched(title: str) -> bool:
-            """Check if a title (possibly CJK) matches any watched title.
+            """Check if a title matches any watched title using local fuzzy matching.
 
-            Matching strategies (in order):
-            1. Direct fuzzy match (works when both titles share a language)
-            2. If REC has CJK → resolve REC to English via TMDB, match against watched
-            3. If REC is Latin but WATCHED has CJK → resolve WATCHED to English via TMDB,
-               match against REC (reverse direction — catches e.g.
-               AI outputting "Inception" vs watched "盗梦空间")
+            Uses ``_match_score`` (Jaccard word similarity with CJK character
+            fallback) — no external API calls.  Works for same-language
+            comparisons (CJK↔CJK, EN↔EN).  Does NOT handle cross-language
+            matching (e.g. "Inception" vs "盗梦空间") — those will not be
+            detected as duplicates without a TMDB-based resolution step.
             """
-            # Step 1: Try fuzzy match directly
-            if any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean):
-                return True
-            # Step 2: If title has CJK, search TMDB for English original and retry
-            # Also resolve CJK watched titles to English for proper cross-CJK comparison.
-            # Catches e.g. AI output "七人の侍" vs watched "七武士" — both are CJK but
-            # neither has Latin words to match against, so we resolve BOTH to English
-            # ("Seven Samurai") and compare English vs English.
-            if has_cjk(title):
-                en_title = _resolve_en_title(title)
-                if en_title and en_title != title:
-                    for wt in watched_clean:
-                        if has_cjk(wt):
-                            en_wt = _resolve_en_title(wt)
-                            if en_wt and _match_score(en_title, en_wt) >= MATCH_THRESHOLD:
-                                return True
-                        elif _match_score(en_title, wt) >= MATCH_THRESHOLD:
-                            return True
-            # Step 3: If title is Latin but some watched titles have CJK,
-            # resolve each CJK watched title to English and compare against the rec title
-            # This catches the reverse case: AI outputs "Inception" but user has "盗梦空间"
-            if not has_cjk(title):
-                for wt in watched_clean:
-                    if has_cjk(wt):
-                        en_wt = _resolve_en_title(wt)
-                        if en_wt and _match_score(title, en_wt) >= MATCH_THRESHOLD:
-                            return True
-            return False
+            return any(_match_score(title, wt) >= MATCH_THRESHOLD for wt in watched_clean)
 
         # Track what's being filtered for debugging
         filtered = []
@@ -652,10 +627,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
         # Also deduplicate within the same batch — AI sometimes returns the same
         # movie twice in one response (exact title or fuzzy match).
-        # CJK titles are resolved via cache if already queried above.
-        # Handles both directions:
-        #   CJK → English: "盗梦空间" vs "Inception"
-        #   English → CJK: "Inception" vs "盗梦空间"
+        # Uses the same local ``_match_score``, no TMDB calls.
         seen_titles: list[str] = []
         deduped = []
         for r in filtered:
@@ -663,40 +635,9 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             if not title:
                 deduped.append(r)
                 continue
-            # Check against seen titles; for CJK, also check English equivalent
             is_dup = any(_match_score(title, st) >= MATCH_THRESHOLD for st in seen_titles)
             if is_dup:
                 logger.info("[FilterDebug] FILTERED OUT (duplicate in batch): '%s'", title)
-                continue
-            # Also check CJK titles via their English names
-            if has_cjk(title):
-                en_title = _resolve_en_title(title)
-                if en_title:
-                    # Compare against seen titles — also resolve CJK seen titles
-                    for st in seen_titles:
-                        if has_cjk(st):
-                            en_st = _resolve_en_title(st)
-                            if en_st and _match_score(en_title, en_st) >= MATCH_THRESHOLD:
-                                logger.info("[FilterDebug] FILTERED OUT (CJK dup, both resolved): '%s' ≡ '%s'", title, st)
-                                is_dup = True
-                                break
-                        elif _match_score(st, en_title) >= MATCH_THRESHOLD:
-                            logger.info("[FilterDebug] FILTERED OUT (CJK duplicate): '%s'", title)
-                            is_dup = True
-                            break
-            if is_dup:
-                continue
-            # Reverse direction: if title is Latin, check against CJK seen titles
-            # via their English names. Catches e.g. "Inception" vs already-seen "盗梦空间".
-            if not has_cjk(title):
-                for st in seen_titles:
-                    if has_cjk(st):
-                        en_st = _resolve_en_title(st)
-                        if en_st and _match_score(title, en_st) >= MATCH_THRESHOLD:
-                            logger.info("[FilterDebug] FILTERED OUT (EN duplicate of CJK): '%s' ≡ '%s'", title, st)
-                            is_dup = True
-                            break
-            if is_dup:
                 continue
             seen_titles.append(title)
             deduped.append(r)
@@ -712,6 +653,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
         previous_feedback: Optional[dict] = None,
+        excluded_tmdb_ids: Optional[set[str]] = None,
     ) -> list[MediaRecommendation]:
         """Generate movie recommendations (non-streaming) with dynamic retry.
 
@@ -720,6 +662,9 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         based on the requested amount — each time asking the AI to recommend
         different movies and requesting extra to compensate for filtering losses
         — until the requested ``count`` is met.
+
+        After metadata resolution, also filters by ``excluded_tmdb_ids``
+        (exact TMDB ID matching) to catch cross-language duplicates.
         """
         max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
@@ -805,7 +750,8 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
                   f"({len(all_recs[:count])}/{count} final)")
 
-        all_recs = self._resolve_posters(all_recs)
+        all_recs = self._resolve_metadata(all_recs)
+        all_recs = self._filter_by_tmdb_id(all_recs, excluded_tmdb_ids)
         return all_recs[:count]
 
     def _build_followup_prompt(
@@ -921,11 +867,13 @@ Format 2 - For explanation or other questions:
         count: int = 3,
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
+        excluded_tmdb_ids: Optional[set[str]] = None,
     ):
         """Generator that yields SSE-formatted events for follow-up conversation.
 
         If the response includes recommendations and the fuzzy dedup filter
         removes some, retries with dynamic retry count to fill the gap.
+        After metadata resolution, also filters by ``excluded_tmdb_ids``.
         """
         max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get("taste", DEFAULT_TEMPERATURE)
@@ -1033,8 +981,9 @@ Format 2 - For explanation or other questions:
             print(f"[FollowUp] Filtered out {total_filtered} already-watched titles "
                   f"({len(all_recs[:count])}/{count} final)")
 
-        # Resolve poster URLs from TMDB
-        all_recs = self._resolve_posters(all_recs)
+        # Resolve poster URLs + TMDB IDs from TMDB
+        all_recs = self._resolve_metadata(all_recs)
+        all_recs = self._filter_by_tmdb_id(all_recs, excluded_tmdb_ids)
 
         # Yield final result with accumulated recommendations
         result_data = json.dumps({
@@ -1053,6 +1002,7 @@ Format 2 - For explanation or other questions:
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
         previous_feedback: Optional[dict] = None,
+        excluded_tmdb_ids: Optional[set[str]] = None,
     ):
         """Generator that yields SSE-formatted events as recommendations are streamed.
 
@@ -1062,6 +1012,9 @@ Format 2 - For explanation or other questions:
         ``count`` is met.  Chunk events from each retry attempt are forwarded
         to the frontend for progress indication, but all recommendations are
         yielded after all retries complete, followed by a single ``done`` event.
+
+        After metadata resolution, also filters by ``excluded_tmdb_ids``
+        (exact TMDB ID matching) to catch cross-language duplicates.
         """
         max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
@@ -1174,8 +1127,9 @@ Format 2 - For explanation or other questions:
             print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
                   f"({len(all_recs[:count])}/{count} final)")
 
-        # Resolve poster URLs from TMDB before yielding
-        all_recs = self._resolve_posters(all_recs)
+        # Resolve poster URLs + TMDB IDs from TMDB before yielding
+        all_recs = self._resolve_metadata(all_recs)
+        all_recs = self._filter_by_tmdb_id(all_recs, excluded_tmdb_ids)
 
         # Yield all recommendations after all retries complete
         for rec in all_recs[:count]:
@@ -1185,6 +1139,7 @@ Format 2 - For explanation or other questions:
             reason = rec.get("reason", "") if isinstance(rec, dict) else getattr(rec, "reason", "")
             confidence_raw = rec.get("confidence", 0.5) if isinstance(rec, dict) else getattr(rec, "confidence", 0.5)
             poster_url = rec.get("poster_url") if isinstance(rec, dict) else getattr(rec, "poster_url", None)
+            tmdb_id = rec.get("tmdb_id") if isinstance(rec, dict) else getattr(rec, "tmdb_id", None)
 
             rec_data = json.dumps({
                 "title": title,
@@ -1193,6 +1148,7 @@ Format 2 - For explanation or other questions:
                 "reason": reason,
                 "confidence": min(max(float(confidence_raw), 0.0), 1.0),
                 "poster_url": poster_url,
+                "tmdb_id": tmdb_id,
             })
             yield f"event: recommendation\ndata: {rec_data}\n\n"
 

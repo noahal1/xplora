@@ -33,6 +33,26 @@ def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
     return [m.title for m in movies if m.title]
 
 
+def _get_all_excluded_tmdb_ids(db: Session, user_id: int) -> set[str]:
+    """Query all watched + wishlist TMDB IDs from DB in a single query.
+
+    Returns a set of TMDB IDs that the user already has in their
+    library.  Used for exact ID matching in the TMDB ID filtering
+    pass (``_filter_by_tmdb_id``).
+
+    Items without a ``tmdb_id`` are skipped — they will fall back
+    to title-based fuzzy matching.
+    """
+    rows = db.exec(
+        select(MediaItemRecord.tmdb_id).where(
+            MediaItemRecord.status.in_(["watched", "wish"]),
+            MediaItemRecord.user_id == user_id,
+            MediaItemRecord.tmdb_id.isnot(None),
+        )
+    ).all()
+    return {str(r) for r in rows if r}
+
+
 def _get_all_excluded_and_wishlist(db: Session, user_id: int) -> tuple[list[str], set[str]]:
     """Query ALL watched + wishlist titles from the DB in a single query.
 
@@ -136,7 +156,7 @@ def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str
 # by not passing db=db, letting save_session create its own session.
 
 
-def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None, watched_titles=None, previous_feedback=None):
+def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None, watched_titles=None, previous_feedback=None, excluded_tmdb_ids=None):
     """SSE generator that auto-saves recommendations to DB on completion."""
     service = AIService(api_key=api_key, model_type=model)
     taste_analysis = service._analyze_user_taste(movies)
@@ -146,6 +166,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
         watched_titles=watched,
         taste_analysis=taste_analysis,
         previous_feedback=previous_feedback,
+        excluded_tmdb_ids=excluded_tmdb_ids,
     )
     recommendations_cache: list[dict] = []
 
@@ -169,6 +190,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
                         genre=r.get("genre"),
                         reason=r.get("reason", ""),
                         confidence=min(max(float(r.get("confidence", 0.5)), 0.0), 1.0),
+                        tmdb_id=r.get("tmdb_id"),
                     )
                     for r in recommendations_cache
                 ]
@@ -206,8 +228,9 @@ async def recommend(
     api_key = get_api_key(request.model)
     try:
         service = AIService(api_key=api_key, model_type=request.model)
-        # Single DB query for all watched + wishlist titles + wishlist titles for feedback
+        # Single DB query for all watched + wishlist titles + wishlist titles for feedback + TMDB IDs
         all_excluded, wishlist_titles = _get_all_excluded_and_wishlist(db, current_user["id"])
+        excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
         previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
         taste_analysis = service._analyze_user_taste(movies)
         recommendations = service.get_recommendations(
@@ -216,6 +239,7 @@ async def recommend(
             watched_titles=all_excluded,
             taste_analysis=taste_analysis,
             previous_feedback=previous_feedback,
+            excluded_tmdb_ids=excluded_tmdb_ids,
         )
         return RecommendationResponse(
             recommendations=recommendations,
@@ -237,8 +261,9 @@ async def recommend_stream(
     """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
-    # Single DB query for all watched + wishlist titles + wishlist titles for feedback
+    # Single DB query for all watched + wishlist titles + wishlist titles for feedback + TMDB IDs
     all_excluded, wishlist_titles = _get_all_excluded_and_wishlist(db, current_user["id"])
+    excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
     previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
     return StreamingResponse(
         _stream_with_persistence(
@@ -247,6 +272,7 @@ async def recommend_stream(
             strategy_params=request.strategy_params.model_dump() if request.strategy_params else None,
             watched_titles=all_excluded,
             previous_feedback=previous_feedback,
+            excluded_tmdb_ids=excluded_tmdb_ids,
         ),
         media_type="text/event-stream",
         headers={
@@ -267,8 +293,9 @@ async def followup_stream(
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
     service = AIService(api_key=api_key, model_type=request.model)
-    # Single DB query for all watched + wishlist titles
+    # Single DB query for all watched + wishlist titles + TMDB IDs
     all_excluded, _ = _get_all_excluded_and_wishlist(db, current_user["id"])
+    excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
     taste_analysis = service._analyze_user_taste(movies)
     return StreamingResponse(
         service.get_followup_stream(
@@ -279,6 +306,7 @@ async def followup_stream(
             count=request.count,
             watched_titles=all_excluded,
             taste_analysis=taste_analysis,
+            excluded_tmdb_ids=excluded_tmdb_ids,
         ),
         media_type="text/event-stream",
         headers={

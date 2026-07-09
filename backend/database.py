@@ -558,6 +558,15 @@ def _run_per_user_column_migrations(user_id: int):
         ("detail", "VARCHAR(500)"),
     ])
 
+    # ── Migration: recommendations.tmdb_id ──
+    try:
+        rec_columns = [c["name"] for c in inspector.get_columns("recommendations")]
+    except Exception:
+        rec_columns = []
+    _add_columns_if_missing("recommendations", rec_columns, [
+        ("tmdb_id", "VARCHAR(50)"),
+    ])
+
     # ── Data migration: ensure items with sort_order are marked as pinned ──
     _fix_top_rated_pins(user_id, engine)
 
@@ -591,17 +600,33 @@ def _fix_top_rated_pins(user_id: int, engine=None):
         logger.warning(f"  [Migration] Error fixing top-rated pins for user id={user_id}: {e}")
 
 def _add_columns_if_missing(table: str, existing_columns: list[str], columns: list[tuple[str, str]], engine=None):
-    """Add each column if it doesn't already exist."""
+    """Add each column if it doesn't already exist.
+
+    Safely handles the case where ``SQLModel.metadata.create_all()`` has
+    already created the column (e.g. when a model's field is added and
+    the table is freshly created).  The explicit ``ALTER TABLE`` would
+    fail with "duplicate column name" on SQLite, which is caught and
+    silently ignored here.
+    """
     from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
 
     target = engine or master_engine
     db_label = "per-user DB" if engine else "master DB"
     with target.connect() as conn:
         for col_name, col_def in columns:
             if col_name not in existing_columns:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}"))
-                conn.commit()
-                print(f"  [Migration] Added '{col_name}' column to {table} table ({db_label})")
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}"))
+                    conn.commit()
+                    print(f"  [Migration] Added '{col_name}' column to {table} table ({db_label})")
+                except OperationalError as e:
+                    # "duplicate column name" on SQLite — column was already
+                    # created by SQLModel.metadata.create_all().  Silently skip.
+                    if "duplicate column" in str(e).lower():
+                        conn.rollback()
+                    else:
+                        raise
 
 
 def _drop_column_if_exists(table: str, column: str):

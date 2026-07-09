@@ -707,6 +707,105 @@ async def media_detail(
         raise HTTPException(status_code=502, detail=str(e))
 
 
+# ── Media Diagnostics ────────────────────────────────────────────────
+
+
+@router.get("/media/diagnostics")
+async def media_diagnostics(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Run diagnostics on the current user's media library.
+
+    Checks each media item for missing metadata fields, scrape errors,
+    and TMDB ID issues. Returns both summary counts and the full item list
+    with per-item missing fields.
+    """
+    from sqlmodel import select
+    from models import MediaItemRecord
+
+    records = db.exec(
+        select(MediaItemRecord).where(MediaItemRecord.user_id == current_user["id"])
+    ).all()
+
+    total = len(records)
+
+    # Define which fields are "important" metadata for diagnostics
+    METADATA_FIELDS = [
+        ("poster_url", "海报"),
+        ("overview", "简介"),
+        ("director", "导演"),
+        ("actors", "演员"),
+        ("runtime", "时长"),
+        ("tmdb_id", "TMDB ID"),
+        ("country", "国家"),
+        ("tagline", "标语"),
+    ]
+
+    # Per-field counters
+    field_missing: dict[str, int] = {f: 0 for f, _ in METADATA_FIELDS}
+
+    items: list[dict] = []
+    for r in records:
+        missing_fields: list[dict] = []
+
+        for attr, label in METADATA_FIELDS:
+            val = getattr(r, attr, None)
+            if val is None or (isinstance(val, str) and val.strip() == ""):
+                field_missing[attr] += 1
+                missing_fields.append({"field": attr, "label": label})
+
+        # TV-specific: also check series_poster_url for TV items
+        if r.media_type == "tv":
+            if not r.series_poster_url:
+                missing_fields.append({"field": "series_poster_url", "label": "剧集海报"})
+
+        if not missing_fields and not r.scrape_error:
+            continue  # skip fully healthy items
+
+        items.append({
+            "id": r.id,
+            "title": r.title,
+            "year": r.year,
+            "media_type": r.media_type,
+            "status": r.status,
+            "rating": r.rating,
+            "missing_fields": missing_fields,
+            "missing_count": len(missing_fields),
+            "has_scrape_error": r.scrape_error is not None,
+            "scrape_error": r.scrape_error,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        })
+
+    # Sort: items with scrape errors first, then by missing count desc, then by title
+    items.sort(key=lambda x: (
+        0 if x["has_scrape_error"] else 1,
+        -x["missing_count"],
+        x["title"].lower(),
+    ))
+
+    # Build summary
+    summary = {
+        "total": total,
+        "healthy": total - len(items),
+        "has_issues": len(items),
+    }
+    for attr, label in METADATA_FIELDS:
+        summary[f"missing_{attr}"] = field_missing.get(attr, 0)
+
+    # Count items with scrape errors
+    summary["has_scrape_error"] = sum(1 for r in records if r.scrape_error is not None)
+    # Count items without tmdb_id
+    summary["missing_tmdb_id"] = sum(1 for r in records if not r.tmdb_id)
+    # Count items without poster
+    summary["missing_poster_url"] = sum(1 for r in records if not r.poster_url)
+
+    return {
+        "summary": summary,
+        "items": items,
+    }
+
+
 # ── Wishlist ────────────────────────────────────────────────────────
 
 
