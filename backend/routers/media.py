@@ -777,7 +777,6 @@ async def media_diagnostics(
         ("runtime", "时长"),
         ("tmdb_id", "TMDB ID"),
         ("country", "国家"),
-        ("tagline", "标语"),
     ]
 
     # Per-field counters
