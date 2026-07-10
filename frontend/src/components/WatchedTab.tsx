@@ -9,7 +9,6 @@ import { DetailModal } from "./ManageTab/DetailModal";
 import { List, LayoutGrid } from "lucide-react";
 import CountUp from "./CountUp";
 import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
-import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { isAbortError, getErrMsg } from "../lib/utils";
 import { useEnrichReload } from "../hooks/useEnrichReload";
 import { usePagination } from "../hooks/usePagination";
@@ -19,6 +18,7 @@ import type { TVSeriesGroup } from "../utils/groupTVSeries";
 import FadeContent from "./FadeContent";
 import { EmptyState } from "./EmptyState";
 import { GenreFilter } from "./GenreFilter";
+import { CountryFilter } from "./CountryFilter";
 import { MediaTypeFilter } from "./MediaTypeFilter";
 import { SortControls } from "./SortControls";
 import { SearchInput } from "./SearchInput";
@@ -45,6 +45,18 @@ export function WatchedTab() {
   const [ratingFilter, setRatingFilter] = useState("all");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
   const [genreFilter, setGenreFilter] = useState<Set<string>>(new Set());
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set());
+
+  // ── All unique countries & genres for filter dropdowns ──
+  const [filterCountries, setFilterCountries] = useState<string[]>([]);
+  const [filterGenres, setFilterGenres] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    api.getMediaFilters().then((data) => {
+      if (!cancelled) { setFilterCountries(data.countries); setFilterGenres(data.genres); }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const search = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
@@ -75,7 +87,7 @@ export function WatchedTab() {
 
   // ── Load data from API ──
 
-  const loadMovies = useCallback(async (page: number, q: string, sortF: string, sortD: string, rating: string, mediaType: string, genre: Set<string>, signal?: AbortSignal) => {
+  const loadMovies = useCallback(async (page: number, q: string, sortF: string, sortD: string, rating: string, mediaType: string, genre: Set<string>, country: Set<string>, signal?: AbortSignal) => {
     setLoading(true);
     let ratingMin: number | undefined;
     let ratingMax: number | undefined;
@@ -96,6 +108,7 @@ export function WatchedTab() {
         rating_max: ratingMax,
         media_type: (mediaType !== "all" ? mediaType : undefined),
         genre: (genre.size > 0 ? Array.from(genre).join(",") : undefined),
+        country: (country.size > 0 ? Array.from(country).join(",") : undefined),
         signal,
       });
       if (signal?.aborted) return;
@@ -112,9 +125,9 @@ export function WatchedTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadMovies(currentPage, search.debouncedValue, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, controller.signal);
+    loadMovies(currentPage, search.debouncedValue, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, countryFilter, controller.signal);
     return () => controller.abort();
-  }, [currentPage, search.debouncedValue, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, reloadTrigger, loadMovies]);
+  }, [currentPage, search.debouncedValue, sortField, sortDir, ratingFilter, mediaTypeFilter, genreFilter, countryFilter, reloadTrigger, loadMovies]);
 
   // Auto-refresh when background enrichment completes
   useEnrichReload(() => setReloadTrigger((n) => n + 1));
@@ -292,12 +305,10 @@ export function WatchedTab() {
     [showToast, t]
   );
 
-  const uniqueGenres = useGenreExtractor(media);
-
   // Reset page when search query changes
   useEffect(() => {
     setCurrentPage(0);
-  }, [search.debouncedValue, ratingFilter, mediaTypeFilter, genreFilter]);
+  }, [search.debouncedValue, ratingFilter, mediaTypeFilter, genreFilter, countryFilter]);
 
   useEffect(() => {
     localStorage.setItem("xplora-watched-view", viewMode);
@@ -305,7 +316,7 @@ export function WatchedTab() {
 
   // ── Render ──
 
-  const hasActiveFilters = !!(search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter.size > 0);
+  const hasActiveFilters = !!(search.debouncedValue || ratingFilter !== "all" || mediaTypeFilter !== "all" || genreFilter.size > 0 || countryFilter.size > 0);
 
   return (
     <div className="space-y-5">
@@ -421,11 +432,35 @@ export function WatchedTab() {
               </div>
 
               <GenreFilter
-                genres={uniqueGenres}
+                genres={filterGenres}
                 selected={genreFilter}
                 onSelect={(g) => { setGenreFilter(g); setCurrentPage(0); }}
               />
-              {/* Show active genre count */}
+              {genreFilter.size > 0 && (
+                <div className="flex items-center gap-1 mb-2 sm:mb-3">
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => { setGenreFilter(new Set()); setCurrentPage(0); }}
+                  >
+                    {t("manage.clear_filter")}
+                  </button>
+                </div>
+              )}
+              <CountryFilter
+                countries={filterCountries}
+                selected={countryFilter}
+                onSelect={(c) => { setCountryFilter(c); setCurrentPage(0); }}
+              />
+              {countryFilter.size > 0 && (
+                <div className="flex items-center gap-1 mb-2 sm:mb-3">
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => { setCountryFilter(new Set()); setCurrentPage(0); }}
+                  >
+                    {t("manage.clear_filter")}
+                  </button>
+                </div>
+              )}
               {genreFilter.size > 0 && (
                 <div className="flex items-center gap-1 mb-2 sm:mb-3">
                   <button

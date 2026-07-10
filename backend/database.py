@@ -544,13 +544,13 @@ def _run_per_user_column_migrations(user_id: int):
         return
 
     if "session_id" in columns:
-        _drop_column_if_exists("media_items", "session_id")
+        _drop_column_if_exists("media_items", "session_id", engine=engine)
 
     # Drop director / actors columns (no longer scraped)
     if "director" in columns:
-        _drop_column_if_exists("media_items", "director")
+        _drop_column_if_exists("media_items", "director", engine=engine)
     if "actors" in columns:
-        _drop_column_if_exists("media_items", "actors")
+        _drop_column_if_exists("media_items", "actors", engine=engine)
 
     try:
         log_columns = [c["name"] for c in inspector.get_columns("operation_logs")]
@@ -561,7 +561,7 @@ def _run_per_user_column_migrations(user_id: int):
         ("username", "VARCHAR(64) NOT NULL"),
         ("action", "VARCHAR(64) NOT NULL"),
         ("detail", "VARCHAR(500)"),
-    ])
+    ], engine=engine)
 
     # ── Migration: recommendations.tmdb_id ──
     try:
@@ -570,7 +570,7 @@ def _run_per_user_column_migrations(user_id: int):
         rec_columns = []
     _add_columns_if_missing("recommendations", rec_columns, [
         ("tmdb_id", "VARCHAR(50)"),
-    ])
+    ], engine=engine)
 
     # ── Data migration: ensure items with sort_order are marked as pinned ──
     _fix_top_rated_pins(user_id, engine)
@@ -634,24 +634,31 @@ def _add_columns_if_missing(table: str, existing_columns: list[str], columns: li
                         raise
 
 
-def _drop_column_if_exists(table: str, column: str):
-    """Drop a column from a table if it exists."""
-    from sqlalchemy import inspect, text
+def _drop_column_if_exists(table: str, column: str, engine=None):
+    """Drop a column from a table if it exists.
 
-    inspector = inspect(master_engine)
-    fks = inspector.get_foreign_keys(table)
-    fk_name = None
-    for fk in fks:
-        if column in fk.get("constrained_columns", []):
-            fk_name = fk.get("name")
-            break
+    Accepts an optional ``engine`` parameter; defaults to ``master_engine``.
+    Unlike ``ALTER TABLE ... DROP COLUMN IF EXISTS`` (which requires
+    SQLite ≥ 3.35.0), this uses a try/except approach for broader
+    compatibility.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
 
-    with master_engine.connect() as conn:
-        if fk_name:
-            conn.execute(text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {fk_name}"))
+    target = engine or master_engine
+    db_label = "per-user DB" if engine else "master DB"
+
+    with target.connect() as conn:
+        try:
+            conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
             conn.commit()
-        conn.execute(text(f"ALTER TABLE {table} DROP COLUMN IF EXISTS {column}"))
-        conn.commit()
-        print(f"  [Migration] Dropped '{column}' column from {table} table")
+            print(f"  [Migration] Dropped '{column}' column from {table} table ({db_label})")
+        except OperationalError as e:
+            err_msg = str(e).lower()
+            # "no such column" — column already gone from a previous run
+            if "no such column" in err_msg:
+                conn.rollback()
+            else:
+                raise
 
 

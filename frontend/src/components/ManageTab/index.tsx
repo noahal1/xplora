@@ -18,7 +18,6 @@ import { ScrapeSourceFilter } from "../ScrapeSourceFilter";
 import FadeContent from "../FadeContent";
 import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
-import { useGenreExtractor } from "../../hooks/useGenreExtractor";
 import { useSort } from "../../hooks/useSort";
 import { isAbortError, getErrMsg } from "../../lib/utils";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
@@ -331,26 +330,20 @@ export function ManageTab() {
   /* ── Pagination helpers ──────────────────────────────────────── */
   const totalPages = Math.ceil(total / MANAGE_PAGE_SIZE);
 
-  // Derive unique genre tags from loaded media list
-  const uniqueGenres = useGenreExtractor(mediaList);
+  // ── Fetch all unique countries & genres for filter dropdowns ──
+  const [filterCountries, setFilterCountries] = useState<string[]>([]);
+  const [filterGenres, setFilterGenres] = useState<string[]>([]);
 
-  // Derive unique country tags from loaded media list
-  const uniqueCountries = useMemo(() => {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const item of mediaList) {
-      if (item.country) {
-        for (const c of item.country.split("/")) {
-          const normalized = c.trim();
-          if (normalized && !seen.has(normalized)) {
-            seen.add(normalized);
-            result.push(normalized);
-          }
-        }
+  useEffect(() => {
+    let cancelled = false;
+    api.getMediaFilters().then((data) => {
+      if (!cancelled) {
+        setFilterCountries(data.countries);
+        setFilterGenres(data.genres);
       }
-    }
-    return result.sort((a, b) => a.localeCompare(b));
-  }, [mediaList]);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const VISIBLE_GENRES = 6;
 
@@ -455,7 +448,7 @@ export function ManageTab() {
           </div>
 
           <GenreFilter
-            genres={uniqueGenres}
+            genres={filterGenres}
             selected={genreFilter}
             visibleCount={VISIBLE_GENRES}
             onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
@@ -471,7 +464,7 @@ export function ManageTab() {
             </div>
           )}
           <CountryFilter
-            countries={uniqueCountries}
+            countries={filterCountries}
             selected={countryFilter}
             visibleCount={VISIBLE_GENRES}
             onSelect={(c) => { setCountryFilter(c); setPage(0); setSelected(new Set()); }}

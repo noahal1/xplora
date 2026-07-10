@@ -342,6 +342,7 @@ def scrape_movie_metadata(title: str, year: Optional[int]) -> Optional[dict]:
         futures["tvmaze"] = pool.submit(
             _try_source, search_tvmaze,
             title, year, title_variants, variant_pinyins, "tvmaze",
+            "tv" if season_number else "movie", season_number,
         )
 
         # Collect results in merge-priority order:

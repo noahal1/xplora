@@ -387,8 +387,12 @@ async def enrich_media_metadata_endpoint(
         match = movie_results[0] if movie_results else results[0]
 
     source_id = match.get("source_id", "")
+    # Use the actual source from the match result (e.g. "tmdb" or "tvmaze")
+    # instead of the user-requested source, because the search may have
+    # returned a match from a different source than requested.
+    match_source = match.get("source", source)
     if not source_id:
-        raise HTTPException(status_code=502, detail="TMDB 搜索结果缺少 source_id")
+        raise HTTPException(status_code=502, detail=f"{match_source.upper()} 搜索结果缺少 source_id")
 
     # Pass media_type from search result so TV series use /tv/{id} instead of /movie/{id}
     media_type = match.get("media_type", "movie")
@@ -396,11 +400,11 @@ async def enrich_media_metadata_endpoint(
     # the season-specific metadata (season poster, episode count) is refreshed
     season_number = media_item.season_number if media_type == "tv" else None
     try:
-        detail = get_external_movie_detail("tmdb", source_id, media_type=media_type, season_number=season_number)
+        detail = get_external_movie_detail(match_source, source_id, media_type=media_type, season_number=season_number)
     except RuntimeError as e:
         raise HTTPException(
             status_code=502,
-            detail=f"获取 TMDB 详情失败：{str(e)}。搜索已成功但获取详情失败，可能是 TMDB 限流或网络问题。",
+            detail=f"获取 {match_source.upper()} 详情失败：{str(e)}。搜索已成功但获取详情失败，可能是 API 限流或网络问题。",
         )
 
     # Explicitly set media_type on the detail dict so that
@@ -584,6 +588,49 @@ async def delete_all_media_endpoint(
     count = delete_all_media_for_user(current_user["id"], db=db)
     log_operation(current_user["id"], current_user["username"], "clear_all_media", f"清空所有条目: {count} 条", db=db)
     return {"status": "deleted", "count": count}
+
+
+# ── Media Filters (countries & genres for filter dropdowns) ─────────
+
+
+@router.get("/media/filters")
+async def media_filters(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Return all unique countries and genres across the current user's media library.
+
+    Used by the frontend to populate filter dropdowns with the full set
+    of available options, regardless of pagination.
+    """
+    from sqlmodel import select
+    from models import MediaItemRecord
+
+    records = db.exec(
+        select(MediaItemRecord.country, MediaItemRecord.genre).where(
+            MediaItemRecord.user_id == current_user["id"]
+        )
+    ).all()
+
+    countries_set: set[str] = set()
+    genres_set: set[str] = set()
+
+    for country, genre in records:
+        if country:
+            for c in country.split("/"):
+                c = c.strip()
+                if c:
+                    countries_set.add(c)
+        if genre:
+            for g in genre.split(" / "):
+                g = g.strip()
+                if g:
+                    genres_set.add(g)
+
+    return {
+        "countries": sorted(countries_set),
+        "genres": sorted(genres_set),
+    }
 
 
 # ── External Media Search ───────────────────────────────────────────

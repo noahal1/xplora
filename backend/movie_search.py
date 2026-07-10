@@ -489,6 +489,8 @@ def get_movie_detail(source: str, source_id: str, media_type: str = "movie", sea
         media_type: ``"movie"`` or ``"tv"`` (only used for TMDB).
         season_number: If set and source is TMDB TV, also fetch
             season-specific metadata from ``/tv/{id}/season/{n}``.
+            If set and source is TVmaze, filter embedded episodes
+            to count only episodes from that season.
     """
     tmdb_key = get_config_api_key("tmdb")
 
@@ -499,7 +501,7 @@ def get_movie_detail(source: str, source_id: str, media_type: str = "movie", sea
             return _get_tmdb_tv_detail(source_id, tmdb_key, season_number=season_number)
         return _get_tmdb_detail(source_id, tmdb_key)
     elif source == "tvmaze":
-        return _get_tvmaze_detail(source_id)
+        return _get_tvmaze_detail(source_id, season_number=season_number)
     else:
         raise RuntimeError(f"Unknown source: {source}")
 
@@ -688,7 +690,7 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
 # ============================================
 
 
-def _get_tvmaze_detail(show_id: str) -> dict:
+def _get_tvmaze_detail(show_id: str, season_number: Optional[int] = None) -> dict:
     """Fetch full TV series details from TVmaze by show ID.
 
     TVmaze is free and requires no API key. The response includes
@@ -696,10 +698,12 @@ def _get_tvmaze_detail(show_id: str) -> dict:
     external IDs (IMDb, TheTVDB), and more.
 
     Uses ``?embed=episodes`` to get the episode list, which is
-    counted to populate ``season_episode_count`` (total series
-    episodes).  This value is compatible with the field_map in
-    ``enrich_media_metadata``, so it is saved as ``episode_count``
-    in the database when TVmaze is the primary match source.
+    counted to populate ``season_episode_count``.
+
+    If ``season_number`` is provided, only episodes from that
+    season are counted — so the episode count accurately reflects
+    a specific season's number of episodes rather than the total
+    series episode count.
     """
     url = f"{TVMAZE_BASE}/shows/{show_id}"
     params = {"embed": "episodes"}
@@ -732,12 +736,24 @@ def _get_tvmaze_detail(show_id: str) -> dict:
     # Build a runtime-like field: average episode runtime
     avg_runtime = data.get("averageRuntime") or data.get("runtime") or None
 
-    # Extract total episode count from embedded season list
+    # ── Episode count: filter by season if season_number is known ──
     embedded = data.get("_embedded") or {}
     episodes_list = embedded.get("episodes") or []
-    episode_count = len(episodes_list) if episodes_list else None
+    if season_number is not None:
+        # TVmaze episodes have a ``season`` field — filter to match
+        season_episodes = [
+            ep for ep in episodes_list
+            if ep.get("season") == season_number
+        ]
+        episode_count = len(season_episodes) if season_episodes else None
+    else:
+        episode_count = len(episodes_list) if episodes_list else None
 
-    return {
+    # TVmaze has no native tv_series_id; use the same show_id so that
+    # all seasons of the same show share a common grouping key.
+    tv_series_id = show_id
+
+    result = {
         "title": data.get("name", ""),
         "year": year,
         "genre": genre_str,
@@ -751,6 +767,7 @@ def _get_tvmaze_detail(show_id: str) -> dict:
         "original_language": data.get("language", ""),
         "source": "tvmaze",
         "source_id": show_id,
+        "tv_series_id": tv_series_id,
         "media_type": "tv",
         "writer": "",
         "country": network.get("country", {}).get("name", "") if network else "",
@@ -762,6 +779,13 @@ def _get_tvmaze_detail(show_id: str) -> dict:
         "seasons": None,
         "episodes": None,
     }
+
+    # Also set season_number in the result so enrich_media_metadata can
+    # save it to the database — consistent with TMDB TV path.
+    if season_number is not None:
+        result["season_number"] = season_number
+
+    return result
 
 
 # ============================================

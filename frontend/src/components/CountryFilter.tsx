@@ -68,7 +68,7 @@ export function CountryFilter({
             style={isNew(i) ? { animationDelay: `${(i - effectiveVisibleCount) * 30}ms` } : undefined}
             onClick={() => toggleCountry(c)}
           >
-            {c}
+            {t(`countries.${c}`, c)}
           </button>
         ))}
         {hasMore && (

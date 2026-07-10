@@ -7,6 +7,7 @@ import { Pagination } from "../Pagination";
 import { DetailModal } from "../ManageTab/DetailModal";
 import CountUp from "../CountUp";
 import { MediaTypeFilter } from "../MediaTypeFilter";
+import { CountryFilter } from "../CountryFilter";
 import { SortControls } from "../SortControls";
 import { SearchInput } from "../SearchInput";
 import { FilterBar } from "../shared/FilterBar";
@@ -52,6 +53,15 @@ export function WishlistTab() {
   const [items, setItems] = useState<WishlistEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set());
+  const [filterCountries, setFilterCountries] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    api.getMediaFilters().then((data) => {
+      if (!cancelled) setFilterCountries(data.countries);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [loading, setLoading] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
@@ -74,7 +84,7 @@ export function WishlistTab() {
 
   // ── Load wishlist from API ──
 
-  const loadWishlist = useCallback(async (page: number, search: string, sortF: string, sortD: string, mediaType: string, signal?: AbortSignal) => {
+  const loadWishlist = useCallback(async (page: number, search: string, sortF: string, sortD: string, mediaType: string, country: Set<string>, signal?: AbortSignal) => {
     setLoading(true);
     try {
       const data = await api.listMedia({
@@ -85,6 +95,7 @@ export function WishlistTab() {
         sort_field: sortF,
         sort_dir: sortD,
         media_type: (mediaType !== "all" ? mediaType : undefined),
+        country: (country.size > 0 ? Array.from(country).join(",") : undefined),
         signal,
       });
       if (signal?.aborted) return;
@@ -102,9 +113,9 @@ export function WishlistTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadWishlist(currentPage, filter.debouncedValue, sortField, sortDir, mediaTypeFilter, controller.signal);
+    loadWishlist(currentPage, filter.debouncedValue, sortField, sortDir, mediaTypeFilter, countryFilter, controller.signal);
     return () => controller.abort();
-  }, [currentPage, filter.debouncedValue, sortField, sortDir, mediaTypeFilter, reloadTrigger, loadWishlist]);
+  }, [currentPage, filter.debouncedValue, sortField, sortDir, mediaTypeFilter, countryFilter, reloadTrigger, loadWishlist]);
 
 
 
@@ -196,6 +207,21 @@ export function WishlistTab() {
                   onSelect={(v) => { setMediaTypeFilter(v); setCurrentPage(0); }}
                 />
               </div>
+              <CountryFilter
+                countries={filterCountries}
+                selected={countryFilter}
+                onSelect={(c) => { setCountryFilter(c); setCurrentPage(0); }}
+              />
+              {countryFilter.size > 0 && (
+                <div className="flex items-center gap-1 mb-2 sm:mb-3">
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => { setCountryFilter(new Set()); setCurrentPage(0); }}
+                  >
+                    {t("manage.clear_filter")}
+                  </button>
+                </div>
+              )}
             </div>
           </FilterBar>
           {loading ? (

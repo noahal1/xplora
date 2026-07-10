@@ -423,6 +423,14 @@ export async function getMediaDiagnostics(): Promise<{
   return fetchJSON(`${API_BASE}/media/diagnostics`, { headers: getAuthHeaders() });
 }
 
+/** Get all unique countries and genres for filter dropdowns */
+export async function getMediaFilters(): Promise<{
+  countries: string[];
+  genres: string[];
+}> {
+  return fetchJSON(`${API_BASE}/media/filters`, { headers: getAuthHeaders() });
+}
+
 /** Fetch health status */
 export async function getHealth(): Promise<{
   status: string;

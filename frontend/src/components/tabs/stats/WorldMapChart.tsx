@@ -254,7 +254,7 @@ export function WorldMapChart({ data }: Props) {
         const width = 800;
         const height = 330;
         const projection = geoMercator()
-          .center([0, 12])
+          .center([0, 15])
           .scale(150)
           .translate([width / 2, height / 2]);
 
