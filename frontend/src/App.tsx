@@ -52,9 +52,9 @@ function MainApp() {
   const currentTabIndex = tabOrder.indexOf(location.pathname);
   const prevTabIndex = tabOrder.indexOf(prevPath);
 
-  // Going forward = content slides in from right; going back = slides in from left
+  // For non-tab pages (admin, profile), always animate forward
   const goingForward =
-    prevTabIndex === -1 || currentTabIndex >= prevTabIndex;
+    prevTabIndex === -1 || currentTabIndex === -1 || currentTabIndex >= prevTabIndex;
   const pageAnimClass = goingForward
     ? "animate-page-slide-in-right"
     : "animate-page-slide-in-left";
@@ -101,6 +101,11 @@ function MainApp() {
                   <Route path="/top-rated" element={<TopRatedTab />} />
                   <Route path="/stats" element={<StatsTab />} />
                   <Route path="/manage" element={<ManageTab />} />
+                  <Route path="/admin/users" element={<AdminUsersPage />} />
+                  <Route path="/admin/logs" element={<AdminLogsPage />} />
+                  <Route path="/admin/diagnostics" element={<AdminDiagnosticsPage />} />
+                  <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+                  <Route path="/profile" element={<ProfilePage />} />
                 </Routes>
               </Suspense>
             </div>
@@ -123,18 +128,6 @@ export default function App() {
       }>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/admin/users" element={<ProtectedRoute><AdminUsersPage /></ProtectedRoute>} />
-          <Route path="/admin/logs" element={<ProtectedRoute><AdminLogsPage /></ProtectedRoute>} />
-          <Route path="/admin/diagnostics" element={<ProtectedRoute><AdminDiagnosticsPage /></ProtectedRoute>} />
-          <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
           <Route
             path="/*"
             element={

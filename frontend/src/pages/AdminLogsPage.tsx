@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { listOperationLogs } from "../api";
 import { useNavigate } from "react-router-dom";
@@ -12,7 +11,6 @@ const LOG_PAGE_SIZE = 30;
 
 export function AdminLogsPage() {
   const { t } = useTranslation();
-  const { logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [logs, setLogs] = useState<Array<{ id: number; user_id: number; username: string; action: string; detail: string | null; created_at: string }>>([]);
@@ -61,27 +59,19 @@ export function AdminLogsPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("/")}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-          </button>
-          <h1 className="text-lg font-semibold tracking-tight">{t("admin.tab_logs")}</h1>
-        </div>
+      <div className="flex items-center gap-3 mb-2">
         <button
-          onClick={logout}
-          className="btn btn-ghost btn-sm text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={() => navigate("/")}
+          className="text-muted-foreground hover:text-foreground transition-colors"
         >
-          {t("admin.logout")}
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
         </button>
+        <h1 className="text-lg font-semibold tracking-tight">{t("admin.tab_logs")}</h1>
       </div>
 
       <FadeContent className="section-card">
