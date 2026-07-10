@@ -1,12 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { getMediaDiagnostics, enrichAllMedia } from "../api";
+import { getMediaDiagnostics, enrichAllMedia, enrichMedia } from "../api";
 import { getErrMsg } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
+import type { MediaDetail } from "../types";
 import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
-import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Quote, Search, CheckCircle, XCircle } from "lucide-react";
+import { RematchModal } from "../components/ManageTab/RematchModal";
+import { DetailModal } from "../components/ManageTab/DetailModal";
+import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Quote, Search, CheckCircle, XCircle, Sparkles, Loader2, Info } from "lucide-react";
 
 interface DiagItem {
   id: number;
@@ -19,6 +22,18 @@ interface DiagItem {
   missing_count: number;
   has_scrape_error: boolean;
   scrape_error: string | null;
+  poster_url: string | null;
+  overview: string | null;
+  genre: string | null;
+  runtime: number | null;
+  imdb_id: string | null;
+  tmdb_id: string | null;
+  country: string | null;
+  tagline: string | null;
+  tv_series_id: string | null;
+  season_number: number | null;
+  episode_count: number | null;
+  series_poster_url: string | null;
   created_at: string;
 }
 
@@ -55,6 +70,31 @@ const FILTER_OPTIONS = [
   { value: "scrape_error", label: "刮削异常", icon: "XCircle" },
 ];
 
+function toMediaDetail(item: DiagItem): MediaDetail {
+  return {
+    id: item.id,
+    title: item.title,
+    year: item.year,
+    media_type: item.media_type,
+    status: item.status,
+    rating: item.rating,
+    scrape_error: item.scrape_error,
+    poster_url: item.poster_url,
+    genre: item.genre,
+    overview: item.overview,
+    runtime: item.runtime,
+    imdb_id: item.imdb_id,
+    tmdb_id: item.tmdb_id,
+    country: item.country,
+    tagline: item.tagline,
+    tv_series_id: item.tv_series_id,
+    season_number: item.season_number,
+    episode_count: item.episode_count,
+    series_poster_url: item.series_poster_url,
+    created_at: item.created_at,
+  };
+}
+
 export function AdminDiagnosticsPage() {
   const { logout } = useAuth();
   const { showToast } = useToast();
@@ -64,6 +104,9 @@ export function AdminDiagnosticsPage() {
   const [enriching, setEnriching] = useState(false);
   const [diagFilter, setDiagFilter] = useState<string>("all");
   const [diagPage, setDiagPage] = useState(0);
+  const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
+  const [rematchMovie, setRematchMovie] = useState<MediaDetail | null>(null);
+  const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
 
   const filteredItems = useMemo(() => {
     if (!diagData) return [];
@@ -78,6 +121,19 @@ export function AdminDiagnosticsPage() {
   }, [filteredItems, diagPage]);
 
   const diagTotalPages = Math.ceil(filteredItems.length / DIAG_PAGE_SIZE);
+
+  const handleEnrich = async (item: DiagItem) => {
+    setEnrichingIds(prev => new Set(prev).add(item.id));
+    try {
+      await enrichMedia(item.id, "tmdb");
+      showToast(`「${item.title}」刮削成功`, "success");
+      loadDiagnostics();
+    } catch (err) {
+      showToast(`刮削失败: ${getErrMsg(err)}`, "error");
+    } finally {
+      setEnrichingIds(prev => { const next = new Set(prev); next.delete(item.id); return next; });
+    }
+  };
 
   const loadDiagnostics = async () => {
     setDiagLoading(true);
@@ -323,6 +379,7 @@ export function AdminDiagnosticsPage() {
                         <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-16">状态</th>
                         <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">缺失字段</th>
                         <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">刮削错误</th>
+                        <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-20">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -357,13 +414,32 @@ export function AdminDiagnosticsPage() {
                           </td>
                           <td className="px-2 py-2.5">
                             {item.scrape_error ? (
-                              <span className="text-[10px] text-red-500/80 block max-w-[200px] truncate" title={item.scrape_error}>
+                              <span className="text-[10px] text-red-500/80 block max-w-[160px] truncate" title={item.scrape_error}>
                                 <XCircle size={10} className="inline mr-0.5" />
                                 {item.scrape_error}
                               </span>
                             ) : (
                               <span className="text-[10px] text-muted-foreground">—</span>
                             )}
+                          </td>
+                          <td className="px-2 py-2.5 whitespace-nowrap">
+                            <div className="inline-flex items-center gap-0.5" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
+                              <button
+                                className={`px-1.5 py-1 rounded transition-colors ${enrichingIds.has(item.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
+                                onClick={() => handleEnrich(item)}
+                                disabled={enrichingIds.has(item.id)}
+                                title={enrichingIds.has(item.id) ? "刮削中..." : "刮削"}
+                              >
+                                {enrichingIds.has(item.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                              </button>
+                              <button
+                                className={`px-1.5 py-1 rounded transition-colors ${item.has_scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
+                                onClick={() => setRematchMovie(toMediaDetail(item))}
+                                title={item.has_scrape_error ? "重新匹配（刮削异常）" : "重新匹配"}
+                              >
+                                <Search size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -400,6 +476,14 @@ export function AdminDiagnosticsPage() {
           </div>
         )}
       </FadeContent>
+
+      {/* ── Rematch Modal ──────────────────────────────────── */}
+      <RematchModal
+        open={rematchMovie !== null}
+        movie={rematchMovie}
+        onClose={() => setRematchMovie(null)}
+        onSuccess={() => { setRematchMovie(null); loadDiagnostics(); }}
+      />
     </div>
   );
 }

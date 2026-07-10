@@ -815,6 +815,18 @@ async def media_diagnostics(
             "missing_count": len(missing_fields),
             "has_scrape_error": r.scrape_error is not None,
             "scrape_error": r.scrape_error,
+            "poster_url": r.poster_url,
+            "overview": r.overview,
+            "genre": r.genre,
+            "runtime": r.runtime,
+            "imdb_id": r.imdb_id,
+            "tmdb_id": r.tmdb_id,
+            "country": r.country,
+            "tagline": r.tagline,
+            "tv_series_id": r.tv_series_id,
+            "season_number": r.season_number,
+            "episode_count": r.episode_count,
+            "series_poster_url": r.series_poster_url,
             "created_at": r.created_at.isoformat() if r.created_at else "",
         })
 
