@@ -110,7 +110,7 @@ export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
                       {avgRating.toFixed(1)} avg
                     </span>
                     <span className="text-white/50 text-[9px] ml-auto">
-                      {group.seasons.length}季
+                      {t("watched.seasons_count", { count: group.seasons.length })}
                     </span>
                   </div>
                 </div>
@@ -130,7 +130,7 @@ export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
           <span className="font-semibold ml-1">{avgRating.toFixed(1)}</span>
           <span className="ml-1 opacity-60">avg</span>
           <span className="mx-1.5 opacity-30">·</span>
-          <span className="opacity-60">{group.seasons.length}季</span>
+          <span className="opacity-60">{t("watched.seasons_count", { count: group.seasons.length })}</span>
         </div>
       </div>
     </div>

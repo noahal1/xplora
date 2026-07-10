@@ -78,7 +78,7 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
                 TV
               </Badge>
               <span className="badge font-mono text-[10px] shrink-0">
-                {group.seasons.length}季
+                {t("watched.seasons_count", { count: group.seasons.length })}
               </span>
             </div>
 

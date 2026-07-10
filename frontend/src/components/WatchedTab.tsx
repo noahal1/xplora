@@ -461,16 +461,6 @@ export function WatchedTab() {
                   </button>
                 </div>
               )}
-              {genreFilter.size > 0 && (
-                <div className="flex items-center gap-1 mb-2 sm:mb-3">
-                  <button
-                    className="text-xs text-muted-foreground hover:text-foreground underline"
-                    onClick={() => { setGenreFilter(new Set()); setCurrentPage(0); }}
-                  >
-                    {t("manage.clear_filter")}
-                  </button>
-                </div>
-              )}
             </div>
           </FilterBar>
 

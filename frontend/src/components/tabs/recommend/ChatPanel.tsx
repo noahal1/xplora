@@ -61,18 +61,23 @@ export function ChatPanel({ messages, isProcessing, onSend }: ChatPanelProps) {
       </div>
 
       <div className="flex gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-        <input
-          type="text"
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={t("recommend.chat_placeholder")}
-          className="input-field flex-1"
+          className="input-field flex-1 resize-none min-h-[36px] max-h-[120px] py-2 leading-relaxed"
+          rows={1}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
+          onInput={(e) => {
+            const el = e.currentTarget;
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+          }}
         />
         <button
           onClick={handleSend}
           disabled={isProcessing || !input.trim()}
-          className="btn btn-primary w-9 h-9 flex items-center justify-center shrink-0"
+          className="btn btn-primary w-9 h-9 flex items-center justify-center shrink-0 self-end"
         >
           <Send size={14} />
         </button>
