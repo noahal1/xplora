@@ -204,32 +204,12 @@ export function TMDBDetailModal({
           )}
 
           {/* Credits */}
-          {(data.director || data.actors || data.writer) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {data.director && (
-                <div>
-                  <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>
-                    {t("detail_modal.director")}
-                  </h4>
-                  <p className="text-sm">{data.director}</p>
-                </div>
-              )}
-              {data.writer && (
-                <div>
-                  <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>
-                    {t("detail_modal.writer")}
-                  </h4>
-                  <p className="text-sm">{data.writer}</p>
-                </div>
-              )}
-              {data.actors && (
-                <div className="col-span-2">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>
-                    {t("detail_modal.actors")}
-                  </h4>
-                  <p className="text-sm">{data.actors}</p>
-                </div>
-              )}
+          {data.writer && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>
+                {t("detail_modal.writer")}
+              </h4>
+              <p className="text-sm">{data.writer}</p>
             </div>
           )}
 

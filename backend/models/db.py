@@ -45,8 +45,6 @@ class MediaItemRecord(SQLModel, table=True):
     # === Metadata fields (populated by TMDB / OMDb scraping) ===
     poster_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
     overview: Optional[str] = Field(default=None, nullable=True)
-    director: Optional[str] = Field(default=None, max_length=255, nullable=True)
-    actors: Optional[str] = Field(default=None, max_length=500, nullable=True)
     runtime: Optional[int] = Field(default=None, nullable=True)
     imdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
     tmdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)

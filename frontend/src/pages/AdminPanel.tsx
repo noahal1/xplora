@@ -33,8 +33,6 @@ interface DiagData {
     has_issues: number;
     missing_poster_url: number;
     missing_overview: number;
-    missing_director: number;
-    missing_actors: number;
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
@@ -113,8 +111,6 @@ export function AdminPanel() {
     { value: "all", label: "全部", icon: null },
     { value: "poster_url", label: "海报", icon: "Image" },
     { value: "overview", label: "简介", icon: "FileText" },
-    { value: "director", label: "导演", icon: "User" },
-    { value: "actors", label: "演员", icon: "User" },
     { value: "runtime", label: "时长", icon: "Clock" },
     { value: "tmdb_id", label: "TMDB ID", icon: "Hash" },
     { value: "country", label: "国家", icon: "MapPin" },
@@ -589,26 +585,6 @@ export function AdminPanel() {
                     <div>
                       <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_overview}</div>
                       <div className="text-[10px] text-muted-foreground">缺失简介</div>
-                    </div>
-                  </div>
-
-                  <div className="card p-3 flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                      <User size={16} className="text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_director}</div>
-                      <div className="text-[10px] text-muted-foreground">缺失导演</div>
-                    </div>
-                  </div>
-
-                  <div className="card p-3 flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                      <User size={16} className="text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_actors}</div>
-                      <div className="text-[10px] text-muted-foreground">缺失演员</div>
                     </div>
                   </div>
 

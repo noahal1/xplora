@@ -6,7 +6,7 @@ import { getErrMsg } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
-import { AlertTriangle, Image, FileText, User, Clock, Hash, MapPin, Quote, Search, CheckCircle, XCircle } from "lucide-react";
+import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Quote, Search, CheckCircle, XCircle } from "lucide-react";
 
 interface DiagItem {
   id: number;
@@ -29,12 +29,12 @@ interface DiagData {
     has_issues: number;
     missing_poster_url: number;
     missing_overview: number;
-    missing_director: number;
-    missing_actors: number;
+
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
     missing_tagline: number;
+    missing_episode_count: number;
     has_scrape_error: number;
   };
   items: DiagItem[];
@@ -46,8 +46,8 @@ const FILTER_OPTIONS = [
   { value: "all", label: "全部", icon: null },
   { value: "poster_url", label: "海报", icon: "Image" },
   { value: "overview", label: "简介", icon: "FileText" },
-  { value: "director", label: "导演", icon: "User" },
-  { value: "actors", label: "演员", icon: "User" },
+
+  { value: "episode_count", label: "集数", icon: "Hash" },
   { value: "runtime", label: "时长", icon: "Clock" },
   { value: "tmdb_id", label: "TMDB ID", icon: "Hash" },
   { value: "country", label: "国家", icon: "MapPin" },
@@ -221,31 +221,21 @@ export function AdminDiagnosticsPage() {
 
               <div className="card p-3 flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <User size={16} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_director}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失导演</div>
-                </div>
-              </div>
-
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <User size={16} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_actors}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失演员</div>
-                </div>
-              </div>
-
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
                   <Clock size={16} className="text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
                   <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_runtime}</div>
                   <div className="text-[10px] text-muted-foreground">缺失时长</div>
+                </div>
+              </div>
+
+              <div className="card p-3 flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                  <Hash size={16} className="text-violet-600 dark:text-violet-400" />
+                </div>
+                <div>
+                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_episode_count}</div>
+                  <div className="text-[10px] text-muted-foreground">缺失集数（TV）</div>
                 </div>
               </div>
 

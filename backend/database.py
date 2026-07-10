@@ -516,8 +516,7 @@ def _run_column_migrations():
         ("notes", "VARCHAR(500)"),
         ("poster_url", "VARCHAR(500)"),
         ("overview", "TEXT"),
-        ("director", "VARCHAR(255)"),
-        ("actors", "VARCHAR(500)"),
+
         ("runtime", "INTEGER"),
         ("imdb_id", "VARCHAR(50)"),
         ("tmdb_id", "VARCHAR(50)"),
@@ -546,6 +545,12 @@ def _run_per_user_column_migrations(user_id: int):
 
     if "session_id" in columns:
         _drop_column_if_exists("media_items", "session_id")
+
+    # Drop director / actors columns (no longer scraped)
+    if "director" in columns:
+        _drop_column_if_exists("media_items", "director")
+    if "actors" in columns:
+        _drop_column_if_exists("media_items", "actors")
 
     try:
         log_columns = [c["name"] for c in inspector.get_columns("operation_logs")]

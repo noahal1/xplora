@@ -78,18 +78,8 @@ export function WishlistDetailModal({ open, movie, detailData, loading, error, o
             </div>
           )}
 
-          {(detailData.director || detailData.actors || detailData.writer) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {detailData.director && (
-                <div><h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">{t("detail_modal.director")}</h4><p className="text-sm">{detailData.director}</p></div>
-              )}
-              {detailData.writer && (
-                <div><h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">{t("detail_modal.writer")}</h4><p className="text-sm">{detailData.writer}</p></div>
-              )}
-              {detailData.actors && (
-                <div className="col-span-2"><h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">{t("detail_modal.actors")}</h4><p className="text-sm">{detailData.actors}</p></div>
-              )}
-            </div>
+          {detailData.writer && (
+            <div><h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">{t("detail_modal.writer")}</h4><p className="text-sm">{detailData.writer}</p></div>
           )}
 
           {(detailData.country || detailData.box_office) && (

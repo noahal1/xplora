@@ -272,8 +272,7 @@ async def list_media(
                 "media_type": r.media_type,
                 "poster_url": r.poster_url,
                 "overview": r.overview,
-                "director": r.director,
-                "actors": r.actors,
+
                 "runtime": r.runtime,
                 "imdb_id": r.imdb_id,
                 "tmdb_id": r.tmdb_id,
@@ -311,8 +310,7 @@ async def update_media_endpoint(
         genre=data.get("genre"),
         poster_url=data.get("poster_url"),
         overview=data.get("overview"),
-        director=data.get("director"),
-        actors=data.get("actors"),
+
         runtime=data.get("runtime"),
         imdb_id=data.get("imdb_id"),
         tmdb_id=data.get("tmdb_id"),
@@ -339,8 +337,6 @@ async def update_media_endpoint(
         "media_type": updated.media_type,
         "poster_url": updated.poster_url,
         "overview": updated.overview,
-        "director": updated.director,
-        "actors": updated.actors,
         "runtime": updated.runtime,
         "imdb_id": updated.imdb_id,
         "tmdb_id": updated.tmdb_id,
@@ -449,8 +445,6 @@ async def enrich_media_metadata_endpoint(
         "status": updated.status,
         "poster_url": updated.poster_url,
         "overview": updated.overview,
-        "director": updated.director,
-        "actors": updated.actors,
         "runtime": updated.runtime,
         "imdb_id": updated.imdb_id,
         "tmdb_id": updated.tmdb_id,
@@ -622,7 +616,7 @@ async def rematch_media(
 
     Accepts ``{"source": "tmdb", "source_id": "12345"}``, fetches
     the full detail from the source, updates the metadata fields
-    (poster, overview, director, actors, etc.), clears ``scrape_error``,
+    (poster, overview, runtime, etc.), clears ``scrape_error``,
     and downloads+caches the poster locally.
     """
     source = request.get("source", "")
@@ -675,8 +669,6 @@ async def rematch_media(
         "status": updated.status,
         "poster_url": updated.poster_url,
         "overview": updated.overview,
-        "director": updated.director,
-        "actors": updated.actors,
         "runtime": updated.runtime,
         "imdb_id": updated.imdb_id,
         "tmdb_id": updated.tmdb_id,
@@ -734,8 +726,7 @@ async def media_diagnostics(
     METADATA_FIELDS = [
         ("poster_url", "海报"),
         ("overview", "简介"),
-        ("director", "导演"),
-        ("actors", "演员"),
+
         ("runtime", "时长"),
         ("tmdb_id", "TMDB ID"),
         ("country", "国家"),
@@ -755,10 +746,13 @@ async def media_diagnostics(
                 field_missing[attr] += 1
                 missing_fields.append({"field": attr, "label": label})
 
-        # TV-specific: also check series_poster_url for TV items
+        # TV-specific: also check series_poster_url and episode_count for TV items
         if r.media_type == "tv":
             if not r.series_poster_url:
                 missing_fields.append({"field": "series_poster_url", "label": "剧集海报"})
+            if not r.episode_count:
+                missing_fields.append({"field": "episode_count", "label": "集数"})
+                field_missing["episode_count"] = field_missing.get("episode_count", 0) + 1
 
         if not missing_fields and not r.scrape_error:
             continue  # skip fully healthy items
@@ -799,6 +793,8 @@ async def media_diagnostics(
     summary["missing_tmdb_id"] = sum(1 for r in records if not r.tmdb_id)
     # Count items without poster
     summary["missing_poster_url"] = sum(1 for r in records if not r.poster_url)
+    # Count TV items missing episode count
+    summary["missing_episode_count"] = field_missing.get("episode_count", 0)
 
     return {
         "summary": summary,

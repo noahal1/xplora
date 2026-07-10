@@ -66,9 +66,6 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
                 {movie.genre && <span className="truncate">{translateGenres(movie.genre)}</span>}
                 {movie.runtime && <span className="whitespace-nowrap">{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
               </div>
-              {movie.director && (
-                <p className="text-[11px] text-muted-foreground/50 mt-0.5 truncate">{movie.director}</p>
-              )}
             </div>
             <ChevronRight size={14} className="shrink-0 mt-0.5" style={{ color: "var(--fg-dim)" }} />
           </div>
@@ -132,7 +129,6 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
   if (prev.movie.season_number !== next.movie.season_number) return false;
   if (prev.movie.episode_count !== next.movie.episode_count) return false;
   if (prev.movie.runtime !== next.movie.runtime) return false;
-  if (prev.movie.director !== next.movie.director) return false;
   if (prev.isSelected !== next.isSelected) return false;
   return true;
 });

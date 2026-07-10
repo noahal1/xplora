@@ -34,8 +34,6 @@ export interface WishlistEntry {
   episode_count?: number | null;
   poster_url?: string | null;
   overview?: string | null;
-  director?: string | null;
-  actors?: string | null;
   runtime?: number | null;
   imdb_id?: string | null;
   tmdb_id?: string | null;
@@ -90,7 +88,7 @@ export function WishlistTab() {
         signal,
       });
       if (signal?.aborted) return;
-      setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, poster_url: m.poster_url, overview: m.overview, director: m.director, actors: m.actors, runtime: m.runtime, imdb_id: m.imdb_id, tmdb_id: m.tmdb_id, country: m.country, tagline: m.tagline, series_poster_url: m.series_poster_url, season_number: m.season_number, episode_count: m.episode_count })));
+      setItems(data.media.map((m) => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, media_type: m.media_type, poster_url: m.poster_url, overview: m.overview, runtime: m.runtime, imdb_id: m.imdb_id, tmdb_id: m.tmdb_id, country: m.country, tagline: m.tagline, series_poster_url: m.series_poster_url, season_number: m.season_number, episode_count: m.episode_count })));
       setTotal(data.total);
     } catch (err: unknown) {
       if (isAbortError(err)) return;
@@ -278,8 +276,7 @@ export function WishlistTab() {
             media_type: detailSaved.media_type || "movie",
             poster_url: detailSaved.poster_url ?? null,
             overview: detailSaved.overview ?? null,
-            director: detailSaved.director ?? null,
-            actors: detailSaved.actors ?? null,
+
             runtime: detailSaved.runtime ?? null,
             imdb_id: detailSaved.imdb_id ?? null,
             tmdb_id: detailSaved.tmdb_id ?? null,

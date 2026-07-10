@@ -344,8 +344,6 @@ def update_media(
     status: Optional[str] = None,
     poster_url: Optional[str] = None,
     overview: Optional[str] = None,
-    director: Optional[str] = None,
-    actors: Optional[str] = None,
     runtime: Optional[int] = None,
     imdb_id: Optional[str] = None,
     tmdb_id: Optional[str] = None,
@@ -386,10 +384,6 @@ def update_media(
             record.poster_url = poster_url
         if overview is not None:
             record.overview = overview
-        if director is not None:
-            record.director = director
-        if actors is not None:
-            record.actors = actors
         if runtime is not None:
             record.runtime = runtime
         if imdb_id is not None:
@@ -471,8 +465,7 @@ def enrich_media_metadata(
         field_map = {
             "poster_url": "poster_url",
             "overview": "overview",
-            "director": "director",
-            "actors": "actors",
+
             "runtime": "runtime",
             "imdb_id": "imdb_id",
             "tmdb_id": "tmdb_id",
@@ -883,8 +876,7 @@ def _media_to_dict(r: MediaItemRecord) -> dict:
         "media_type": r.media_type or "movie",
         "poster_url": r.poster_url,
         "overview": r.overview,
-        "director": r.director,
-        "actors": r.actors,
+
         "runtime": r.runtime,
         "imdb_id": r.imdb_id,
         "tmdb_id": r.tmdb_id,

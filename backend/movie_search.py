@@ -676,6 +676,9 @@ def _get_tmdb_tv_detail(tv_id: str, api_key: str, season_number: Optional[int] =
                 "TMDB season detail fetch failed for TV ID %s season %s: %s",
                 tv_id, season_number, e,
             )
+    else:
+        # No season specified — save the series' total episode count
+        result["season_episode_count"] = episodes or None
 
     return result
 
@@ -691,11 +694,18 @@ def _get_tvmaze_detail(show_id: str) -> dict:
     TVmaze is free and requires no API key. The response includes
     rich metadata: name, status, network, genres, summary, image,
     external IDs (IMDb, TheTVDB), and more.
+
+    Uses ``?embed=episodes`` to get the episode list, which is
+    counted to populate ``season_episode_count`` (total series
+    episodes).  This value is compatible with the field_map in
+    ``enrich_media_metadata``, so it is saved as ``episode_count``
+    in the database when TVmaze is the primary match source.
     """
     url = f"{TVMAZE_BASE}/shows/{show_id}"
+    params = {"embed": "episodes"}
     try:
         client = get_shared_client()
-        resp = client.get(url, timeout=Timeout(5.0, connect=15.0))
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
@@ -722,6 +732,11 @@ def _get_tvmaze_detail(show_id: str) -> dict:
     # Build a runtime-like field: average episode runtime
     avg_runtime = data.get("averageRuntime") or data.get("runtime") or None
 
+    # Extract total episode count from embedded season list
+    embedded = data.get("_embedded") or {}
+    episodes_list = embedded.get("episodes") or []
+    episode_count = len(episodes_list) if episodes_list else None
+
     return {
         "title": data.get("name", ""),
         "year": year,
@@ -737,14 +752,13 @@ def _get_tvmaze_detail(show_id: str) -> dict:
         "source": "tvmaze",
         "source_id": show_id,
         "media_type": "tv",
-        "director": "",
-        "actors": "",
         "writer": "",
         "country": network.get("country", {}).get("name", "") if network else "",
         "status": data.get("status", ""),
         "network": channel,
         "imdb_id": imdb_id if imdb_id.startswith("tt") else None,
         "thetvdb_id": str(thetvdb_id) if thetvdb_id else None,
+        "season_episode_count": episode_count,
         "seasons": None,
         "episodes": None,
     }

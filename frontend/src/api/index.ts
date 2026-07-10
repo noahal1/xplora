@@ -102,8 +102,7 @@ export async function updateMedia(
     year?: number | null;
     genre?: string | null;
     overview?: string | null;
-    director?: string | null;
-    actors?: string | null;
+
     runtime?: number | null;
     imdb_id?: string | null;
     tmdb_id?: string | null;
@@ -400,8 +399,7 @@ export async function getMediaDiagnostics(): Promise<{
     has_issues: number;
     missing_poster_url: number;
     missing_overview: number;
-    missing_director: number;
-    missing_actors: number;
+
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;

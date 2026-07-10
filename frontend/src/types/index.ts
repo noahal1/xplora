@@ -59,8 +59,6 @@ export interface MediaDetail {
   media_type: string;
   poster_url: string | null;
   overview: string | null;
-  director: string | null;
-  actors: string | null;
   runtime: number | null;
   imdb_id: string | null;
   tmdb_id: string | null;
@@ -127,8 +125,6 @@ export interface ExternalDetail {
   original_language: string;
   source: string;
   source_id: string;
-  director?: string;
-  actors?: string;
   writer?: string;
   country?: string;
   box_office?: string;
@@ -158,8 +154,6 @@ export interface StatsData {
     media_type: string;
     poster_url: string | null;
     overview: string | null;
-    director: string | null;
-    actors: string | null;
     runtime: number | null;
     imdb_id: string | null;
     tmdb_id: string | null;

@@ -68,9 +68,6 @@ export const MovieListItem = memo(function MovieListItem({ movie, isSelected, on
             </Badge>
           )}
         </div>
-        {movie.director && (
-          <p className="text-[11px] text-muted-foreground/50 mt-0.5 truncate">{movie.director}</p>
-        )}
       </div>
       {/* Rating + Actions */}
       <div className="flex items-center gap-2 shrink-0">

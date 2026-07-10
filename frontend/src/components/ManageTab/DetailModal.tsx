@@ -34,8 +34,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       setForm({
         title: movie.title,
         overview: movie.overview ?? "",
-        director: movie.director ?? "",
-        actors: movie.actors ?? "",
         country: movie.country ?? "",
         tagline: movie.tagline ?? "",
         runtime: movie.runtime,
@@ -70,8 +68,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         episode_count: isMovie ? null : movie.episode_count,
         series_poster_url: isMovie ? null : movie.series_poster_url,
         overview: form.overview || null,
-        director: form.director || null,
-        actors: form.actors || null,
         country: form.country || null,
         tagline: form.tagline || null,
         runtime: form.runtime != null ? form.runtime : null,
@@ -80,8 +76,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       setForm({
         title: updated.title,
         overview: updated.overview ?? "",
-        director: updated.director ?? "",
-        actors: updated.actors ?? "",
         country: updated.country ?? "",
         tagline: updated.tagline ?? "",
         runtime: updated.runtime,
@@ -92,8 +86,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       Object.assign(movie, {
         title: updated.title,
         overview: updated.overview,
-        director: updated.director,
-        actors: updated.actors,
         country: updated.country,
         tagline: updated.tagline,
         runtime: updated.runtime,
@@ -114,8 +106,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
     if (!movie) return;      setForm({
         title: movie.title,
         overview: movie.overview ?? "",
-        director: movie.director ?? "",
-        actors: movie.actors ?? "",
         country: movie.country ?? "",
         tagline: movie.tagline ?? "",
         runtime: movie.runtime,
@@ -176,20 +166,10 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
               onChange={(e) => setForm(f => ({ ...f, overview: e.target.value }))} />
           </EditField>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 sm:gap-y-4">
-            <EditField label={t("detail_modal.director")}>
-              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
-                value={form.director ?? ""}
-                onChange={(e) => setForm(f => ({ ...f, director: e.target.value }))} />
-            </EditField>
-            <EditField label={t("detail_modal.country")}>
+              <EditField label={t("detail_modal.country")}>
               <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.country ?? ""}
                 onChange={(e) => setForm(f => ({ ...f, country: e.target.value }))} />
-            </EditField>
-            <EditField label={t("detail_modal.actors")} className="sm:col-span-2">
-              <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
-                value={form.actors ?? ""}
-                onChange={(e) => setForm(f => ({ ...f, actors: e.target.value }))} />
             </EditField>
             <EditField label={t("detail_modal.runtime")}>
               <input type="number" className="input-field w-full text-sm px-3 py-2.5 sm:py-2 no-spinner"
@@ -253,18 +233,6 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
 
           {/* Metadata grid — 1 col on mobile, 2 col on desktop */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 sm:gap-y-3">
-            {movie.director && (
-              <div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.director")}</p>
-                <p className="text-sm">{movie.director}</p>
-              </div>
-            )}
-            {movie.actors && (
-              <div className="sm:col-span-2">
-                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.actors")}</p>
-                <p className="text-sm line-clamp-2">{movie.actors}</p>
-              </div>
-            )}
             {movie.country && (
               <div>
                 <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.country")}</p>

@@ -109,7 +109,7 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
               ))}
             </div>
 
-            {/* Sub-meta: year, genre, director info from first season */}
+            {/* Sub-meta: year, genre from first season */}
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               {firstSeason.year && (
                 <span className="text-[11px] text-muted-foreground font-medium">
@@ -119,11 +119,6 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
               {firstSeason.genre && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/70 border border-primary/15">
                   {translateGenres(firstSeason.genre)}
-                </span>
-              )}
-              {firstSeason.director && (
-                <span className="text-[11px] text-muted-foreground/50 truncate">
-                  {firstSeason.director}
                 </span>
               )}
             </div>
