@@ -174,7 +174,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
 
         {/* Year range */}
         <td className="px-3 py-2 border-b border-border">
-          <span className="text-muted-foreground text-xs">{yearRange}</span>
+          <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">{yearRange}</span>
         </td>
 
         {/* Genre */}
@@ -186,7 +186,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
 
         {/* Date */}
         <td className="px-3 py-2 border-b border-border">
-          <span className="text-muted-foreground text-[11px]">{dateRange}</span>
+          <span className="text-muted-foreground text-[11px] whitespace-nowrap tabular-nums">{dateRange}</span>
         </td>
 
         {/* Actions */}
@@ -313,7 +313,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
           <TableEditableCell movie={season} field="created_at" editingCell={editingCell} sliderValue={sliderValue}
             onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}
             tdClassName="!py-1">
-            <span className="text-muted-foreground text-[10px]">
+            <span className="text-muted-foreground text-[10px] whitespace-nowrap tabular-nums">
               {season.created_at ? season.created_at.slice(0, 10) : "—"}
             </span>
           </TableEditableCell>

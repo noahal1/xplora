@@ -9,7 +9,7 @@ import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
 import { RematchModal } from "../components/ManageTab/RematchModal";
 import { DetailModal } from "../components/ManageTab/DetailModal";
-import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Quote, Search, CheckCircle, XCircle, Sparkles, Loader2, Info } from "lucide-react";
+import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Search, CheckCircle, XCircle, Sparkles, Loader2, Info, Film } from "lucide-react";
 
 interface DiagItem {
   id: number;
@@ -48,7 +48,6 @@ interface DiagData {
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
-    missing_tagline: number;
     missing_episode_count: number;
     has_scrape_error: number;
   };
@@ -66,9 +65,133 @@ const FILTER_OPTIONS = [
   { value: "runtime", label: "时长", icon: "Clock" },
   { value: "tmdb_id", label: "TMDB ID", icon: "Hash" },
   { value: "country", label: "国家", icon: "MapPin" },
-  { value: "tagline", label: "标语", icon: "Quote" },
   { value: "scrape_error", label: "刮削异常", icon: "XCircle" },
 ];
+
+/* ── Mobile Card Component ──────────────────────────────────── */
+function DiagMobileCard({ item, enrichingIds, onEnrich, onDetail, onRematch }: {
+  item: DiagItem;
+  enrichingIds: Set<number>;
+  onEnrich: (item: DiagItem) => Promise<void>;
+  onDetail: (item: MediaDetail) => void;
+  onRematch: (item: MediaDetail) => void;
+}) {
+  return (
+    <div
+      className="p-3 rounded-xl transition-all duration-200"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}
+    >
+      {/* Row 1: Poster + Title/Meta */}
+      <div className="flex items-start gap-2.5">
+        {/* Poster */}
+        <div
+          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer"
+          style={{ border: "1px solid var(--border-subtle)" }}
+          onClick={() => onDetail(toMediaDetail(item))}
+        >
+          {item.poster_url ? (
+            <img src={item.poster_url} alt={item.title} className="w-full h-full object-cover" loading="lazy"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          ) : (
+            <Film size={16} className="text-muted-foreground/30" />
+          )}
+        </div>
+
+        {/* Title + Meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0 flex-1">
+              <button
+                className="font-medium text-sm truncate w-full text-left hover:text-primary transition-colors"
+                onClick={() => onDetail(toMediaDetail(item))}
+              >
+                {item.title}
+              </button>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                {/* Year */}
+                {item.year && <span className="text-[11px] text-muted-foreground tabular-nums">{item.year}</span>}
+                {/* Media type */}
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                  item.media_type === "tv" ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                }`}>
+                  {item.media_type === "tv" ? "剧集" : "电影"}
+                </span>
+                {/* Status */}
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                  item.status === "wish" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-accent text-accent-foreground"
+                }`}>
+                  {item.status === "wish" ? "想看" : "已看"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Missing fields tags */}
+      {item.missing_fields.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {item.missing_fields.map((f) => (
+            <span key={f.field} className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              {f.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Scrape error */}
+      {item.scrape_error && (
+        <div className="mt-1.5 text-[10px] text-red-500/80 truncate" title={item.scrape_error}>
+          <XCircle size={10} className="inline mr-0.5 shrink-0" />
+          {item.scrape_error}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-1 mt-2.5 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+        <MobileActionBtn
+          icon={enrichingIds.has(item.id) ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          label={enrichingIds.has(item.id) ? "刮削中" : "刮削"}
+          onClick={() => onEnrich(item)}
+          disabled={enrichingIds.has(item.id)}
+          className={enrichingIds.has(item.id) ? "text-primary" : "hover:text-amber"}
+        />
+        <MobileActionBtn
+          icon={<Info size={13} />}
+          label="详情"
+          onClick={() => onDetail(toMediaDetail(item))}
+        />
+        <MobileActionBtn
+          icon={<Search size={13} />}
+          label="重匹配"
+          onClick={() => onRematch(toMediaDetail(item))}
+          className={item.has_scrape_error ? "text-amber" : ""}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ── Mobile action button helper ─────────────────────────────── */
+function MobileActionBtn({ icon, label, onClick, disabled, className }: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:pointer-events-none ${className || ''}`}
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
 
 function toMediaDetail(item: DiagItem): MediaDetail {
   return {
@@ -171,7 +294,7 @@ export function AdminDiagnosticsPage() {
   }, []);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-5 py-10 space-y-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
@@ -234,7 +357,7 @@ export function AdminDiagnosticsPage() {
         ) : diagData ? (
           <div className="space-y-6">
             {/* ── Summary Cards ─────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-3 gap-2.5">
               <div className="card p-3 flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   <CheckCircle size={16} className="text-primary" />
@@ -316,16 +439,6 @@ export function AdminDiagnosticsPage() {
               </div>
 
               <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <Quote size={16} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_tagline}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失标语</div>
-                </div>
-              </div>
-
-              <div className="card p-3 flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
                   <XCircle size={16} className="text-red-600 dark:text-red-400" />
                 </div>
@@ -360,7 +473,7 @@ export function AdminDiagnosticsPage() {
               ))}
             </div>
 
-            {/* ── Issues Table ──────────────────────────────── */}
+            {/* ── Issues Table / Mobile Cards ──────────────── */}
             {filteredItems.length > 0 && (
               <div>
                 <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
@@ -370,82 +483,115 @@ export function AdminDiagnosticsPage() {
                     ({filteredItems.length}{diagFilter !== "all" ? ` / ${diagData.items.length}` : ""} 项)
                   </span>
                 </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">标题</th>
-                        <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-16">类型</th>
-                        <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-16">状态</th>
-                        <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">缺失字段</th>
-                        <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">刮削错误</th>
-                        <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-20">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedItems.map((item) => (
-                        <tr key={item.id} className="border-b border-border/50 hover:bg-accent/10 transition-colors">
-                          <td className="px-2 py-2.5">
-                            <span className="font-medium text-xs">{item.title}</span>
-                            {item.year && <span className="text-[10px] text-muted-foreground ml-1.5">({item.year})</span>}
-                          </td>
-                          <td className="px-2 py-2.5">
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+
+                {/* ── Desktop Table ───────────────────────────── */}
+                <div className="max-sm:hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">标题</th>
+                          <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-16">类型</th>
+                          <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-16">状态</th>
+                          <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">缺失字段</th>
+                          <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">刮削错误</th>
+                          <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-20">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedItems.map((item) => (
+                          <tr key={item.id} className="border-b border-border/50 hover:bg-accent/10 transition-colors">
+                            <td className="px-2 py-2.5">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                              <button
+                                className="font-medium text-xs text-left hover:text-primary transition-colors cursor-pointer truncate max-w-[180px]"
+                                onClick={() => setDetailMovie(toMediaDetail(item))}
+                              >
+                                {item.title}
+                              </button>
+                              {item.year && <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">({item.year})</span>}
+                            </span>
+                            </td>
+                            <td className="px-2 py-2.5">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${
                               item.media_type === "tv" ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
                             }`}>
                               {item.media_type === "tv" ? "剧集" : "电影"}
                             </span>
-                          </td>
-                          <td className="px-2 py-2.5">
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            </td>
+                            <td className="px-2 py-2.5">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${
                               item.status === "wish" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-accent text-accent-foreground"
                             }`}>
                               {item.status === "wish" ? "想看" : "已看"}
                             </span>
-                          </td>
-                          <td className="px-2 py-2.5">
-                            <div className="flex flex-wrap gap-1">
-                              {item.missing_fields.map((f) => (
-                                <span key={f.field} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                                  {f.label}
+                            </td>
+                            <td className="px-2 py-2.5">
+                              <div className="flex flex-wrap gap-1">
+                                {item.missing_fields.map((f) => (
+                                  <span key={f.field} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                    {f.label}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2.5">
+                              {item.scrape_error ? (
+                                <span className="text-[10px] text-red-500/80 block max-w-[160px] truncate" title={item.scrape_error}>
+                                  <XCircle size={10} className="inline mr-0.5" />
+                                  {item.scrape_error}
                                 </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-2 py-2.5">
-                            {item.scrape_error ? (
-                              <span className="text-[10px] text-red-500/80 block max-w-[160px] truncate" title={item.scrape_error}>
-                                <XCircle size={10} className="inline mr-0.5" />
-                                {item.scrape_error}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-2 py-2.5 whitespace-nowrap">
-                            <div className="inline-flex items-center gap-0.5" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
-                              <button
-                                className={`px-1.5 py-1 rounded transition-colors ${enrichingIds.has(item.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
-                                onClick={() => handleEnrich(item)}
-                                disabled={enrichingIds.has(item.id)}
-                                title={enrichingIds.has(item.id) ? "刮削中..." : "刮削"}
-                              >
-                                {enrichingIds.has(item.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                              </button>
-                              <button
-                                className={`px-1.5 py-1 rounded transition-colors ${item.has_scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
-                                onClick={() => setRematchMovie(toMediaDetail(item))}
-                                title={item.has_scrape_error ? "重新匹配（刮削异常）" : "重新匹配"}
-                              >
-                                <Search size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2.5 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-0.5" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
+                                <button
+                                  className={`px-1.5 py-1 rounded transition-colors ${enrichingIds.has(item.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
+                                  onClick={() => handleEnrich(item)}
+                                  disabled={enrichingIds.has(item.id)}
+                                  title={enrichingIds.has(item.id) ? "刮削中..." : "刮削"}
+                                >
+                                  {enrichingIds.has(item.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                </button>
+                                <button
+                                  className="px-1.5 py-1 rounded transition-colors text-muted-foreground hover:text-sky hover:bg-sky/10"
+                                  onClick={() => setDetailMovie(toMediaDetail(item))}
+                                  title="查看详情"
+                                >
+                                  <Info size={14} />
+                                </button>
+                                <button
+                                  className={`px-1.5 py-1 rounded transition-colors ${item.has_scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
+                                  onClick={() => setRematchMovie(toMediaDetail(item))}
+                                  title={item.has_scrape_error ? "重新匹配（刮削异常）" : "重新匹配"}
+                                >
+                                  <Search size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
+
+                {/* ── Mobile Cards ──────────────────────────────── */}
+                <div className="sm:hidden space-y-2.5">
+                  {paginatedItems.map((item) => (
+                    <DiagMobileCard
+                      key={item.id}
+                      item={item}
+                      enrichingIds={enrichingIds}
+                      onEnrich={handleEnrich}
+                      onDetail={setDetailMovie}
+                      onRematch={setRematchMovie}
+                    />
+                  ))}
+                </div>
+
                 <Pagination
                   currentPage={diagPage}
                   totalPages={diagTotalPages}
@@ -483,6 +629,14 @@ export function AdminDiagnosticsPage() {
         movie={rematchMovie}
         onClose={() => setRematchMovie(null)}
         onSuccess={() => { setRematchMovie(null); loadDiagnostics(); }}
+      />
+
+      {/* ── Detail Modal ────────────────────────────────────── */}
+      <DetailModal
+        open={detailMovie !== null}
+        movie={detailMovie}
+        onClose={() => setDetailMovie(null)}
+        onSave={() => { setDetailMovie(null); loadDiagnostics(); }}
       />
     </div>
   );

@@ -403,7 +403,6 @@ export async function getMediaDiagnostics(): Promise<{
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
-    missing_tagline: number;
     has_scrape_error: number;
   };
   items: Array<{

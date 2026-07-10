@@ -112,7 +112,7 @@ export const ManageTableRow = memo(function ManageTableRow({
       <TableEditableCell movie={movie} field="created_at" editingCell={editingCell} sliderValue={sliderValue}
         onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}
         tdClassName="max-sm:hidden">
-        <span className="text-muted-foreground text-xs">{movie.created_at ? movie.created_at.slice(0, 10) : "—"}</span>
+        <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">{movie.created_at ? movie.created_at.slice(0, 10) : "—"}</span>
       </TableEditableCell>
       <td className="px-1 max-sm:px-0.5 py-2 max-sm:py-3 border-b border-border text-center whitespace-nowrap">
         <div className="inline-flex items-center gap-0.5 max-sm:gap-1" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>

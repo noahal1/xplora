@@ -61,7 +61,7 @@ export function AdminLogsPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-5 py-10 space-y-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
@@ -113,9 +113,9 @@ export function AdminLogsPage() {
                   {logs.map((log) => (
                     <tr key={log.id} className="border-b border-border/50 hover:bg-accent/10 transition-colors">
                       <td className="px-2 py-2.5 text-xs text-muted-foreground whitespace-nowrap tabular-nums">{formatDateTime(log.created_at)}</td>
-                      <td className="px-2 py-2.5 text-xs">{log.username}</td>
+                      <td className="px-2 py-2.5 text-xs whitespace-nowrap">{log.username}</td>
                       <td className="px-2 py-2.5">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent text-accent-foreground">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent text-accent-foreground whitespace-nowrap">
                           {actionLabels[log.action] || log.action}
                         </span>
                       </td>
