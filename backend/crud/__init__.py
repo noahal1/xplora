@@ -48,6 +48,15 @@ from crud.logs import (
     get_operation_logs,
 )
 
+from crud.media_servers import (
+    create_media_server,
+    get_media_servers,
+    get_media_server,
+    update_media_server,
+    update_last_connected,
+    delete_media_server,
+)
+
 __all__ = [
     # Users
     "create_user",
@@ -88,4 +97,11 @@ __all__ = [
     # Logs
     "log_operation",
     "get_operation_logs",
+    # Media servers
+    "create_media_server",
+    "get_media_servers",
+    "get_media_server",
+    "update_media_server",
+    "update_last_connected",
+    "delete_media_server",
 ]

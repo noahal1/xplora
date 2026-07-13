@@ -89,6 +89,7 @@ from routers.admin import router as admin_router
 from routers.user_data import router as user_data_router
 from routers.logs import router as logs_router
 from routers.updates import router as updates_router
+from routers.media_server import router as media_server_router
 
 app.include_router(auth_router)
 app.include_router(media_router)
@@ -98,6 +99,7 @@ app.include_router(admin_router)
 app.include_router(user_data_router)
 app.include_router(logs_router)
 app.include_router(updates_router)
+app.include_router(media_server_router)
 
 
 # ── Health check ────────────────────────────────────────────────────

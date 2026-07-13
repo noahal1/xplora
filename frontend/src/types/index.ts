@@ -1,3 +1,48 @@
+/** Media server types */
+export interface MediaServer {
+  id: number;
+  name: string;
+  server_type: string;
+  host: string;
+  port: number;
+  use_ssl: boolean;
+  is_active: boolean;
+  has_api_key: boolean;
+  last_connected: string | null;
+  created_at: string;
+}
+
+export interface ServerFormData {
+  name: string;
+  server_type: string;
+  host: string;
+  port: number;
+  api_key: string;
+  use_ssl: boolean;
+}
+
+export interface VerifyResult {
+  online: boolean;
+  version: string;
+  server_name: string;
+  message: string;
+}
+
+export interface MediaLibrary {
+  id: string;
+  name: string;
+  media_type: string;
+  item_count: number;
+}
+
+export interface MediaServerSearchResult {
+  id: string;
+  title: string;
+  year: number | null;
+  media_type: string;
+  series: string | null;
+}
+
 /** Shared types for the media recommender */
 
 export interface MediaItem {

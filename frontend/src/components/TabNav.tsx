@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Film, BookmarkPlus, Sparkles, Library, BarChart3 } from "lucide-react";
+import { Film, BookmarkPlus, Sparkles, Library, BarChart3, Server } from "lucide-react";
 import { useMemo } from "react";
 import { createPortal } from "react-dom";
 
@@ -13,6 +13,7 @@ export function TabNav() {
     { id: "wishlist", label: t("tabs.wishlist"), icon: BookmarkPlus },
     { id: "recommend", label: t("tabs.recommend"), icon: Sparkles },
     { id: "stats", label: t("tabs.stats"), icon: BarChart3 },
+    { id: "media-servers", label: t("media_server.tab_title"), icon: Server },
     { id: "manage", label: t("tabs.manage"), icon: Library },
   ], [t]);
 

@@ -1,0 +1,1 @@
+"""Media server integration module — Plex / Jellyfin / FeiNiu connectors."""

@@ -481,6 +481,93 @@ export async function removeFromTopRated(mediaId: number): Promise<{ status: str
   });
 }
 
+import type { MediaServer, ServerFormData, VerifyResult, MediaLibrary, MediaServerSearchResult } from "../types";
+
+// ── Media Server API ──────────────────────────────────────────
+
+/** List all media servers for the current user */
+export async function listMediaServers(): Promise<MediaServer[]> {
+  const data = await fetchJSON<{ servers: MediaServer[] }>(`${API_BASE}/media-servers`, { headers: getAuthHeaders() });
+  return data.servers;
+}
+
+/** Verify a media server connection (without saving) */
+export async function verifyMediaServer(
+  data: ServerFormData
+): Promise<VerifyResult> {
+  return fetchJSON(`${API_BASE}/media-servers/verify`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Verify a saved media server connection */
+export async function verifySavedMediaServer(serverId: number): Promise<VerifyResult> {
+  return fetchJSON(`${API_BASE}/media-servers/${serverId}/verify`, { headers: getAuthHeaders() });
+}
+
+/** Add a new media server */
+export async function addMediaServer(
+  data: ServerFormData
+): Promise<MediaServer> {
+  return fetchJSON(`${API_BASE}/media-servers`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Update a media server */
+export async function updateMediaServer(
+  serverId: number,
+  data: Partial<ServerFormData & { is_active: boolean }>
+): Promise<MediaServer> {
+  return fetchJSON(`${API_BASE}/media-servers/${serverId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Delete a media server */
+export async function deleteMediaServer(serverId: number): Promise<void> {
+  await fetchJSON(`${API_BASE}/media-servers/${serverId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Get libraries from a media server */
+export async function getMediaServerLibraries(serverId: number): Promise<MediaLibrary[]> {
+  const data = await fetchJSON<{ libraries: MediaLibrary[] }>(`${API_BASE}/media-servers/${serverId}/libraries`, { headers: getAuthHeaders() });
+  return data.libraries;
+}
+
+/** Refresh a media server library (or all libraries) */
+export async function refreshMediaServer(
+  serverId: number,
+  libraryId?: string
+): Promise<{ status: string; library_id?: string; refreshed?: number; total?: number }> {
+  return fetchJSON(`${API_BASE}/media-servers/${serverId}/refresh`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(libraryId ? { library_id: libraryId } : {}),
+  });
+}
+
+/** Search media on a media server */
+export async function searchMediaServer(
+  serverId: number,
+  query: string,
+  libraryId?: string
+): Promise<MediaServerSearchResult[]> {
+  const qs = new URLSearchParams({ q: query });
+  if (libraryId) qs.set("library_id", libraryId);
+  const data = await fetchJSON<{ results: MediaServerSearchResult[] }>(`${API_BASE}/media-servers/${serverId}/search?${qs.toString()}`, { headers: getAuthHeaders() });
+  return data.results;
+}
+
 /** Change current user's password */
 export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
   await fetchJSON(`${API_BASE}/auth/password`, {

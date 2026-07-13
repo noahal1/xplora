@@ -118,3 +118,21 @@ class OperationLogRecord(SQLModel, table=True):
     action: str = Field(max_length=64, nullable=False, index=True)
     detail: Optional[str] = Field(default=None, max_length=500, nullable=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class MediaServerRecord(SQLModel, table=True):
+    """A media server (Plex / Jellyfin / FeiNiu) linked to a user account."""
+
+    __tablename__ = "media_servers"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    name: str = Field(max_length=128, nullable=False, description="User-given alias, e.g. 'My FeiNiu'")
+    server_type: str = Field(max_length=32, nullable=False, description="'plex' or 'jellyfin'")
+    host: str = Field(max_length=255, nullable=False, description="IP or hostname")
+    port: int = Field(default=8096, nullable=False, description="Port number")
+    api_key: str = Field(max_length=512, nullable=False, description="Encrypted API key / token")
+    use_ssl: bool = Field(default=False, nullable=False)
+    is_active: bool = Field(default=True, nullable=False)
+    last_connected: Optional[datetime] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)

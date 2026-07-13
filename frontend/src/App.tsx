@@ -26,6 +26,7 @@ const RecommendTab = lazy(() => import("./components/RecommendTab").then((m) => 
 const ManageTab = lazy(() => import("./components/ManageTab").then((m) => ({ default: m.ManageTab })));
 const StatsTab = lazy(() => import("./components/StatsTab").then((m) => ({ default: m.StatsTab })));
 const TopRatedTab = lazy(() => import("./components/TopRatedTab").then((m) => ({ default: m.TopRatedTab })));
+const MediaServerTab = lazy(() => import("./components/MediaServerTab").then((m) => ({ default: m.MediaServerTab })));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -110,6 +111,7 @@ function MainApp() {
                   <Route path="/top-rated" element={<TopRatedTab />} />
                   <Route path="/stats" element={<StatsTab />} />
                   <Route path="/manage" element={<ManageTab />} />
+                  <Route path="/media-servers" element={<MediaServerTab />} />
                   <Route path="/admin/users" element={<AdminUsersPage />} />
                   <Route path="/admin/logs" element={<AdminLogsPage />} />
                   <Route path="/admin/diagnostics" element={<AdminDiagnosticsPage />} />

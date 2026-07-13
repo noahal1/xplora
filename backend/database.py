@@ -572,6 +572,14 @@ def _run_per_user_column_migrations(user_id: int):
         ("tmdb_id", "VARCHAR(50)"),
     ], engine=engine)
 
+    # ── Migration: media_servers table ──
+    try:
+        existing_tables = inspector.get_table_names()
+    except Exception:
+        existing_tables = []
+    if "media_servers" not in existing_tables:
+        _create_media_servers_table(engine, user_id)
+
     # ── Data migration: ensure items with sort_order are marked as pinned ──
     _fix_top_rated_pins(user_id, engine)
 
@@ -632,6 +640,33 @@ def _add_columns_if_missing(table: str, existing_columns: list[str], columns: li
                         conn.rollback()
                     else:
                         raise
+
+
+def _create_media_servers_table(engine, user_id: int):
+    """Create the media_servers table for a per-user database."""
+    from sqlalchemy import text
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS media_servers (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    name VARCHAR(128) NOT NULL,
+                    server_type VARCHAR(32) NOT NULL,
+                    host VARCHAR(255) NOT NULL,
+                    port INTEGER NOT NULL DEFAULT 8096,
+                    api_key VARCHAR(512) NOT NULL,
+                    use_ssl BOOLEAN NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    last_connected TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info(f"  [Migration] Created media_servers table for user id={user_id}")
+    except Exception as e:
+        logger.warning(f"  [Migration] Error creating media_servers table for user id={user_id}: {e}")
 
 
 def _drop_column_if_exists(table: str, column: str, engine=None):
