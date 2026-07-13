@@ -134,7 +134,7 @@ export function AdminUsersPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button
