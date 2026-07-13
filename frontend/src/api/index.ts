@@ -289,12 +289,14 @@ export async function rematchMedia(
   });
 }
 
-/** Search movies/TV via external sources (TMDB / OMDb) */
+/** Search movies/TV via external sources (TMDB / TVmaze) */
 export async function searchMedia(
   q: string,
-  source: string = "auto"
+  source: string = "auto",
+  media_type?: string
 ): Promise<{ results: MediaSearchResult[] }> {
   const qs = new URLSearchParams({ q, source });
+  if (media_type) qs.set("media_type", media_type);
   return fetchJSON(`${API_BASE}/media/search?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
@@ -403,6 +405,7 @@ export async function getMediaDiagnostics(): Promise<{
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
+    missing_episode_count: number;
     has_scrape_error: number;
   };
   items: Array<{

@@ -65,6 +65,7 @@ export const TableEditableCell = memo(function TableEditableCell({ movie, field,
     switch (field) {
       case "title": value = movie.title; widthClass = "w-full min-w-[120px]"; break;
       case "year": inputType = "number"; widthClass = "w-[72px]"; value = movie.year != null ? movie.year.toString() : ""; break;
+      case "episode_count": inputType = "number"; widthClass = "w-[72px]"; value = movie.episode_count != null ? movie.episode_count.toString() : ""; break;
       case "created_at": inputType = "date"; widthClass = "w-[110px]"; value = movie.created_at ? movie.created_at.slice(0, 10) : ""; break;
     }
     return (

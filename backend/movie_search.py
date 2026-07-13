@@ -16,6 +16,36 @@ TMDB_BASE = "https://api.tmdb.org/3"
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w342"
 TVMAZE_BASE = "https://api.tvmaze.com"
 
+# Match an exact year token (standalone, not part of a word like "2001:")
+_YEAR_PATTERN = re.compile(r"^(19[0-9]{2}|20[0-9]{2})$")
+
+
+def extract_year(query: str) -> tuple[str, Optional[int]]:
+    """Extract a 4-digit year from the search query, if present.
+
+    Only matches when the year is a standalone token (surrounded by
+    whitespace or at string boundaries). This ensures titles like
+    ``"2001: A Space Odyssey"`` are not incorrectly parsed.
+
+    Returns ``(cleaned_query, year)`` where ``cleaned_query`` has the
+    year token removed. If no year is found, returns ``(original_query, None)``.
+
+    Examples:
+        ``extract_year("Inception 2010") → ("Inception", 2010)``
+        ``extract_year("The Dark Knight") → ("The Dark Knight", None)``
+        ``extract_year("2001: A Space Odyssey") → ("2001: A Space Odyssey", None)``
+        ``extract_year("Room 2015") → ("Room", 2015)``
+    """
+    tokens = query.split()
+    year = None
+    cleaned_tokens = []
+    for token in tokens:
+        if _YEAR_PATTERN.match(token) and year is None:
+            year = int(token)
+        else:
+            cleaned_tokens.append(token)
+    return " ".join(cleaned_tokens) or query, year
+
 
 class MovieSearchResult:
     """Normalized search result from external search sources."""
@@ -74,10 +104,16 @@ class MovieSearchResult:
         return d
 
 
-def search_tmdb(query: str, api_key: str, language: str = "zh-CN") -> list[MovieSearchResult]:
-    """Search movies via TMDB API with a single language."""
+def search_tmdb(query: str, api_key: str, language: str = "zh-CN", year: Optional[int] = None) -> list[MovieSearchResult]:
+    """Search movies via TMDB API with a single language.
+
+    If ``year`` is provided, passes ``&year=YYYY`` to TMDB so results
+    are filtered to that specific release year.
+    """
     url = f"{TMDB_BASE}/search/movie"
     params = {"api_key": api_key, "query": query, "language": language}
+    if year is not None:
+        params["year"] = year
     try:
         client = get_shared_client()
         resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
@@ -110,7 +146,7 @@ def search_tmdb(query: str, api_key: str, language: str = "zh-CN") -> list[Movie
     return results
 
 
-def search_tmdb_dual(query: str, api_key: str) -> list[MovieSearchResult]:
+def search_tmdb_dual(query: str, api_key: str, year: Optional[int] = None) -> list[MovieSearchResult]:
     """Search TMDB in both Chinese and English, then merge results.
 
     This improves match rates when scraping metadata because the same
@@ -127,12 +163,12 @@ def search_tmdb_dual(query: str, api_key: str) -> list[MovieSearchResult]:
     en_results: list[MovieSearchResult] = []
 
     try:
-        zh_results = search_tmdb(query, api_key, language="zh-CN")
+        zh_results = search_tmdb(query, api_key, language="zh-CN", year=year)
     except RuntimeError as e:
         logger.warning("zh-CN TMDB search failed for '%s': %s", query, e)
 
     try:
-        en_results = search_tmdb(query, api_key, language="en-US")
+        en_results = search_tmdb(query, api_key, language="en-US", year=year)
     except RuntimeError as e:
         logger.warning("en-US TMDB search failed for '%s': %s", query, e)
 
@@ -153,14 +189,19 @@ def search_tmdb_dual(query: str, api_key: str) -> list[MovieSearchResult]:
     return merged
 
 
-def search_tmdb_tv(query: str, api_key: str, language: str = "zh-CN") -> list[MovieSearchResult]:
+def search_tmdb_tv(query: str, api_key: str, language: str = "zh-CN", year: Optional[int] = None) -> list[MovieSearchResult]:
     """Search TV series via TMDB API with a single language.
+
+    If ``year`` is provided, passes ``&first_air_date_year=YYYY`` to TMDB
+    so results are filtered to shows that began airing in that year.
 
     Retries once on SSL/connection errors to handle transient
     TLS handshake issues (common on some Windows configurations).
     """
     url = f"{TMDB_BASE}/search/tv"
     params = {"api_key": api_key, "query": query, "language": language}
+    if year is not None:
+        params["first_air_date_year"] = year
 
     def _do_request() -> dict:
         client = get_shared_client()
@@ -203,18 +244,18 @@ def search_tmdb_tv(query: str, api_key: str, language: str = "zh-CN") -> list[Mo
     return results
 
 
-def search_tmdb_tv_dual(query: str, api_key: str) -> list[MovieSearchResult]:
+def search_tmdb_tv_dual(query: str, api_key: str, year: Optional[int] = None) -> list[MovieSearchResult]:
     """Search TMDB TV in both Chinese and English, then merge results."""
     zh_results: list[MovieSearchResult] = []
     en_results: list[MovieSearchResult] = []
 
     try:
-        zh_results = search_tmdb_tv(query, api_key, language="zh-CN")
+        zh_results = search_tmdb_tv(query, api_key, language="zh-CN", year=year)
     except RuntimeError as e:
         logger.warning("zh-CN TMDB TV search failed for '%s': %s", query, e)
 
     try:
-        en_results = search_tmdb_tv(query, api_key, language="en-US")
+        en_results = search_tmdb_tv(query, api_key, language="en-US", year=year)
     except RuntimeError as e:
         logger.warning("en-US TMDB TV search failed for '%s': %s", query, e)
 
@@ -280,7 +321,8 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False,
     """Search movies/TV via external sources.
 
     Args:
-        query: Search query string.
+        query: Search query string. May include a year (e.g. ``"Inception 2010"``)
+            which will be extracted and passed as a filter to the API.
         source: ``"tmdb"``, ``"tvmaze"``, or ``"auto"``.
         dual_language: If True, search in both zh-CN and en-US and merge.
         media_type: When set to ``"movie"`` or ``"tv"``, only search that
@@ -295,6 +337,11 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False,
 
     # Strip season info for clean search
     query = strip_season(original_query)
+    if not query:
+        return []
+
+    # Extract year from query (e.g. "Inception 2010" → year=2010, query="Inception")
+    query, search_year = extract_year(query)
     if not query:
         return []
 
@@ -318,11 +365,11 @@ def search_movies(query: str, source: str = "tmdb", dual_language: bool = False,
     results: list[MovieSearchResult] = []
 
     if source == "tmdb" and tmdb_key:
-        _search_tmdb_variants(search_queries, tmdb_key, dual_language, results, media_type=media_type)
+        _search_tmdb_variants(search_queries, tmdb_key, dual_language, results, media_type=media_type, year=search_year)
     elif source == "tvmaze":
         _search_tvmaze_variants(search_queries, results)
     elif source == "auto":
-        _search_auto(search_queries, tmdb_key, results)
+        _search_auto(search_queries, tmdb_key, results, year=search_year)
 
     # Final deduplicate by title
     seen: set[str] = set()
@@ -404,12 +451,16 @@ def _search_tmdb_variants(
     dual_language: bool,
     results: list[MovieSearchResult],
     media_type: str | None = None,
+    year: Optional[int] = None,
 ):
     """Search TMDB movies + TV, trying each query variant.
 
     When ``media_type`` is ``"movie"`` or ``"tv"``, only searches the
     corresponding endpoint — saving a wasteful API call.
     When ``None`` (default), searches both movie and TV endpoints.
+
+    If ``year`` is provided, passes it as a filter to TMDB (``&year=YYYY``
+    for movies, ``&first_air_date_year=YYYY`` for TV).
 
     Stops trying new variants once we have results.
     """
@@ -421,9 +472,9 @@ def _search_tmdb_variants(
         if media_type != "tv":
             try:
                 if dual_language:
-                    movie_results = search_tmdb_dual(q, tmdb_key)
+                    movie_results = search_tmdb_dual(q, tmdb_key, year=year)
                 else:
-                    movie_results = search_tmdb(q, tmdb_key)
+                    movie_results = search_tmdb(q, tmdb_key, year=year)
                 for r in movie_results:
                     seen_titles.add(r.title.lower().strip())
                     q_results.append(r)
@@ -434,9 +485,9 @@ def _search_tmdb_variants(
         if media_type != "movie":
             try:
                 if dual_language:
-                    tv_results = search_tmdb_tv_dual(q, tmdb_key)
+                    tv_results = search_tmdb_tv_dual(q, tmdb_key, year=year)
                 else:
-                    tv_results = search_tmdb_tv(q, tmdb_key)
+                    tv_results = search_tmdb_tv(q, tmdb_key, year=year)
                 for r in tv_results:
                     key = r.title.lower().strip()
                     if key not in seen_titles:
@@ -467,12 +518,13 @@ def _search_auto(
     search_queries: list[str],
     tmdb_key: Optional[str],
     results: list[MovieSearchResult],
+    year: Optional[int] = None,
 ):
     """Auto mode: TMDB first (variants until results), then TVmaze append."""
     # Step 1: TMDB — try each variant until we get results
     if tmdb_key:
         try:
-            _search_tmdb_variants(search_queries, tmdb_key, dual_language=False, results=results)
+            _search_tmdb_variants(search_queries, tmdb_key, dual_language=False, results=results, year=year)
         except RuntimeError:
             pass
 

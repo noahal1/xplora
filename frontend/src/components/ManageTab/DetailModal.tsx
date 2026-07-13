@@ -39,6 +39,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         runtime: movie.runtime,
         year: movie.year,
         media_type: movie.media_type || "movie",
+        episode_count: movie.episode_count,
       });
     }
   }, [open, movie]);
@@ -65,7 +66,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         // Clear TV-specific fields when switching to movie
         tv_series_id: isMovie ? null : movie.tv_series_id,
         season_number: isMovie ? null : movie.season_number,
-        episode_count: isMovie ? null : movie.episode_count,
+        episode_count: isMovie ? null : (form.episode_count ?? movie.episode_count),
         series_poster_url: isMovie ? null : movie.series_poster_url,
         overview: form.overview || null,
         country: form.country || null,
@@ -81,6 +82,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         runtime: updated.runtime,
         year: updated.year,
         media_type: updated.media_type || "movie",
+        episode_count: updated.episode_count,
       });
       // Optimistically update the movie object so view mode shows new data immediately
       Object.assign(movie, {
@@ -90,6 +92,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         tagline: updated.tagline,
         runtime: updated.runtime,
         media_type: updated.media_type,
+        episode_count: updated.episode_count,
       });
       // onSave triggers fetchData in ManageTab to refresh from server
       showToast(t("manage.updated"), "success");
@@ -111,6 +114,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         runtime: movie.runtime,
         year: movie.year,
         media_type: movie.media_type || "movie",
+        episode_count: movie.episode_count,
       });
       setEditing(true);
     }, [movie]);
@@ -183,6 +187,15 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
                 onChange={(e) => setForm(f => ({ ...f, year: e.target.value ? parseInt(e.target.value) : null }))}
                 min={1888} max={2030} placeholder={t("manage.col_year")} />
             </EditField>
+            {/* Episode count (TV only) */}
+            {form.media_type === "tv" && (
+              <EditField label={t("detail_modal.episode_count", "集数")}>
+                <input type="number" className="input-field w-full text-sm px-3 py-2.5 sm:py-2 no-spinner"
+                  value={form.episode_count ?? ""}
+                  onChange={(e) => setForm(f => ({ ...f, episode_count: e.target.value ? parseInt(e.target.value) : null }))}
+                  min={0} placeholder={t("detail_modal.episode_count_placeholder", "集数")} />
+              </EditField>
+            )}
             <EditField label={t("detail_modal.tagline")}>
               <input type="text" className="input-field w-full text-sm px-3 py-2.5 sm:py-2"
                 value={form.tagline ?? ""}
@@ -219,6 +232,14 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
                   <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 leading-none px-1.5 py-0 shrink-0">TV</Badge>
                 )}
               </div>
+
+              {/* Episode count (TV only) */}
+              {movie.media_type === "tv" && movie.episode_count != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{t("detail_modal.episode_count", "集数")}</span>
+                  <span className="text-sm font-medium">{movie.episode_count}</span>
+                </div>
+              )}
 
               {/* Overview */}
               {movie.overview ? (

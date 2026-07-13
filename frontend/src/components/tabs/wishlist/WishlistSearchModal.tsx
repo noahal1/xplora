@@ -1,16 +1,15 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaSearchResult, ExternalDetail } from "../../../types";
 import * as api from "../../../api";
 import { useToast } from "../../../context/ToastContext";
 import { useEnrich } from "../../../context/EnrichContext";
 import { getErrMsg } from "../../../lib/utils";
-import { Badge } from "../../ui/badge";
 import { Modal } from "../../Modal";
-import { ProgressiveImage } from "../../ProgressiveImage";
 import { SearchSourceSelector } from "../../SearchSourceSelector";
-import { Film, Loader2 } from "lucide-react";
-import { translateGenres } from "../../../utils/genre";
+import { MediaTypeFilter } from "../../MediaTypeFilter";
+import { SearchResultCard } from "../../shared/SearchResultCard";
+import { Loader2 } from "lucide-react";
 import { WishlistDetailModal } from "../../WishlistTab/DetailModal";
 
 interface WishlistSearchModalProps {
@@ -26,6 +25,7 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
   const { startPolling } = useEnrich();
 
   const [searchSource, setSearchSource] = useState("auto");
+  const [searchMediaType, setSearchMediaType] = useState("all");
   const [externalQuery, setExternalQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MediaSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -45,18 +45,45 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
 
+  // Stable refs for latest search params (avoids stale closures in callbacks/effects)
+  const searchParamsRef = useRef({ query: externalQuery, mediaType: searchMediaType });
+  searchParamsRef.current = { query: externalQuery, mediaType: searchMediaType };
+  const searchSeqRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+
+  // Stable search function (reads from refs, won't trigger re-renders)
   const handleSearch = useCallback(async () => {
-    const q = externalQuery;
+    const { query: q, mediaType: mt } = searchParamsRef.current;
     if (!q.trim()) { setSearchResults([]); setSearchError(""); setSearchDone(false); return; }
+
+    const seq = ++searchSeqRef.current;
     setSearchLoading(true);
     setSearchError("");
     try {
-      const data = await api.searchMedia(q.trim(), searchSourceRef.current);
+      const mediaTypeParam = mt === "all" ? undefined : mt;
+      const data = await api.searchMedia(q.trim(), searchSourceRef.current, mediaTypeParam);
+      if (seq !== searchSeqRef.current || !mountedRef.current) return;
       setSearchResults(data.results);
       setSearchDone(true);
-    } catch (err: unknown) { setSearchError(getErrMsg(err)); setSearchResults([]); setSearchDone(true); }
-    finally { setSearchLoading(false); }
-  }, [externalQuery]);
+    } catch (err: unknown) {
+      if (seq !== searchSeqRef.current || !mountedRef.current) return;
+      setSearchError(getErrMsg(err));
+      setSearchResults([]);
+      setSearchDone(true);
+    } finally {
+      if (seq === searchSeqRef.current && mountedRef.current) {
+        setSearchLoading(false);
+      }
+    }
+  }, []);
+
+  // Auto-refresh search when media_type filter changes (only if there's an active query)
+  useEffect(() => {
+    if (searchParamsRef.current.query.trim()) {
+      handleSearch();
+    }
+  }, [searchMediaType]);
 
   const changeSearchSource = useCallback((source: string) => {
     setSearchSource(source);
@@ -135,10 +162,14 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
         title={t("wishlist.search_movies")}
       >
         <div className="space-y-3">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <SearchSourceSelector
               selected={searchSource}
               onSelect={changeSearchSource}
+            />
+            <MediaTypeFilter
+              selected={searchMediaType}
+              onSelect={setSearchMediaType}
             />
           </div>
 
@@ -184,31 +215,20 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
                 <div className="text-center py-4 text-muted-foreground"><p className="text-xs">{t("manage.no_matching", { query: externalQuery })}</p></div>
               ) : (
                 <div className="space-y-1.5">
-                  {sortedResults.map((r, i) => {
+                  {sortedResults.map((r) => {
                     const key = `${r.source}:${r.source_id}`;
                     const isAdding = addingIds.has(key);
                     const alreadyInList = existingTitles.some((title) => title.toLowerCase() === r.title.toLowerCase());
                     return (
-                      <div key={`${key}-${i}`} className="card card-lift p-3 flex items-center gap-3 text-sm cursor-pointer" onClick={() => openDetail(r)}>
-                        <div className="w-9 h-[54px] shrink-0 rounded overflow-hidden bg-muted/60 flex items-center justify-center text-lg border border-border">
-                          {r.poster_url ? <ProgressiveImage src={r.poster_url} alt={r.title} className="w-full h-full object-cover" /> : <Film size={16} style={{ color: "var(--fg-dim)", opacity: 0.4 }} />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium truncate block">{r.title}</span>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {r.year && <span className="text-xs text-muted-foreground">{r.year}</span>}
-                            {r.genre && <Badge variant="outline" className="text-[10px]">{translateGenres(r.genre)}</Badge>}
-                            {r.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
-                            <Badge variant="outline" className="text-[9px] font-mono border-primary/30 text-primary/70">{r.source.toUpperCase()}</Badge>
-                          </div>
-                        </div>
-                        <button className={`btn ${alreadyInList ? "btn-ghost" : ""} btn-xs shrink-0 transition-all`} disabled={isAdding || alreadyInList}
-                          onClick={(e) => { e.stopPropagation(); addSearchResultToWishlist(r); }}>
-                          {isAdding ? <span className="flex items-center gap-1"><div className="w-3 h-3 border-2 border-border border-t-primary rounded-full animate-stream-spin" />{t("wishlist.adding")}</span>
-                            : alreadyInList ? t("wishlist.already_added")
-                            : <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>{t("wishlist.add")}</span>}
-                        </button>
-                      </div>
+                      <SearchResultCard
+                        key={key}
+                        result={r}
+                        progressivePoster
+                        adding={isAdding}
+                        alreadyAdded={alreadyInList}
+                        onAdd={() => addSearchResultToWishlist(r)}
+                        onDetail={() => openDetail(r)}
+                      />
                     );
                   })}
                 </div>

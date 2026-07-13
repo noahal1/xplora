@@ -167,7 +167,7 @@ export interface StatsData {
   recent_additions: Array<{ title: string; status: string; created_at: string }>;
 }
 
-export type SortField = "title" | "rating" | "year" | "genre" | "created_at";
+export type SortField = "title" | "rating" | "year" | "genre" | "episode_count" | "created_at";
 export type SortDir = "asc" | "desc";
 
 export interface SortConfig {

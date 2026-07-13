@@ -248,7 +248,8 @@ export function AdminDiagnosticsPage() {
     try {
       await enrichMedia(item.id, "tmdb");
       showToast(`「${item.title}」刮削成功`, "success");
-      loadDiagnostics();
+      // 静默刷新，不闪烁页面、不重置分页
+      silentRefresh();
     } catch (err) {
       showToast(`刮削失败: ${getErrMsg(err)}`, "error");
     } finally {
@@ -267,6 +268,16 @@ export function AdminDiagnosticsPage() {
       showToast("诊断失败: " + getErrMsg(err), "error");
     } finally {
       setDiagLoading(false);
+    }
+  };
+
+  /** Silent refresh: don't show loading spinner, don't clear data, don't reset page */
+  const silentRefresh = async () => {
+    try {
+      const data = await getMediaDiagnostics();
+      setDiagData(data);
+    } catch {
+      // Silently ignore — the triggering action already showed a toast
     }
   };
 
@@ -618,7 +629,7 @@ export function AdminDiagnosticsPage() {
         open={rematchMovie !== null}
         movie={rematchMovie}
         onClose={() => setRematchMovie(null)}
-        onSuccess={() => { setRematchMovie(null); loadDiagnostics(); }}
+        onSuccess={() => { setRematchMovie(null); silentRefresh(); }}
       />
 
       {/* ── Detail Modal ────────────────────────────────────── */}
@@ -626,7 +637,7 @@ export function AdminDiagnosticsPage() {
         open={detailMovie !== null}
         movie={detailMovie}
         onClose={() => setDetailMovie(null)}
-        onSave={() => { setDetailMovie(null); loadDiagnostics(); }}
+        onSave={() => { setDetailMovie(null); silentRefresh(); }}
       />
     </div>
   );

@@ -640,13 +640,15 @@ async def media_filters(
 async def search_media(
     q: str = Query(..., min_length=1, description="Search query"),
     source: str = Query("auto", pattern="^(tmdb|tvmaze|auto)$", description="Data source: tmdb, tvmaze, or auto"),
+    media_type: str = Query("", pattern="^(movie|tv|)$", description="Optional filter: movie or tv"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
     """Search for movies/TV via external sources (TMDB / TVmaze)."""
     try:
-        results = search_external_movies(q, source)
-        log_operation(current_user["id"], current_user["username"], "search", f"搜索: {q} (来源: {source})", db=db)
+        media_type_filter = media_type if media_type in ("movie", "tv") else None
+        results = search_external_movies(q, source, media_type=media_type_filter)
+        log_operation(current_user["id"], current_user["username"], "search", f"搜索: {q} (来源: {source}, 类型: {media_type_filter or '全部'})", db=db)
         return {"results": results}
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))

@@ -244,6 +244,7 @@ export function ManageTab() {
       case "title": if (!newValue) return; updatedFields.title = newValue; break;
       case "rating": newValue = parseFloat(value); if (isNaN(newValue) || newValue < 0 || newValue > 10) return; updatedFields.rating = Math.round(newValue * 10) / 10; break;
       case "year": newValue = value ? parseInt(value) : null; if (value && (isNaN(newValue) || newValue < 1888 || newValue > 2030)) return; updatedFields.year = newValue; break;
+      case "episode_count": newValue = value ? parseInt(value) : null; if (value && (isNaN(newValue) || newValue < 0)) return; updatedFields.episode_count = newValue; break;
       case "created_at": newValue = value || null; updatedFields.created_at = newValue; break;
     }
     const currentVal = movie[field as keyof MediaDetail];
@@ -253,6 +254,7 @@ export function ManageTab() {
         title: updatedFields.title ?? movie.title,
         rating: updatedFields.rating ?? movie.rating,
         year: updatedFields.year !== undefined ? updatedFields.year : movie.year,
+        episode_count: updatedFields.episode_count !== undefined ? updatedFields.episode_count : movie.episode_count,
         genre: movie.genre || "",
         created_at: updatedFields.created_at !== undefined ? updatedFields.created_at : movie.created_at,
       } as any);
@@ -541,12 +543,12 @@ export function ManageTab() {
                   </th>
                   <th className="w-[52px] px-1 py-2.5 text-center font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none max-sm:hidden">{t("manage.col_poster")}</th>
                   <th className="w-14 px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_status")}</th>
-                  {(["title", "rating", "year", "genre", "created_at"] as const).map((field) => {
-                    const widths: Record<string, number | undefined> = { title: 200, rating: 140, year: 72, genre: undefined, created_at: 100 };
+                  {(["title", "rating", "episode_count", "year", "genre", "created_at"] as const).map((field) => {
+                    const widths: Record<string, number | undefined> = { title: 200, rating: 140, episode_count: 72, year: 72, genre: undefined, created_at: 100 };
                     return (
                       <th key={field} className={`px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none cursor-pointer hover:text-foreground transition-colors${field === 'created_at' ? ' max-sm:hidden' : ''}`}
                         style={widths[field] ? { width: widths[field] } : undefined} onClick={() => handleSort(field)}>
-                        {field === "title" ? t("manage.col_title") : field === "rating" ? t("manage.col_rating") : field === "year" ? t("manage.col_year") : field === "genre" ? t("manage.col_genre") : t("manage.col_date")}
+                        {field === "title" ? t("manage.col_title") : field === "rating" ? t("manage.col_rating") : field === "year" ? t("manage.col_year") : field === "episode_count" ? t("manage.col_episode_count", "集数") : field === "genre" ? t("manage.col_genre") : t("manage.col_date")}
                         <SortArrow field={field} />
                       </th>
                     );

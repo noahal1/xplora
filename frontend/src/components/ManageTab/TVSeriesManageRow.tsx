@@ -172,6 +172,11 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
           </span>
         </td>
 
+        {/* Episode count */}
+        <td className="px-3 py-2 border-b border-border">
+          <span className="text-muted-foreground text-xs tabular-nums">—</span>
+        </td>
+
         {/* Year range */}
         <td className="px-3 py-2 border-b border-border">
           <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">{yearRange}</span>
@@ -275,11 +280,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
               <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 shrink-0 leading-none px-1">
                 {formatSeasonLabel(season.season_number, t("season_specials"))}
               </Badge>
-              {season.episode_count != null && (
-                <span className="text-[9px] text-muted-foreground/60 shrink-0">
-                  · {season.episode_count}ep
-                </span>
-              )}
+    
             </div>
           </TableEditableCell>
 
@@ -290,6 +291,15 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
             <span className="inline-flex items-center gap-1 font-medium text-xs">
               <Star size={10} fill="currentColor" className="text-amber" />
               <CountUp end={season.rating} decimals={1} />
+            </span>
+          </TableEditableCell>
+
+          {/* Episode count (editable) */}
+          <TableEditableCell movie={season} field="episode_count" editingCell={editingCell} sliderValue={sliderValue}
+            onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}
+            tdClassName="!py-1">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {season.episode_count != null ? `${season.episode_count}ep` : "—"}
             </span>
           </TableEditableCell>
 

@@ -101,6 +101,10 @@ export const ManageTableRow = memo(function ManageTableRow({
           <CountUp end={movie.rating} decimals={1} />
         </span>
       </TableEditableCell>
+      {/* Episode count (only for TV series) */}
+      <td className="px-3 py-2 border-b border-border text-muted-foreground text-xs tabular-nums">
+        {movie.media_type === "tv" && movie.episode_count != null ? `${movie.episode_count}ep` : "—"}
+      </td>
       <TableEditableCell movie={movie} field="year" editingCell={editingCell} sliderValue={sliderValue}
         onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}>
         <span className="text-muted-foreground">{movie.year || "—"}</span>
