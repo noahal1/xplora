@@ -46,14 +46,13 @@ export function SessionList({
     return (
       <FadeContent className="section-card">
         <div className="empty-state">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-            style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}>
-            <History size={24} style={{ color: "var(--seed-primary)" }} />
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 bg-accent-glow border border-primary-20">
+            <History size={24} className="text-primary" />
           </div>
-          <h2 className="text-heading mb-2" style={{ color: "var(--seed-fg)" }}>
+          <h2 className="text-heading mb-2 text-foreground">
             {t("history.no_sessions")}
           </h2>
-          <p className="text-body text-center max-w-md" style={{ color: "var(--fg-muted)" }}>
+          <p className="text-body text-center max-w-md text-muted-foreground">
             {t("history.no_sessions_hint")}
           </p>
         </div>
@@ -66,15 +65,14 @@ export function SessionList({
       <FadeContent className="section-card">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}>
-              <History size={18} style={{ color: "var(--seed-primary)" }} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-accent-glow border border-primary-20">
+              <History size={18} className="text-primary" />
             </div>
             <div>
-              <h2 className="text-heading" style={{ color: "var(--seed-fg)" }}>
+              <h2 className="text-heading text-foreground">
                 {t("history.tab_sessions")}
               </h2>
-              <p className="text-xs mt-0.5" style={{ color: "var(--fg-muted)" }}>
+              <p className="text-xs mt-0.5 text-muted-foreground">
                 {t("history.session_count", { count: total })}
               </p>
             </div>
@@ -82,7 +80,7 @@ export function SessionList({
           {total > 20 && (
             <div className="flex items-center gap-1">
               <button className="page-btn" disabled={page <= 0} onClick={() => onLoadSessions(page - 1)}>‹</button>
-              <span className="text-xs px-2" style={{ color: "var(--fg-muted)" }}>{page + 1}/{totalPages}</span>
+              <span className="text-xs px-2 text-muted-foreground">{page + 1}/{totalPages}</span>
               <button className="page-btn" disabled={page >= totalPages - 1} onClick={() => onLoadSessions(page + 1)}>›</button>
             </div>
           )}
@@ -114,7 +112,7 @@ export function SessionList({
                     }}
                   >
                     {s.model === "deepseek" ? (
-                      <Brain size={16} style={{ color: "var(--seed-primary)" }} />
+                      <Brain size={16} className="text-primary" />
                     ) : (
                       <Bot size={16} style={{ color: "#10b981" }} />
                     )}
@@ -125,19 +123,19 @@ export function SessionList({
                         {s.model === "deepseek" ? "DeepSeek" : "OpenAI"}
                       </span>
                       <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-                      <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                      <span className="text-xs text-muted-foreground">
                         {formatDateTime(s.created_at)}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                        <span className="font-medium" style={{ color: "var(--seed-primary)" }}>
+                      <span className="text-xs text-muted-foreground">
+                        <span className="font-medium text-primary">
                           {s.recommendation_count}
                         </span>{" "}
-                        {t("history.recommendations", { count: 0 }).replace("0", "")}<CountUp end={s.recommendation_count} />
+                        {t("history.recommendations").split("{{count}}")[0]}<CountUp end={s.recommendation_count} />{t("history.recommendations").split("{{count}}")[1]}
                       </span>
-                      <span className="text-xs" style={{ color: "var(--fg-dim)" }}>
-                        {t("history.source_movies", { count: 0 }).replace("0", "")}<CountUp end={s.source_count} />
+                      <span className="text-xs text-fg-dim">
+                        {t("history.source_movies").split("{{count}}")[0]}<CountUp end={s.source_count} />{t("history.source_movies").split("{{count}}")[1]}
                       </span>
                     </div>
                   </div>
@@ -150,7 +148,7 @@ export function SessionList({
                   >
                     <Trash2 size={14} />
                   </button>
-                  <ChevronRight size={14} style={{ color: "var(--fg-dim)" }} />
+                  <ChevronRight size={14} className="text-fg-dim" />
                 </div>
               </div>
             ))}
@@ -188,8 +186,7 @@ export function SessionList({
               {t("common.cancel")}
             </button>
             <button
-              className="btn btn-sm"
-              style={{ background: "var(--destructive)", color: "#fff", borderColor: "transparent" }}
+              className="btn btn-sm bg-destructive text-white" style={{ borderColor: "transparent" }}
               onClick={confirmDelete}
             >
               {t("common.delete")}
@@ -197,7 +194,7 @@ export function SessionList({
           </div>
         }
       >
-        <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+        <p className="text-sm text-muted-foreground">
           {t("history.delete_session_confirm")}
         </p>
       </Modal>

@@ -353,7 +353,7 @@ export function TopRatedTab() {
                   className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-xl shadow-xl z-50 overflow-hidden bg-popover border border-border transition-none"
                 >
                   <div className="p-2 border-b" style={{ borderColor: "var(--border-default)" }}>
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: "var(--bg-input)" }}>
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-bg-input">
                       <Search size={13} className="opacity-40 shrink-0" />
                       <input
                         type="text"
@@ -400,7 +400,7 @@ export function TopRatedTab() {
                             className="w-6 h-8 rounded object-cover shrink-0"
                           />
                         ) : (
-                          <div className="w-6 h-8 rounded flex items-center justify-center shrink-0" style={{ background: "var(--bg-input)" }}>
+                          <div className="w-6 h-8 rounded flex items-center justify-center shrink-0 bg-bg-input">
                             <Film size={10} className="opacity-20" />
                           </div>
                         )}
@@ -617,7 +617,7 @@ export function TopRatedTab() {
                 {m.poster_url ? (
                   <img src={m.poster_url} alt="" className="w-7 h-10 rounded object-cover shrink-0" />
                 ) : (
-                  <div className="w-7 h-10 rounded flex items-center justify-center shrink-0" style={{ background: "var(--bg-input)" }}>
+                  <div className="w-7 h-10 rounded flex items-center justify-center shrink-0 bg-bg-input">
                     <Film size={10} className="opacity-20" />
                   </div>
                 )}

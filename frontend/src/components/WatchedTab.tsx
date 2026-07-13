@@ -355,7 +355,7 @@ export function WatchedTab() {
                 </button>
               </div>
               <span className="badge font-mono text-xs shrink-0">
-                {t("watched.movie_count", { count: 0 }).replace("0", "")}<CountUp end={total} />
+                {t("watched.movie_count").split("{{count}}")[0]}<CountUp end={total} />{t("watched.movie_count").split("{{count}}")[1]}
               </span>
             </div>
           </div>

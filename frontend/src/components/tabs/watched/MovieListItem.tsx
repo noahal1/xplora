@@ -31,14 +31,12 @@ export const MovieListItem = memo(function MovieListItem({ movie, isSelected, on
 
   return (
     <div
-      className={`group flex items-center gap-3.5 p-3 rounded-xl transition-all duration-200 hover:-translate-y-0.5 ${isSelected ? "ring-1 ring-primary/30" : ""}`}
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
+      className={`group flex items-center gap-3.5 p-3 rounded-xl transition-all duration-200 hover:-translate-y-0.5 bg-bg-card border border-border animate-stream ${isSelected ? "ring-1 ring-primary/30" : ""}`}>
       <input type="checkbox" className="shrink-0 w-4 h-4 accent-primary cursor-pointer"
         checked={isSelected} onChange={() => onToggle(movie.id)} />
       {/* Poster */}
       <div
-        className="w-12 h-[72px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-sm transition-transform duration-200 group-hover:scale-[1.04]"
-        style={{ border: "1px solid var(--border-subtle)" }}
+        className="w-12 h-[72px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-sm transition-transform duration-200 group-hover:scale-[1.04] border border-border-subtle"
         onClick={() => onOpenDetail(movie)}>
         {movie.poster_url ? (
           <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />

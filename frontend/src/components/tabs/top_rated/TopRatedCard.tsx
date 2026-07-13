@@ -132,7 +132,7 @@ export function TopRatedCard({
           {movie.poster_url ? (
             <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" wrapperClassName="!aspect-auto !h-full" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--bg-input)" }}>
+            <div className="w-full h-full flex items-center justify-center bg-bg-input">
               <Film size={14} className="opacity-20" />
             </div>
           )}

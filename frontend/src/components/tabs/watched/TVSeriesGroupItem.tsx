@@ -36,7 +36,7 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
       className={`group relative rounded-xl transition-all duration-200 ${
         isSelected ? "ring-1 ring-primary/30" : ""
       }`}
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}
+      className="bg-bg-card border border-border"
     >
       <div className="p-3">
         {/* Header row: checkbox + poster + title + meta */}
@@ -50,8 +50,7 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
 
           {/* Poster */}
           <div
-            className="w-12 h-[72px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-sm transition-transform duration-200 hover:scale-[1.04]"
-            style={{ border: "1px solid var(--border-subtle)" }}
+            className="w-12 h-[72px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-sm transition-transform duration-200 hover:scale-[1.04] border border-border-subtle"
             onClick={() => onOpenDetail(firstSeason)}
           >
             {group.posterUrl ? (

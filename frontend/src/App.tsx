@@ -72,16 +72,25 @@ function MainApp() {
   return (
     <HistoryProvider>
       <EnrichProvider>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:pb-8">
-          <div className="fixed inset-0 pointer-events-none z-[-1] opacity-15">
-            <Aurora
-              colorStops={['#e8a838', '#f59e0b', '#e8a838']}
-              amplitude={0.15}
-              blend={0.8}
-              speed={0.2}
-            />
+        {/* Full-width Aurora background */}
+        <div className="fixed inset-0 pointer-events-none z-[-1] opacity-15">
+          <Aurora
+            colorStops={['#e8a838', '#f59e0b', '#e8a838']}
+            amplitude={0.15}
+            blend={0.8}
+            speed={0.2}
+          />
+        </div>
+
+        {/* Full-width Header */}
+        <div className="w-full">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+            <Header />
           </div>
-          <Header />
+        </div>
+
+        {/* Main content area */}
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:pb-8">
           <UpdateBanner />
           <EnrichBanner />
           <TabNav />
@@ -111,7 +120,13 @@ function MainApp() {
             </div>
           </div>
           <HistorySidebar />
-          <Footer />
+        </div>
+
+        {/* Full-width Footer */}
+        <div className="w-full mt-8 sm:mt-10 border-t border-border-subtle">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+            <Footer />
+          </div>
         </div>
       </EnrichProvider>
     </HistoryProvider>

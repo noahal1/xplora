@@ -35,7 +35,7 @@ export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
       className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 ${
         isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
       }`}
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}
+      className="bg-bg-card border border-border"
     >
       {/* Checkbox */}
       <input

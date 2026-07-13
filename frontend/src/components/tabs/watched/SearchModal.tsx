@@ -10,6 +10,7 @@ import { SearchSourceSelector } from "../../SearchSourceSelector";
 import { MediaTypeFilter } from "../../MediaTypeFilter";
 import { SearchResultCard } from "../../shared/SearchResultCard";
 import { Loader2 } from "lucide-react";
+import { SearchResultSkeleton } from "../../Skeleton";
 
 interface SearchModalProps {
   open: boolean;
@@ -139,7 +140,11 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
           </button>
         </div>
 
-        {searchResults.length > 0 && (
+        {searchLoading && externalQuery.trim() && (
+          <SearchResultSkeleton count={3} />
+        )}
+
+        {!searchLoading && searchResults.length > 0 && (
           <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
             <p className="text-xs text-muted-foreground mb-1">{t("wishlist.search_results")}</p>
             {searchResults.map((r) => {

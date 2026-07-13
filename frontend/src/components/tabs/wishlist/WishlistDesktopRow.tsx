@@ -25,13 +25,13 @@ export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail
           {item.poster_url ? (
             <ProgressiveImage src={item.poster_url} alt={item.title} className="w-full h-full object-cover" />
           ) : (
-            <Film size={14} style={{ color: "var(--fg-dim)" }} />
+            <Film size={14} className="text-fg-dim" />
           )}
         </div>
         <div>
-          <p className="text-sm font-[510]" style={{ color: "var(--seed-fg)" }}>{item.title}</p>
+          <p className="text-sm font-[510] text-foreground">{item.title}</p>
           <div className="flex items-center gap-2 mt-0.5">
-            {item.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{item.year}</span>}
+            {item.year && <span className="text-xs text-muted-foreground">{item.year}</span>}
             {item.genre && <span className="badge text-xs">{translateGenres(item.genre)}</span>}
             {item.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
             {item.season_number != null && (
@@ -52,7 +52,7 @@ export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail
           onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} title={t("watched.remove")}>
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
         </button>
-        <ChevronRight size={14} style={{ color: "var(--fg-dim)" }} />
+        <ChevronRight size={14} className="text-fg-dim" />
       </div>
     </div>
   );

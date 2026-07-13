@@ -579,6 +579,18 @@
     "month_short": "mo",
     "total_label": "Total"
   },
+  "wheel": {
+    "title": "What to Watch Today",
+    "subtitle": "{{count}} movies in wishlist",
+    "no_items": "No movies in wishlist yet",
+    "no_items_hint": "Add some movies to your wishlist first",
+    "spin": "Pick One",
+    "spin_again": "Spin Again",
+    "spinning": "Spinning...",
+    "mark_watched": "Mark as Watched",
+    "no_movies": "No movies in your wishlist",
+    "no_tv": "No TV shows in your wishlist"
+  },
   "detail_modal": {
     "loading": "Loading movie details...",
     "overview": "Overview",

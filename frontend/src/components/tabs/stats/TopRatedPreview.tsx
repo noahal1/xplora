@@ -28,19 +28,19 @@ export function TopRatedPreview({ movies, onNavigate }: { movies: StatsData["top
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "color-mix(in srgb, var(--seed-primary) 20%, transparent)" }}>
-              <Trophy size={15} style={{ color: "var(--seed-primary)" }} />
+              <Trophy size={15} className="text-primary" />
             </div>
             <div>
-              <span className="text-sm font-semibold" style={{ color: "var(--seed-fg)" }}>
+              <span className="text-sm font-semibold text-foreground">
                 {t("stats.top_rated", "高分排行榜")}
               </span>
-              <span className="text-[10px] ml-2" style={{ color: "var(--fg-muted)" }}>
-                <Sparkles size={10} className="inline mr-0.5" style={{ color: "var(--seed-primary)" }} />
+              <span className="text-[10px] ml-2 text-muted-foreground">
+                <Sparkles size={10} className="inline mr-0.5 text-primary" />
                 {t("stats.view_top_rated", "浏览 Top 10")}
               </span>
             </div>
           </div>
-          <ChevronRight size={15} className="shrink-0 transition-all duration-300 group-hover:translate-x-0.5" style={{ color: "var(--fg-dim)" }} />
+          <ChevronRight size={15} className="shrink-0 transition-all duration-300 group-hover:translate-x-0.5 text-fg-dim" />
         </div>
 
         {/* Mini grid */}
@@ -85,12 +85,12 @@ export function TopRatedPreview({ movies, onNavigate }: { movies: StatsData["top
                 )}
               </div>
               <div className="text-center min-w-0 w-full px-0.5">
-                <p className="text-[10px] font-medium truncate leading-tight" style={{ color: "var(--fg-secondary)" }}>
+                <p className="text-[10px] font-medium truncate leading-tight text-fg-secondary">
                   {movie.title}
                 </p>
                 <div className="flex items-center justify-center gap-0.5 mt-0.5">
-                  <Star size={8} style={{ color: "var(--seed-primary)" }} />
-                  <span className="text-[9px] font-semibold tabular-nums" style={{ color: "var(--fg-muted)" }}>
+                  <Star size={8} className="text-primary" />
+                  <span className="text-[9px] font-semibold tabular-nums text-muted-foreground">
                     {movie.rating.toFixed(1)}
                   </span>
                 </div>

@@ -133,8 +133,7 @@ export const TopRatedMobileCard = memo(function TopRatedMobileCard({
 
         {/* Poster */}
         <div
-          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer"
-          style={{ border: "1px solid var(--border-subtle)" }}
+          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer border border-border-subtle"
           onClick={() => !editMode && onClick(movie)}
         >
           {movie.poster_url ? (

@@ -347,8 +347,6 @@ export function ManageTab() {
     return () => { cancelled = true; };
   }, []);
 
-  const VISIBLE_GENRES = 6;
-
   const hasActiveFilters = !!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter.size > 0 || countryFilter.size > 0 || errorFilter);
 
   const SortArrow = ({ field }: { field: SortField }) => {
@@ -368,7 +366,9 @@ export function ManageTab() {
         <h2 className="section-title flex items-center gap-2 text-base">
           <Film size={16} className="text-primary shrink-0" />
           <span className="truncate">{t("manage.title")}</span>
-          <span className="badge font-mono text-xs shrink-0">{t("manage.total", { count: 0 }).replace("0", "")}<CountUp end={total} /></span>
+          <span className="badge font-mono text-xs shrink-0">
+            {t("manage.total").split("{{count}}")[0]}<CountUp end={total} />{t("manage.total").split("{{count}}")[1]}
+          </span>
         </h2>
         <div className="flex gap-1.5 items-center w-full sm:w-auto overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1">
           <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={() => fetchData()} title={t("manage.refresh")}>
@@ -452,7 +452,6 @@ export function ManageTab() {
           <GenreFilter
             genres={filterGenres}
             selected={genreFilter}
-            visibleCount={VISIBLE_GENRES}
             onSelect={(g) => { setGenreFilter(g); setPage(0); setSelected(new Set()); }}
           />
           {genreFilter.size > 0 && (
@@ -468,7 +467,6 @@ export function ManageTab() {
           <CountryFilter
             countries={filterCountries}
             selected={countryFilter}
-            visibleCount={VISIBLE_GENRES}
             onSelect={(c) => { setCountryFilter(c); setPage(0); setSelected(new Set()); }}
           />
           {countryFilter.size > 0 && (
@@ -537,23 +535,23 @@ export function ManageTab() {
             <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
               <thead>
                 <tr className="sticky top-0 z-10">
-                  <th className="w-10 text-center px-3 py-2.5 font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">
+                  <th className="w-10 text-center px-3 py-2.5 font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none">
                     <input type="checkbox" ref={selectAllRef} className="w-4 h-4 accent-primary cursor-pointer"
                       checked={mediaList.length > 0 && mediaList.every((m) => selected.has(m.id))} onChange={toggleSelectAll} />
                   </th>
-                  <th className="w-[52px] px-1 py-2.5 text-center font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none max-sm:hidden">{t("manage.col_poster")}</th>
-                  <th className="w-14 px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_status")}</th>
+                  <th className="w-[52px] px-1 py-2.5 text-center font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none max-sm:hidden">{t("manage.col_poster")}</th>
+                  <th className="w-14 px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none">{t("manage.col_status")}</th>
                   {(["title", "rating", "episode_count", "year", "genre", "created_at"] as const).map((field) => {
                     const widths: Record<string, number | undefined> = { title: 200, rating: 140, episode_count: 72, year: 72, genre: undefined, created_at: 100 };
                     return (
-                      <th key={field} className={`px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none cursor-pointer hover:text-foreground transition-colors${field === 'created_at' ? ' max-sm:hidden' : ''}`}
+                      <th key={field} className={`px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none cursor-pointer hover:text-foreground transition-colors${field === 'created_at' ? ' max-sm:hidden' : ''}`}
                         style={widths[field] ? { width: widths[field] } : undefined} onClick={() => handleSort(field)}>
                         {field === "title" ? t("manage.col_title") : field === "rating" ? t("manage.col_rating") : field === "year" ? t("manage.col_year") : field === "episode_count" ? t("manage.col_episode_count", "集数") : field === "genre" ? t("manage.col_genre") : t("manage.col_date")}
                         <SortArrow field={field} />
                       </th>
                     );
                   })}
-                  <th className="w-[120px] max-sm:w-[160px] text-center px-1 py-2.5 font-medium text-xs text-muted-foreground bg-[var(--bg-canvas)] border-b border-border select-none">{t("manage.col_actions")}</th>
+                  <th className="w-[120px] max-sm:w-[160px] text-center px-1 py-2.5 font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none">{t("manage.col_actions")}</th>
                 </tr>
               </thead>
               <tbody>

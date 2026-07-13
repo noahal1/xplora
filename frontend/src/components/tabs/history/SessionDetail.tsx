@@ -25,10 +25,9 @@ export function SessionDetail({
 }: SessionDetailProps) {
   return (
     <FadeContent className="section-card">
-      <div className="flex items-start sm:items-center gap-2 pb-4 mb-5 flex-wrap" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+      <div className="flex items-start sm:items-center gap-2 pb-4 mb-5 flex-wrap border-b border-border-subtle">
         <button
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all hover:bg-accent"
-          style={{ color: "var(--fg-muted)" }}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all hover:bg-accent text-muted-foreground"
           onClick={onBack}
         >
           <ChevronRight size={14} className="rotate-180" />
@@ -39,16 +38,16 @@ export function SessionDetail({
             {detail.model === "deepseek" ? <><Brain size={14} /> DeepSeek</> : <><Bot size={14} /> OpenAI</>}
           </span>
           <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-          <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+          <span className="text-xs text-muted-foreground">
             <Clock size={10} className="inline mr-0.5" />
             {formatDateTime(detail.created_at)}
           </span>
           <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-          <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-            {t("history.source_movies", { count: 0 }).replace("0", "")}<CountUp end={detail.source_count} />
+          <span className="text-xs text-muted-foreground">
+            {t("history.source_movies").split("{{count}}")[0]}<CountUp end={detail.source_count} />{t("history.source_movies").split("{{count}}")[1]}
           </span>
           <Badge variant="outline" className="text-[10px] ml-1">
-            {t("history.recommendations", { count: 0 }).replace("0", "")}<CountUp end={detail.recommendations.length} />
+            {t("history.recommendations").split("{{count}}")[0]}<CountUp end={detail.recommendations.length} />{t("history.recommendations").split("{{count}}")[1]}
           </Badge>
         </div>
       </div>
@@ -80,11 +79,11 @@ export function SessionDetail({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-[510] truncate" style={{ color: "var(--seed-fg)" }}>
+                    <span className="text-sm font-[510] truncate text-foreground">
                       {rec.title}
                     </span>
                     {rec.year && (
-                      <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{rec.year}</span>
+                      <span className="text-xs text-muted-foreground">{rec.year}</span>
                     )}
                     {rec.genre && (
                       <Badge variant="outline" className="text-[10px]">{translateGenres(rec.genre)}</Badge>
@@ -100,7 +99,7 @@ export function SessionDetail({
                       <Percent size={8} /><CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
                     </span>
                   </div>
-                  <p className="text-xs mt-1 leading-relaxed line-clamp-2" style={{ color: "var(--fg-secondary)" }}>
+                  <p className="text-xs mt-1 leading-relaxed line-clamp-2 text-fg-secondary">
                     {rec.reason}
                   </p>
                 </div>

@@ -47,8 +47,7 @@ export const SearchResultCard = memo(function SearchResultCard({
 
   const poster = (
     <div
-      className="w-10 h-14 rounded shrink-0 overflow-hidden bg-muted flex items-center justify-center cursor-pointer relative group"
-      style={{ border: "1px solid var(--border-subtle)" }}
+      className="w-10 h-14 rounded shrink-0 overflow-hidden bg-muted flex items-center justify-center cursor-pointer relative group border border-border-subtle"
       onClick={onDetail ?? onAdd}
     >
       {result.poster_url ? (

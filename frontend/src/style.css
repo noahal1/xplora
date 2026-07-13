@@ -5,6 +5,19 @@
    Seed Token System + shadcn/ui Integration
    ============================================ */
 
+/* ── Fallback @font-face for Inter ──────────────────────────────────
+   When Google Fonts hasn't loaded yet, the browser uses the fallback
+   (Arial) with adjusted metrics to match Inter's layout. This
+   minimises Cumulative Layout Shift (CLS) when 'swap' triggers.        */
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Segoe UI');
+  size-adjust: 107%;
+  ascent-override: 89%;
+  descent-override: 99%;
+  line-gap-override: 0%;
+}
+
 /* Seed Tokens — Dark (Default) */
 :root {
   --seed-bg: #08090a;
@@ -202,10 +215,45 @@
   --color-pink: #ec4899;
   --color-purple: var(--purple);
 
+  /* Inline-style CSS variables exposed as Tailwind utilities */
+  --color-bg-card: var(--bg-card);
+  --color-bg-input: var(--bg-input);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-dim: var(--fg-dim);
+  --color-border-subtle: var(--border-subtle);
+  --color-accent-glow: var(--accent-glow);
+  --color-primary-20: var(--primary-20);
+  --color-bg-canvas: var(--bg-canvas);
+  --color-border-hover: var(--border-hover);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
+  --color-chart-10: var(--chart-10);
+
+  /* Chart background tints */
+  --color-chart-1-bg: var(--chart-1-bg);
+  --color-chart-2-bg: var(--chart-2-bg);
+  --color-chart-3-bg: var(--chart-3-bg);
+  --color-chart-4-bg: var(--chart-4-bg);
+
+  /* Border-radius — exposes seed-radius as rounded-card utility */
+  --radius-card: var(--seed-radius);
+
   --animate-fade-in: fadeIn 0.3s ease;
   --animate-slide-up: slideUp 0.35s var(--ease-out-expo);
   --animate-slide-down: slideDown 0.35s var(--ease-out-expo);
   --animate-scale-in: scaleIn 0.25s var(--ease-out-expo);
+  --animate-wheel-enter: wheelEnter 0.4s var(--ease-spring);
+  --animate-enter-1: enterStagger 0.4s var(--ease-out-expo) 0.04s both;
+  --animate-enter-2: enterStagger 0.4s var(--ease-out-expo) 0.12s both;
+  --animate-enter-3: enterStagger 0.4s var(--ease-out-expo) 0.20s both;
+  --animate-enter-4: enterStagger 0.4s var(--ease-out-expo) 0.28s both;
   --animate-pulse-glow: pulseGlow 2s ease-in-out infinite;
   --animate-stream: streamIn 0.4s var(--ease-out-expo);
   --animate-stream-spin: streamSpin 0.8s linear infinite;
@@ -216,6 +264,9 @@
   --animate-float: float 3s ease-in-out infinite;
   --animate-count-up: countUp 0.35s var(--ease-out-expo);
   --animate-pill-enter: pillEnter 0.25s var(--ease-out-expo) both;
+
+  /* WheelPicker celebration */
+  --animate-celebration-burst: celebration-burst 0.6s var(--ease-out-expo) forwards;
 
 }
 
@@ -351,6 +402,71 @@
   }
 }
 
+/* ── WheelPicker Celebration ────────────────────────────────────── */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-10px) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh)) rotate(720deg) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes celebration-burst {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow), 0 0 0 0 rgba(232, 168, 56, 0.1);
+    transform: scale(1);
+  }
+  30% {
+    box-shadow: 0 0 0 12px transparent, 0 0 0 24px transparent;
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+}
+
+@keyframes star-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(-45deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8) rotate(45deg) translateY(-20px);
+  }
+}
+
+/* ── WheelPicker Entrance ──────────────────────────────────────── */
+@keyframes wheelEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes enterStagger {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ============================================
    Base
    ============================================ */
@@ -359,8 +475,11 @@ html {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Microsoft YaHei', system-ui, sans-serif;
+  /* 'Inter Fallback' comes second so it kicks in when Inter hasn't loaded yet.
+     The size-adjust + ascent/descent overrides make Arial occupy the same
+     space as Inter, preventing layout shift when Inter swaps in. */
+  font-family: 'Inter', 'Inter Fallback', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
   font-feature-settings: "cv01", "ss03";
   background: var(--seed-bg);
   color: var(--seed-fg);
@@ -762,29 +881,46 @@ body {
 
 /* ============================================
    Theme Transition — smooth color changes on theme toggle
-   Targeted selectors instead of universal * for performance.
-   Component classes (card, btn, pill, input-field, etc.)
-   already define their own transitions for hover/active states.
+   When `.theme-transitioning` is on <html>, all theme-affecting
+   properties morph smoothly.  Once the transition overlay finishes,
+   the class is removed so normal (fast) hover transitions resume.
    ============================================ */
-body {
-  transition: background-color 0.25s ease, color 0.2s ease;
+html.theme-transitioning body {
+  transition: background-color 0.35s ease, color 0.3s ease !important;
 }
 
-/* Theme-relevant classes that don't have their own transitions */
-.badge,
-.spinner,
-.empty-state,
-.text-caption,
-.section-header,
-.section-title,
-.count-badge {
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
+html.theme-transitioning .badge,
+html.theme-transitioning .spinner,
+html.theme-transitioning .empty-state,
+html.theme-transitioning .text-caption,
+html.theme-transitioning .section-header,
+html.theme-transitioning .section-title,
+html.theme-transitioning .count-badge,
+html.theme-transitioning .section-card,
+html.theme-transitioning .card,
+html.theme-transitioning .pill,
+html.theme-transitioning .btn,
+html.theme-transitioning .btn-ghost,
+html.theme-transitioning .btn-subtle,
+html.theme-transitioning .btn-destructive,
+html.theme-transitioning .input-field,
+html.theme-transitioning .page-btn,
+html.theme-transitioning .tab-item,
+html.theme-transitioning .pill,
+html.theme-transitioning .history-item,
+html.theme-transitioning .skeleton,
+html.theme-transitioning .shimmer-bg,
+html.theme-transitioning .progress-bar,
+html.theme-transitioning .badge {
+  transition: background-color 0.35s ease,
+              border-color 0.35s ease,
+              color 0.3s ease,
+              box-shadow 0.35s ease !important;
 }
 
-.no-theme-transition,
-.no-theme-transition *,
-.no-theme-transition *::before,
-.no-theme-transition *::after {
+/* Override for controls that should NOT animate during theme transition */
+html.theme-transitioning .no-theme-transition,
+html.theme-transitioning .no-theme-transition * {
   transition: none !important;
 }
 

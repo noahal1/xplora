@@ -962,11 +962,13 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             for c, n in country_counter.most_common()
         ]
 
-        # ── Genre distribution (split by " / ") ───────────────
+        # ── Genre distribution (normalize separators first) ────
         genre_counter: Counter = Counter()
         for r in records:
             if r.genre:
-                for g in r.genre.split(" / "):
+                # Normalize: replace "/" and "," with " / " then split
+                normalized = r.genre.replace("/", " / ").replace(",", " / ")
+                for g in normalized.split(" / "):
                     g = g.strip()
                     if g:
                         genre_counter[g] += 1

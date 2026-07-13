@@ -8,6 +8,7 @@ import { Modal } from "../Modal";
 import { SearchResultCard } from "../shared/SearchResultCard";
 import { MediaTypeFilter } from "../MediaTypeFilter";
 import { Search, Loader2, Plus, ExternalLink } from "lucide-react";
+import { SearchResultSkeleton } from "../Skeleton";
 
 interface SearchImportModalProps {
   open: boolean;
@@ -149,10 +150,7 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
         </div>
 
         {searchLoading && (
-          <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Loader2 size={20} className="animate-spin mr-2" />
-            <span className="text-sm">{t("manage.searching")}</span>
-          </div>
+          <SearchResultSkeleton count={3} />
         )}
 
         {!searchLoading && searchQuery && searchResults.length === 0 && (

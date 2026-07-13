@@ -116,8 +116,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
         <div className="space-y-4">
           {/* Current movie info */}
           <div className="relative flex items-center gap-4 p-3.5 rounded-xl bg-gradient-to-r from-primary/[0.04] to-primary/[0.01] border border-primary/10">
-            <div className="w-11 h-16 rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm"
-              style={{ border: "1px solid var(--border-subtle)" }}>
+            <div className="w-11 h-16 rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm border border-border-subtle">
               {movie.poster_url ? (
                 <img src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
               ) : (
@@ -227,8 +226,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                       onClick={() => handleSelectRematch(result)}
                       onMouseEnter={() => setRematchFocusedIdx(idx)}
                     >
-                      <div className="w-11 h-[60px] rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm relative group"
-                        style={{ border: "1px solid var(--border-subtle)" }}>
+                      <div className="w-11 h-[60px] rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm relative group border border-border-subtle">
                         {result.poster_url ? (
                           <>
                             <img src={result.poster_url} alt={result.title} className="w-full h-full object-cover" loading="lazy"

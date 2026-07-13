@@ -40,7 +40,7 @@ export function ResultsSection({
   return (
     <FadeContent className="section-card" ref={resultsRef}>
       <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
-        <h2 className="text-heading" style={{ color: "var(--seed-fg)" }}>
+        <h2 className="text-heading text-foreground">
           {t("recommend.results")}
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
@@ -90,8 +90,7 @@ export function ResultsSection({
           </button>
           <button
             onClick={onNewSession}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all sm:ml-auto"
-            style={{ color: "var(--fg-muted)" }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all sm:ml-auto text-muted-foreground"
           >
             <Sparkles size={12} />
             {t("recommend.new_session")}

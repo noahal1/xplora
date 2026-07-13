@@ -30,7 +30,7 @@ export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, on
 
   return (
     <div className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}>
+      className="bg-bg-card border border-border">
       {/* Checkbox — always visible on mobile, hover on desktop */}
       <input type="checkbox"
         className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer opacity-0 group-hover:opacity-100 max-sm:opacity-100 transition-opacity duration-200"

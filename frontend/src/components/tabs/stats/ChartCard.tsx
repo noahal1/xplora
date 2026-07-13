@@ -11,12 +11,12 @@ export function ChartCard({ title, count, icon, children }: {
     }}>
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          {icon && <span className="shrink-0" style={{ color: "var(--seed-primary)" }}>{icon}</span>}
-          <span className="text-xs font-semibold uppercase tracking-[0.06em]" style={{ color: "var(--fg-dim)" }}>
+          {icon && <span className="shrink-0 text-primary">{icon}</span>}
+          <span className="text-xs font-semibold uppercase tracking-[0.06em] text-fg-dim">
             {title}
           </span>
           {count && (
-            <span className="text-[10px] font-medium tabular-nums ml-auto" style={{ color: "var(--fg-muted)" }}>
+            <span className="text-[10px] font-medium tabular-nums ml-auto text-muted-foreground">
               {count}
             </span>
           )}

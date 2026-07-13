@@ -294,8 +294,7 @@ export function HistorySidebar() {
               {t("common.cancel")}
             </button>
             <button
-              className="btn btn-sm"
-              style={{ background: "var(--destructive)", color: "#fff", borderColor: "transparent" }}
+              className="btn btn-sm bg-destructive text-white" style={{ borderColor: "transparent" }}
               onClick={confirmDelete}
             >
               {t("common.delete")}

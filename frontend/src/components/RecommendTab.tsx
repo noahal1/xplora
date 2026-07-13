@@ -495,7 +495,7 @@ export function RecommendTab() {
       <FadeContent className="section-card">
         <div className="flex items-center justify-center py-8">
           <div className="w-6 h-6 border-2 border-[var(--border-default)] border-t-[var(--seed-primary)] rounded-full animate-stream-spin" />
-          <span className="ml-2 text-sm" style={{ color: "var(--fg-muted)" }}>{t("recommend.loading_movies")}</span>
+          <span className="ml-2 text-sm text-muted-foreground">{t("recommend.loading_movies")}</span>
         </div>
       </FadeContent>
     );
@@ -539,11 +539,11 @@ export function RecommendTab() {
 
           <div className="flex flex-col items-center justify-center py-10">
             <div className="spinner mb-4" />
-            <p className="text-sm font-[510]" style={{ color: "var(--fg-secondary)" }}>
+            <p className="text-sm font-[510] text-fg-secondary">
               {t("recommend.analyzing")}
             </p>
             {/* Elapsed time */}
-            <p className="text-xs mt-3 tabular-nums" style={{ color: "var(--fg-muted)" }}>
+            <p className="text-xs mt-3 tabular-nums text-muted-foreground">
               {elapsedSeconds < 60
                 ? `${elapsedSeconds}s`
                 : `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`}

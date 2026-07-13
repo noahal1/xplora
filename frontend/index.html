@@ -5,9 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
     <title>Xplora</title>
     <link rel="icon" type="image/png" href="src/assets/icon.png" />
+
+    <!-- ── Font loading: preconnect + preload + stylesheet ────────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Preload the Google Fonts CSS so the browser discovers @font-face early -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&display=swap" rel="stylesheet" />
+
+    <!-- ── Inline theme script: prevent React hydration flash ────────
+         Reads saved theme BEFORE React renders, so the correct .light
+         or .dark class is on <html> from the very first paint.        -->
+    <script>
+      (function() {
+        var theme;
+        try { theme = localStorage.getItem('xplora-theme'); } catch (e) {}
+        if (theme === 'light') {
+          document.documentElement.classList.add('light');
+        } else if (theme === 'dark') {
+          // dark is the default, no class needed on :root
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.classList.add('light');
+        }
+      })();
+    </script>
 </head>
 <body>
     <div id="root"></div>

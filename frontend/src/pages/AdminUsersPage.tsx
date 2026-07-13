@@ -134,7 +134,7 @@ export function AdminUsersPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button
@@ -284,8 +284,7 @@ export function AdminUsersPage() {
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="btn btn-sm"
-              style={{ background: 'var(--destructive)', color: '#fff', borderColor: 'transparent' }}
+              className="btn btn-sm bg-destructive text-white" style={{ borderColor: "transparent" }}
             >
               {deleting ? t("admin.delete_progress") : t("admin.confirm_delete")}
             </button>

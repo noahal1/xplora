@@ -46,19 +46,19 @@ export function SessionHistory({
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}
               >
-                <History size={15} style={{ color: "var(--seed-primary)" }} />
+                <History size={15} className="text-primary" />
               </div>
-              <h2 className="text-sm font-[590]" style={{ color: "var(--seed-fg)" }}>
+              <h2 className="text-sm font-[590] text-foreground">
                 {t("history.title")}
               </h2>
-              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+              <span className="text-xs text-muted-foreground">
                 {t("history.session_count", { count: sessionsTotal })}
               </span>
             </div>
             {sessionsTotal > 10 && (
               <div className="flex items-center gap-1">
                 <button className="page-btn" disabled={sessionsPage <= 0} onClick={() => onLoadSessions(sessionsPage - 1)}>‹</button>
-                <span className="text-xs px-1" style={{ color: "var(--fg-muted)" }}>{sessionsPage + 1}/{Math.ceil(sessionsTotal / 10)}</span>
+                <span className="text-xs px-1 text-muted-foreground">{sessionsPage + 1}/{Math.ceil(sessionsTotal / 10)}</span>
                 <button className="page-btn" disabled={sessionsPage >= Math.ceil(sessionsTotal / 10) - 1} onClick={() => onLoadSessions(sessionsPage + 1)}>›</button>
               </div>
             )}
@@ -94,7 +94,7 @@ export function SessionHistory({
                       }}
                     >
                       {s.model === "deepseek" ? (
-                        <Brain size={14} style={{ color: "var(--seed-primary)" }} />
+                        <Brain size={14} className="text-primary" />
                       ) : (
                         <Bot size={14} style={{ color: "#10b981" }} />
                       )}
@@ -105,17 +105,17 @@ export function SessionHistory({
                           {s.model === "deepseek" ? "DeepSeek" : "OpenAI"}
                         </span>
                         <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-                        <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                        <span className="text-xs text-muted-foreground">
                           <Clock size={10} className="inline mr-0.5" />
                           {formatDateTime(s.created_at)}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
-                          <span className="font-medium" style={{ color: "var(--seed-primary)" }}>{s.recommendation_count}</span>
+                        <span className="text-xs text-muted-foreground">
+                          <span className="font-medium text-primary">{s.recommendation_count}</span>
                           {' '}{t("history.recommendations", { count: s.recommendation_count })}
                         </span>
-                        <span className="text-xs" style={{ color: "var(--fg-dim)" }}>
+                        <span className="text-xs text-fg-dim">
                           {t("history.source_movies", { count: s.source_count })}
                         </span>
                       </div>
@@ -129,7 +129,7 @@ export function SessionHistory({
                     >
                       <Trash2 size={13} />
                     </button>
-                    <ChevronRight size={14} style={{ color: "var(--fg-dim)" }} />
+                    <ChevronRight size={14} className="text-fg-dim" />
                   </div>
                 </div>
               ))}
@@ -144,8 +144,7 @@ export function SessionHistory({
           {/* Back + session info */}
           <div className="flex items-start sm:items-center gap-2 pb-4 mb-4 flex-wrap" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
             <button
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all hover:bg-accent"
-              style={{ color: "var(--fg-muted)" }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all hover:bg-accent text-muted-foreground"
               onClick={onBackToList}
             >
               <ChevronRight size={14} className="rotate-180" />
@@ -156,12 +155,12 @@ export function SessionHistory({
                 {selectedSession.model === "deepseek" ? <><Brain size={14} className="inline mr-1" />DeepSeek</> : <><Bot size={14} className="inline mr-1" />OpenAI</>}
               </span>
               <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+              <span className="text-xs text-muted-foreground">
                 <Clock size={10} className="inline mr-0.5" />
                 {formatDateTime(selectedSession.created_at)}
               </span>
               <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
-              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+              <span className="text-xs text-muted-foreground">
                 {t("history.source_movies", { count: selectedSession.source_count })}
               </span>
             </div>
@@ -191,8 +190,8 @@ export function SessionHistory({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-[510] truncate" style={{ color: "var(--seed-fg)" }}>{rec.title}</span>
-                        {rec.year && <span className="text-xs" style={{ color: "var(--fg-muted)" }}>{rec.year}</span>}
+                        <span className="text-sm font-[510] truncate text-foreground">{rec.title}</span>
+                        {rec.year && <span className="text-xs text-muted-foreground">{rec.year}</span>}
                         {rec.genre && <span className="badge text-[10px]">{translateGenres(rec.genre)}</span>}
                         <span
                           className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
@@ -205,7 +204,7 @@ export function SessionHistory({
                           <Percent size={8} /><CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
                         </span>
                       </div>
-                      <p className="text-xs mt-1 leading-relaxed line-clamp-2" style={{ color: "var(--fg-secondary)" }}>{rec.reason}</p>
+                      <p className="text-xs mt-1 leading-relaxed line-clamp-2 text-fg-secondary">{rec.reason}</p>
                     </div>
                   </div>
                   <button
@@ -255,7 +254,7 @@ export function SessionHistory({
           </div>
         }
       >
-        <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+        <p className="text-sm text-muted-foreground">
           {t("history.delete_session_confirm")}
         </p>
       </Modal>

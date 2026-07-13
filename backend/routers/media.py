@@ -614,6 +614,7 @@ async def media_filters(
 
     countries_set: set[str] = set()
     genres_set: set[str] = set()
+    genres_seen: set[str] = set()
 
     for country, genre in records:
         if country:
@@ -622,9 +623,14 @@ async def media_filters(
                 if c:
                     countries_set.add(c)
         if genre:
-            for g in genre.split(" / "):
+            # Normalize: replace all "/" and "," with " / " then split
+            # Handles inconsistent separators like "Action/Adventure",
+            # "Action / Adventure", "Action, Adventure" etc.
+            normalized = genre.replace("/", " / ").replace(",", " / ")
+            for g in normalized.split(" / "):
                 g = g.strip()
-                if g:
+                if g and g.lower() not in genres_seen:
+                    genres_seen.add(g.lower())
                     genres_set.add(g)
 
     return {

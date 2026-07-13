@@ -87,17 +87,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       pendingTheme.current = nextTheme;
       setTransitioning(true);
 
-      // Switch theme at the midpoint of the animation
+      // Add transitioning class to html for smooth CSS transitions
+      document.documentElement.classList.add("theme-transitioning");
+
+      // Switch theme at ~40% of the animation (when the circle is large enough to cover)
       setTimeout(() => {
         setTheme(nextTheme);
-      }, 300);
+      }, 180);
 
-      // Store cleanup timer so it can be cancelled on unmount
+      // Clean up: remove overlay + transitioning class
       const cleanupTimer = setTimeout(() => {
         setTransitioning(false);
         pendingTheme.current = null;
+        document.documentElement.classList.remove("theme-transitioning");
         timerRef.current = null;
-      }, 700);
+      }, 450);
       timerRef.current = cleanupTimer;
     },
     [theme, transitioning],
@@ -130,10 +134,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
               inset: 0,
               zIndex: 9999,
               pointerEvents: "none",
-              background: overlayBg,
+              willChange: "clip-path",
+              background: `radial-gradient(circle at ${origin.x * 100}% ${origin.y * 100}%, ${overlayBg}, color-mix(in srgb, ${overlayBg} 85%, transparent))`,
+              backdropFilter: "blur(2px)",
+              WebkitBackdropFilter: "blur(2px)",
               "--origin-x": `${origin.x * 100}%`,
               "--origin-y": `${origin.y * 100}%`,
-              animation: "themeIrisWipe 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+              animation: "themeIrisWipe 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards",
             } as React.CSSProperties
           }
         />

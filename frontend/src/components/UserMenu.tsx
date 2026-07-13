@@ -74,11 +74,11 @@ export function UserMenu() {
           }}
         >
           {user?.username ? (
-            <span className="text-[10px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+            <span className="text-[10px] font-semibold text-muted-foreground">
               {user.username.charAt(0).toUpperCase()}
             </span>
           ) : (
-            <User size={13} style={{ color: "var(--fg-muted)" }} />
+            <User size={13} className="text-muted-foreground" />
           )}
         </div>
         <ChevronDown

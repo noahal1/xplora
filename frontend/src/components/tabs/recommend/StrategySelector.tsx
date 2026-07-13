@@ -4,8 +4,6 @@ import { STRATEGIES } from "./strategies";
 import { MediaTypeFilter } from "../../MediaTypeFilter";
 import { GenreFilter } from "../../GenreFilter";
 
-const VISIBLE_GENRES = 6;
-
 interface StrategySelectorProps {
   strategy: string;
   onStrategyChange: (id: string) => void;
@@ -50,18 +48,18 @@ export function StrategySelector({
         className="w-10 sm:w-12 h-10 sm:h-12 rounded-xl flex items-center justify-center mb-3 sm:mb-4"
         style={{ background: "var(--accent-glow)", border: "1px solid var(--primary-20)" }}
       >
-        <Sparkles size={16} style={{ color: "var(--seed-primary)" }} />
+        <Sparkles size={16} className="text-primary" />
       </div>
-      <h2 className="text-sm sm:text-heading mb-1.5 sm:mb-2 text-center" style={{ color: "var(--seed-fg)" }}>
+      <h2 className="text-sm sm:text-heading mb-1.5 sm:mb-2 text-center text-foreground">
         {t("recommend.empty_title")}
       </h2>
-      <p className="text-xs sm:text-body text-center max-w-md mb-4 sm:mb-6" style={{ color: "var(--fg-muted)" }}>
+      <p className="text-xs sm:text-body text-center max-w-md mb-4 sm:mb-6 text-muted-foreground">
         {t("recommend.empty_desc")}
       </p>
 
       {/* ── Strategy Selector Grid ────────────────────────── */}
       <div className="w-full max-w-[520px] mb-4 sm:mb-6">
-        <p className="text-label mb-2 sm:mb-3 text-center" style={{ color: "var(--fg-dim)" }}>
+        <p className="text-label mb-2 sm:mb-3 text-center text-fg-dim">
           {t("recommend.strategy_label")}
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2">
@@ -108,7 +106,6 @@ export function StrategySelector({
         genres={uniqueGenres}
         selected={genreFilter}
         onSelect={onGenreFilterChange}
-        visibleCount={VISIBLE_GENRES}
       />
 
       {/* ── Strategy-specific inputs ──────────────────────── */}
@@ -136,7 +133,7 @@ export function StrategySelector({
               min={1900}
               max={2030}
             />
-            <span className="text-xs" style={{ color: "var(--fg-dim)" }}>—</span>
+            <span className="text-xs text-fg-dim">—</span>
             <input
               type="number"
               value={strategyYearEnd}
@@ -179,7 +176,7 @@ export function StrategySelector({
 
         {/* Count */}
         <div className="flex items-center gap-2">
-          <span className="text-xs" style={{ color: "var(--fg-dim)" }}>{t("recommend.rec_count")}</span>
+          <span className="text-xs text-fg-dim">{t("recommend.rec_count")}</span>
           <div className="flex items-center gap-1">
             <button
               className="w-6 h-6 flex items-center justify-center rounded text-xs font-medium transition-all disabled:opacity-30"
@@ -187,7 +184,7 @@ export function StrategySelector({
               disabled={recCount <= 1}
               onClick={() => onRecCountChange(Math.max(1, recCount - 1))}
             >−</button>
-            <span className="w-6 text-center text-xs font-semibold" style={{ color: "var(--seed-primary)" }}>{recCount}</span>
+            <span className="w-6 text-center text-xs font-semibold text-primary">{recCount}</span>
             <button
               className="w-6 h-6 flex items-center justify-center rounded text-xs font-medium transition-all disabled:opacity-30"
               style={{ border: "1px solid var(--border-subtle)", color: "var(--fg-muted)" }}
@@ -199,7 +196,7 @@ export function StrategySelector({
 
         {/* Generate button */}
         {filteredCount < 2 && (
-          <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+          <p className="text-sm text-muted-foreground">
             {mediaTypeFilter !== "all"
               ? t("recommend.need_more_filtered", { type: t(`manage.media_type_${mediaTypeFilter}`) })
               : t("recommend.need_more_movies")}
@@ -220,7 +217,7 @@ export function StrategySelector({
           {t("recommend.generate")}
         </button>
 
-        <p className="text-caption" style={{ color: "var(--fg-dim)" }}>
+        <p className="text-caption text-fg-dim">
           {t("recommend.based_on", { count: filteredCount })} · Ctrl+Enter
         </p>
       </div>

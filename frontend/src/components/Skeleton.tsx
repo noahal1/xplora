@@ -37,6 +37,35 @@ export function SkeletonCard({ count = 1 }: { count?: number }) {
   );
 }
 
+/**
+ * Skeleton placeholder for SearchResultCard — matches its exact layout:
+ * [checkbox] [poster] [title + year + genre + badges] [add button]
+ */
+export function SearchResultSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl border border-border">
+          {/* Poster placeholder */}
+          <div className="w-10 h-14 rounded shrink-0 skeleton" />
+          {/* Info placeholders */}
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="skeleton h-4 w-3/5" />
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <div className="skeleton h-3 w-8" />
+              <div className="skeleton h-3 w-14 rounded-full" />
+              <div className="skeleton h-3 w-7 rounded-full" />
+              <div className="skeleton h-3 w-9 rounded-full" />
+            </div>
+          </div>
+          {/* Add button placeholder */}
+          <div className="skeleton h-[26px] sm:h-[22px] w-[26px] sm:w-[52px] rounded shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SkeletonTable({ rows = 8 }: { rows?: number }) {
   return (
     <div className="border border-border rounded-xl overflow-hidden">

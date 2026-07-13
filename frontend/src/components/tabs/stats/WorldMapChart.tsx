@@ -332,7 +332,7 @@ export function WorldMapChart({ data }: Props) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-3">
         <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-        <p className="text-xs" style={{ color: "var(--fg-dim)" }}>加载世界地图数据...</p>
+        <p className="text-xs text-fg-dim">加载世界地图数据...</p>
       </div>
     );
   }
@@ -342,13 +342,13 @@ export function WorldMapChart({ data }: Props) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
         <svg className="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
-          style={{ color: "var(--fg-dim)" }}>
+          className="text-fg-dim">
           <circle cx="12" cy="12" r="10" />
           <path d="M2 12h20" />
           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </svg>
-        <p className="text-sm" style={{ color: "var(--fg-muted)" }}>暂无产地数据</p>
-        <p className="text-xs" style={{ color: "var(--fg-dim)" }}>执行「批量刮削」后可获取国家/地区信息</p>
+        <p className="text-sm text-muted-foreground">暂无产地数据</p>
+        <p className="text-xs text-fg-dim">执行「批量刮削」后可获取国家/地区信息</p>
       </div>
     );
   }
@@ -356,11 +356,11 @@ export function WorldMapChart({ data }: Props) {
   return (
     <div className="relative">
       {/* Legend & summary */}
-      <div className="flex items-center justify-between mb-4 text-xs" style={{ color: "var(--fg-dim)" }}>
+      <div className="flex items-center justify-between mb-4 text-xs text-fg-dim">
         <span>
-          <span className="font-semibold tabular-nums" style={{ color: "var(--fg-muted)" }}>{totalCountries}</span>
+          <span className="font-semibold tabular-nums text-muted-foreground">{totalCountries}</span>
           {" "}个国家/地区 ·{" "}
-          <span className="font-semibold tabular-nums" style={{ color: "var(--fg-muted)" }}>{totalItems}</span>
+          <span className="font-semibold tabular-nums text-muted-foreground">{totalItems}</span>
           {" "}部作品
         </span>
         <div className="flex items-center gap-2">
@@ -419,7 +419,7 @@ export function WorldMapChart({ data }: Props) {
             transform: "translateY(0)",
           }}>
             <span>{tooltip.country}</span>
-            <span className="ml-1.5 font-semibold tabular-nums" style={{ color: "var(--seed-primary)" }}>
+            <span className="ml-1.5 font-semibold tabular-nums text-primary">
               {tooltip.count}
             </span>
           </div>
@@ -427,10 +427,10 @@ export function WorldMapChart({ data }: Props) {
 
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3">
           {sortedCountries.slice(0, 10).map(([iso, entry]) => (
-            <span key={iso} className="inline-flex items-center gap-1 text-xs" style={{ color: "var(--fg-dim)" }}>
+            <span key={iso} className="inline-flex items-center gap-1 text-xs text-fg-dim">
               <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ background: getColor(entry.count) }} />
               <span>{getDisplayName(iso, entry.names[0])}</span>
-              <span className="tabular-nums font-medium" style={{ color: "var(--fg-muted)" }}>{entry.count}</span>
+              <span className="tabular-nums font-medium text-muted-foreground">{entry.count}</span>
             </span>
           ))}
         </div>
@@ -461,7 +461,7 @@ function MobileCountryList({ sortedCountries, maxBar, getColor }: {
             <span className="text-xs font-medium truncate shrink-0" style={{ width: "5.5rem", color: "var(--fg-secondary)" }}>
               {getDisplayName(iso, entry.names[0])}
             </span>
-            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
+            <div className="flex-1 h-2 rounded-full overflow-hidden bg-bg-input">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{

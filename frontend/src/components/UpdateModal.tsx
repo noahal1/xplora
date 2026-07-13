@@ -72,11 +72,11 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
         {/* Version comparison */}
         <div className="flex items-center gap-4 justify-center">
           {/* Current version */}
-          <div className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl" style={{ background: "var(--bg-card)" }}>
+          <div className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-bg-card">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
               {t("update.current")}
             </span>
-            <span className="text-xl font-bold font-mono" style={{ color: "var(--fg-muted)" }}>
+            <span className="text-xl font-bold font-mono text-muted-foreground">
               {updateInfo.current_version}
             </span>
           </div>
@@ -94,7 +94,7 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
           </div>
 
           {/* Latest version */}
-          <div className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl" style={{ background: "var(--bg-card)" }}>
+          <div className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-bg-card">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
               {t("update.latest")}
             </span>
@@ -174,7 +174,7 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
 
         {/* Info text when triggered */}
         {!updateInfo.update_available && (
-          <p className="text-center text-[11px]" style={{ color: "var(--fg-muted)" }}>
+          <p className="text-center text-[11px] text-muted-foreground">
             {t("update.up_to_date")}
           </p>
         )}

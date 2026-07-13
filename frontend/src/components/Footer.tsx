@@ -5,10 +5,9 @@ export function Footer() {
   const { t } = useTranslation();
   return (
     <footer
-      className="py-6 sm:py-8 mt-8 sm:mt-10 text-center space-y-3"
-      style={{ borderTop: "1px solid var(--border-subtle)" }}
+      className="py-6 sm:py-8 text-center space-y-3"
     >
-      <div style={{ color: "var(--fg-dim)" }}>
+      <div className="text-fg-dim">
         <BlurText
           text={t("footer.tagline")}
           className="text-xs justify-center"

@@ -49,7 +49,7 @@ export function RecommendationCard({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="text-sm font-[590] truncate" style={{ color: "var(--seed-fg)" }}>
+              <p className="text-sm font-[590] truncate text-foreground">
                 {rec.title}
               </p>
               {rec.media_type === "tv" && (
@@ -63,7 +63,7 @@ export function RecommendationCard({
               {rec.genre && <span className="badge">{translateGenres(rec.genre)}</span>}
             </div>
             {rec.year && (
-              <p className="text-xs mt-0.5" style={{ color: "var(--fg-muted)" }}>{rec.year}</p>
+              <p className="text-xs mt-0.5 text-muted-foreground">{rec.year}</p>
             )}
             <p className="text-body mt-2" style={{ color: "var(--fg-secondary)", fontSize: "0.8125rem" }}>
               {rec.reason}
@@ -97,8 +97,8 @@ export function RecommendationCard({
             </button>
           )}
           <div className="flex items-center gap-1">
-            <Percent size={11} style={{ color: "var(--seed-primary)" }} />
-            <span className="text-xs font-[590]" style={{ color: "var(--seed-primary)" }}>
+            <Percent size={11} className="text-primary" />
+            <span className="text-xs font-[590] text-primary">
               <CountUp end={Math.round(rec.confidence * 100)} suffix="%" />
             </span>
           </div>

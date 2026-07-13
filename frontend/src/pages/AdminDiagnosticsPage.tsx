@@ -77,15 +77,13 @@ function DiagMobileCard({ item, enrichingIds, onEnrich, onDetail, onRematch }: {
 }) {
   return (
     <div
-      className="p-3 rounded-xl transition-all duration-200"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}
+      className="p-3 rounded-xl transition-all duration-200 bg-bg-card border border-border"
     >
       {/* Row 1: Poster + Title/Meta */}
       <div className="flex items-start gap-2.5">
         {/* Poster */}
         <div
-          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer"
-          style={{ border: "1px solid var(--border-subtle)" }}
+          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer border border-border-subtle"
           onClick={() => onDetail(toMediaDetail(item))}
         >
           {item.poster_url ? (
@@ -303,7 +301,7 @@ export function AdminDiagnosticsPage() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
+    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button

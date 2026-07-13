@@ -21,8 +21,7 @@ export function SearchSourceSelector({
 
   return (
     <div
-      className="flex items-center gap-1 rounded-lg p-0.5"
-      style={{ background: "var(--bg-input)", border: "1px solid var(--border-default)" }}
+      className="flex items-center gap-1 rounded-lg p-0.5 bg-bg-input border border-border"
     >
       {SOURCES.map((opt) => (
         <button

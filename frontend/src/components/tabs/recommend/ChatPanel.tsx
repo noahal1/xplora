@@ -27,8 +27,8 @@ export function ChatPanel({ messages, isProcessing, onSend }: ChatPanelProps) {
 
   return (
     <section className="card overflow-hidden animate-slide-down">
-      <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-        <MessageSquare size={13} style={{ color: "var(--fg-muted)" }} />
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
+        <MessageSquare size={13} className="text-muted-foreground" />
         <span className="text-caption font-[510]">{t("recommend.chat_title")}</span>
       </div>
 
@@ -53,14 +53,14 @@ export function ChatPanel({ messages, isProcessing, onSend }: ChatPanelProps) {
             <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs"
               style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}><Brain size={12} /></div>
             <div className="px-3 py-2 rounded-xl" style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)" }}>
-              <span className="text-sm" style={{ color: "var(--fg-muted)" }}>{t("recommend.chat_thinking")}</span>
+              <span className="text-sm text-muted-foreground">{t("recommend.chat_thinking")}</span>
             </div>
           </div>
         )}
         <div ref={chatEndRef} />
       </div>
 
-      <div className="flex gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+      <div className="flex gap-2 px-4 py-3 border-t border-border-subtle">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}

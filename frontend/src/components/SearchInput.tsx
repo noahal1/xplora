@@ -47,19 +47,22 @@ export function SearchInput({
         onKeyDown={onKeyDown}
         className="input-field pl-9 pr-9 py-2 h-auto text-sm"
       />
-      {resolvedShowClear && (
-        <button
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-2 sm:p-1.5 rounded-md hover:bg-accent/50 active:bg-accent/80"
-          onClick={onClear}
-          tabIndex={-1}
-          aria-label="Clear search"
-        >
-          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6 6 18" />
-            <path d="m6 6 12 12" />
-          </svg>
-        </button>
-      )}
+      {/* Clear button — with enter/leave transition */}
+      <button
+        className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-all duration-200 p-2 sm:p-1.5 rounded-md hover:bg-accent/50 active:bg-accent/80 ${
+          resolvedShowClear
+            ? "opacity-100 scale-100 pointer-events-auto"
+            : "opacity-0 scale-90 pointer-events-none"
+        }`}
+        onClick={onClear}
+        tabIndex={-1}
+        aria-label="Clear search"
+      >
+        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
     </div>
   );
 }

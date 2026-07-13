@@ -216,10 +216,10 @@ export function StatsTab() {
   if (error && !stats) {
     return (
       <div className="section-card flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: "var(--accent-glow)" }}>
-          <BarChart3 size={20} style={{ color: "var(--seed-primary)" }} />
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-accent-glow">
+          <BarChart3 size={20} className="text-primary" />
         </div>
-        <p className="text-sm" style={{ color: "var(--fg-muted)" }}>{error || t("stats.no_data", "暂无数据")}</p>
+        <p className="text-sm text-muted-foreground">{error || t("stats.no_data", "暂无数据")}</p>
         <button className="btn btn-ghost btn-xs gap-1.5" onClick={() => { clearCachedStats(); loadStats(true); }}>
           <RefreshCw size={13} /> {t("stats.retry", "重试")}
         </button>
@@ -278,18 +278,18 @@ export function StatsTab() {
             <div className="flex items-start justify-between">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-7 h-7 rounded-lg shrink-0" style={{ background: "var(--accent-glow)" }}>
-                    <BarChart3 size={14} style={{ color: "var(--seed-primary)" }} />
+                  <span className="flex items-center justify-center w-7 h-7 rounded-lg shrink-0 bg-accent-glow">
+                    <BarChart3 size={14} className="text-primary" />
                   </span>
-                  <h1 className="text-sm font-semibold tracking-tight" style={{ color: "var(--seed-fg)" }}>
+                  <h1 className="text-sm font-semibold tracking-tight text-foreground">
                     {t("stats.title", "数据概览")}
                   </h1>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-5xl sm:text-6xl font-bold tabular-nums tracking-tight leading-none" style={{ color: "var(--seed-primary)" }}>
+                  <span className="text-5xl sm:text-6xl font-bold tabular-nums tracking-tight leading-none text-primary">
                     <CountUp end={s.total} duration={1.4} />
                   </span>
-                  <span className="text-sm font-medium" style={{ color: "var(--fg-muted)" }}>
+                  <span className="text-sm font-medium text-muted-foreground">
                     {t("stats.total", "部")}
                   </span>
                 </div>
@@ -330,15 +330,15 @@ export function StatsTab() {
                ══════════════════════════════════════════════════ */}
             {s.total_watch_time > 0 && (
               <div className="mt-3 pt-3 flex items-center gap-2 text-sm flex-wrap" style={{ borderTop: "1px solid color-mix(in srgb, var(--seed-primary) 10%, transparent)" }}>
-                <span className="shrink-0 inline-flex items-center gap-1.5" style={{ color: "var(--chart-2)" }}>
+                <span className="shrink-0 inline-flex items-center gap-1.5 text-chart-2">
                   <Clock size={13} />
                   <span className="font-[510]">{formatWatchTime(s.total_watch_time)}</span>
                 </span>
                 {watchTimeAnalogies.length > 0 && (
                   <>
-                    <span className="text-xs" style={{ color: "var(--fg-dim)" }}>·</span>
+                    <span className="text-xs text-fg-dim">·</span>
                     <span className="shrink-0">{watchTimeAnalogies[0].icon}</span>
-                    <span style={{ color: "var(--fg-secondary)" }}>{watchTimeAnalogies[0].text}</span>
+                    <span className="text-fg-secondary">{watchTimeAnalogies[0].text}</span>
                   </>
                 )}
               </div>
@@ -427,10 +427,10 @@ export function StatsTab() {
             icon={<TrendingUp size={14} />}
           >
             <MonthlyTrendChart data={trendData} color="var(--chart-1)" />
-            <div className="flex items-center justify-between mt-2 text-[10px]" style={{ color: "var(--fg-dim)" }}>
+            <div className="flex items-center justify-between mt-2 text-[10px] text-fg-dim">
               <span>{trendData[0]?.name}</span>
               <span className="flex items-center gap-1">
-                <TrendingUp size={10} style={{ color: "var(--chart-1)" }} />
+                <TrendingUp size={10} className="text-chart-1" />
                 {t("stats.monthly_trend_desc", "每月新增数量趋势")}
               </span>
               <span>{trendData[trendData.length - 1]?.name}</span>

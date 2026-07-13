@@ -53,7 +53,7 @@ export function TMDBDetailModal({
       {loading && (
         <div className="flex items-center justify-center py-10">
           <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-          <span className="ml-2 text-sm" style={{ color: "var(--fg-muted)" }}>
+          <span className="ml-2 text-sm text-muted-foreground">
             {t("detail_modal.loading")}
           </span>
         </div>
@@ -86,12 +86,12 @@ export function TMDBDetailModal({
               {/* Year / Runtime / Language / Source */}
               <div className="flex items-center gap-2 flex-wrap">
                 {data.year && (
-                  <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  <span className="text-xs text-muted-foreground">
                     {data.year}
                   </span>
                 )}
                 {data.runtime != null && (
-                  <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  <span className="text-xs text-muted-foreground">
                     {Math.floor(data.runtime / 60)}h {data.runtime % 60}m
                   </span>
                 )}
@@ -102,8 +102,7 @@ export function TMDBDetailModal({
                 )}
                 <Badge
                   variant="outline"
-                  className="text-[9px] font-mono border-primary/30"
-                  style={{ color: "var(--seed-primary)" }}
+                  className="text-[9px] font-mono border-primary/30 text-primary"
                 >
                   {data.source.toUpperCase()}
                 </Badge>
@@ -126,12 +125,12 @@ export function TMDBDetailModal({
               <div className="flex flex-wrap items-center gap-2.5">
                 {data.rating != null && (
                   <div className="flex items-center gap-1">
-                    <span style={{ color: "var(--seed-primary)" }}>★</span>
+                    <span className="text-primary">★</span>
                     <span className="font-semibold text-sm">
                       {Number(data.rating).toFixed(1)}
                     </span>
                     {data.vote_count != null && (
-                      <span className="text-[10px]" style={{ color: "var(--fg-muted)" }}>
+                      <span className="text-[10px] text-muted-foreground">
                         ({data.vote_count})
                       </span>
                     )}
@@ -157,8 +156,7 @@ export function TMDBDetailModal({
                 <div className="pt-2 mt-2" style={{ borderTop: "1px solid var(--border-subtle)" }}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <div
-                      className="flex-1 h-1.5 rounded-full overflow-hidden"
-                      style={{ background: "var(--bg-input)" }}
+                      className="flex-1 h-1.5 rounded-full overflow-hidden bg-bg-input"
                     >
                       <div
                         className="h-full rounded-full transition-all duration-700"
@@ -174,13 +172,12 @@ export function TMDBDetailModal({
                       />
                     </div>
                     <span
-                      className="text-xs font-[590] tabular-nums shrink-0"
-                      style={{ color: "var(--seed-primary)" }}
+                      className="text-xs font-[590] tabular-nums shrink-0 text-primary"
                     >
                       <CountUp end={Math.round(recommendation.confidence * 100)} suffix="%" />
                     </span>
                   </div>
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--fg-secondary)" }}>
+                  <p className="text-xs leading-relaxed text-fg-secondary">
                     {recommendation.reason}
                   </p>
                 </div>
@@ -192,12 +189,11 @@ export function TMDBDetailModal({
           {data.overview && (
             <div>
               <h4
-                className="text-xs font-semibold uppercase tracking-wider mb-1.5"
-                style={{ color: "var(--fg-muted)" }}
+                className="text-xs font-semibold uppercase tracking-wider mb-1.5 text-muted-foreground"
               >
                 {t("detail_modal.overview")}
               </h4>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--fg-secondary)" }}>
+              <p className="text-sm leading-relaxed text-fg-secondary">
                 {data.overview}
               </p>
             </div>
@@ -206,7 +202,7 @@ export function TMDBDetailModal({
           {/* Credits */}
           {data.writer && (
             <div>
-              <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "var(--fg-muted)" }}>
+              <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-0.5 text-muted-foreground">
                 {t("detail_modal.writer")}
               </h4>
               <p className="text-sm">{data.writer}</p>
@@ -215,7 +211,7 @@ export function TMDBDetailModal({
 
           {/* Country + Box office */}
           {(data.country || data.box_office) && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--fg-muted)" }}>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               {data.country && <span>{t("detail_modal.country")}: {data.country}</span>}
               {data.box_office && <span>{t("detail_modal.box_office")}: {data.box_office}</span>}
             </div>

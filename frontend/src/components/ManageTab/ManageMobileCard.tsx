@@ -25,7 +25,7 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
   return (
     <div
       className={`p-3 rounded-xl transition-all duration-200 ${isSelected ? "ring-1 ring-primary/40" : ""}`}
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border-default)" }}
+      className="bg-bg-card border border-border"
     >
       {/* Row 1: Checkbox + Poster + Title/Meta + Rating */}
       <div className="flex items-start gap-2.5">
@@ -35,8 +35,7 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
 
         {/* Poster */}
         <div
-          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer"
-          style={{ border: "1px solid var(--border-subtle)" }}
+          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer border border-border-subtle"
           onClick={() => onSetDetailMovie(movie)}
         >
           {movie.poster_url ? (
@@ -97,7 +96,7 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
                 )}
               </div>
             </div>
-            <ChevronRight size={14} className="shrink-0 mt-0.5" style={{ color: "var(--fg-dim)" }} />
+            <ChevronRight size={14} className="shrink-0 mt-0.5 text-fg-dim" />
           </div>
         </div>
       </div>

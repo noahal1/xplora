@@ -48,8 +48,7 @@ export const ManageTableRow = memo(function ManageTableRow({
           checked={isSelected} onChange={() => onToggle(movie.id)} />
       </td>
       <td className="px-1 max-sm:hidden py-2 max-sm:py-3 border-b border-border text-center">
-        <div className="relative w-[38px] h-[52px] rounded overflow-hidden bg-muted flex items-center justify-center mx-auto"
-          style={{ border: "1px solid var(--border-subtle)" }}>
+        <div className="relative w-[38px] h-[52px] rounded overflow-hidden bg-muted flex items-center justify-center mx-auto border border-border-subtle">
           {movie.poster_url ? (
             <img src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" loading="lazy"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />

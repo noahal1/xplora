@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 
 interface FilterBarProps {
@@ -17,6 +17,17 @@ export function FilterBar({ children, collapseLabel, expandLabel }: FilterBarPro
   const [expanded, setExpanded] = useState(
     () => typeof window !== "undefined" && window.innerWidth >= 640
   );
+
+  // Listen for resize to auto-expand on desktop
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= 640) {
+        setExpanded(true);
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   return (
     <>
@@ -44,8 +55,15 @@ export function FilterBar({ children, collapseLabel, expandLabel }: FilterBarPro
         </button>
       </div>
 
-      {/* Collapsible content */}
-      <div className={`sm:block ${expanded ? "max-sm:block max-sm:animate-slide-down" : "max-sm:hidden"}`}>
+      {/* Collapsible content — smooth height transition instead of instant hide */}
+      <div
+        className={`sm:block overflow-hidden transition-all duration-300 ${
+          expanded
+            ? "max-sm:opacity-100 max-sm:max-h-[2000px]"
+            : "max-sm:opacity-0 max-sm:max-h-0"
+        }`}
+        style={{ transitionTimingFunction: "var(--ease-out-expo)" }}
+      >
         {children}
       </div>
     </>
