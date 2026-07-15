@@ -55,7 +55,6 @@ export function MediaServerTab() {
 
   // MP config
   const [mpConfig, setMpConfig] = useState<MPConfig | null>(null);
-  const [loadingMp, setLoadingMp] = useState(false);
 
   // Library & detail state
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -91,14 +90,11 @@ export function MediaServerTab() {
   // ── Load MP config ────────────────────────────────────
 
   const loadMpConfig = useCallback(async () => {
-    setLoadingMp(true);
     try {
       const data = await getMPConfig();
       setMpConfig(data.configured ? data : null);
     } catch {
       setMpConfig(null);
-    } finally {
-      setLoadingMp(false);
     }
   }, []);
 
