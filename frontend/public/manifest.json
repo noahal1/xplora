@@ -1,0 +1,28 @@
+{
+  "name": "Xplora",
+  "short_name": "Xplora",
+  "description": "探索电影和剧集的世界 — 收藏已看、标记想看、获取 AI 推荐",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0b14",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait",
+  "categories": ["entertainment", "movies", "productivity"],
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

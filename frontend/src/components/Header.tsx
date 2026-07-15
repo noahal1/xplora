@@ -15,7 +15,7 @@ export function Header() {
   const [wheelOpen, setWheelOpen] = useState(false);
 
   return (
-    <header className="flex items-center justify-between py-3 sm:py-4 mb-1 sm:mb-2">
+    <header className="flex items-center justify-between py-3 sm:py-4 mb-1 sm:mb-2 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1rem+env(safe-area-inset-top,0px))]">
       <div className="flex items-center gap-2 sm:gap-3">
         <Logo />
       </div>

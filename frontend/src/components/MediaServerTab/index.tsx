@@ -13,8 +13,9 @@ import {
   refreshMediaServer,
   importWatchedFromServer,
   syncMediaServerLibrary,
+  getMPConfig,
 } from "../../api";
-import type { MediaServer, ServerFormData, VerifyResult, MediaLibrary, LibraryItem } from "../../types";
+import type { MediaServer, ServerFormData, VerifyResult, MediaLibrary, LibraryItem, MoviePilotConfig as MPConfig } from "../../types";
 import { Modal } from "../Modal";
 import FadeContent from "../FadeContent";
 import { getErrMsg } from "../../lib/utils";
@@ -52,6 +53,10 @@ export function MediaServerTab() {
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
 
+  // MP config
+  const [mpConfig, setMpConfig] = useState<MPConfig | null>(null);
+  const [loadingMp, setLoadingMp] = useState(false);
+
   // Library & detail state
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [libraries, setLibraries] = useState<MediaLibrary[]>([]);
@@ -83,9 +88,24 @@ export function MediaServerTab() {
     }
   }, [showToast, t]);
 
+  // ── Load MP config ────────────────────────────────────
+
+  const loadMpConfig = useCallback(async () => {
+    setLoadingMp(true);
+    try {
+      const data = await getMPConfig();
+      setMpConfig(data.configured ? data : null);
+    } catch {
+      setMpConfig(null);
+    } finally {
+      setLoadingMp(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadServers();
-  }, [loadServers]);
+    loadMpConfig();
+  }, [loadServers, loadMpConfig]);
 
   // ── Form helpers ──────────────────────────────────────────────
 
@@ -365,6 +385,60 @@ export function MediaServerTab() {
         </div>
       </FadeContent>
 
+      {/* ── MoviePilot status card ──────────────────────── */}
+      {mpConfig && (
+        <FadeContent className="section-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Download size={18} className="text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-medium">{mpConfig.name || "MoviePilot"}</h3>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    MoviePilot
+                  </span>
+                  {mpConfig.is_active && mpConfig.last_connected ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-600 dark:text-green-400">
+                      <CheckCircle2 size={10} />
+                      {t("media_server.status_online")}
+                    </span>
+                  ) : mpConfig.last_connected ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/10 text-red-600 dark:text-red-400">
+                      <XCircle size={10} />
+                      {t("media_server.status_offline")}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/50 text-muted-foreground">
+                      <Network size={10} />
+                      {t("media_server.status_unknown")}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                  {mpConfig.use_ssl ? "https" : "http"}://{mpConfig.host}:{mpConfig.port}
+                </p>
+                {mpConfig.last_connected && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    {t("common.watched")}: {new Date(mpConfig.last_connected).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => setShowMPConfig(true)}
+                className="btn btn-ghost btn-xs"
+                title={t("common.edit")}
+              >
+                {t("common.edit")}
+              </button>
+            </div>
+          </div>
+        </FadeContent>
+      )}
+
       {/* Server list */}
       {loading ? (
         <div className="space-y-3">
@@ -372,7 +446,7 @@ export function MediaServerTab() {
             <div key={i} className="h-24 rounded-lg skeleton" />
           ))}
         </div>
-      ) : servers.length === 0 ? (
+      ) : servers.length === 0 && !mpConfig ? (
         <FadeContent className="flex flex-col items-center justify-center py-16 text-center">
           <Server size={32} className="text-muted-foreground/30 mb-3" />
           <p className="text-sm text-muted-foreground">{t("media_server.no_servers")}</p>
@@ -833,7 +907,7 @@ export function MediaServerTab() {
       {/* ── MoviePilot Config Modal ───────────────────────────── */}
       <Modal
         open={showMPConfig}
-        onClose={() => setShowMPConfig(false)}
+        onClose={() => { setShowMPConfig(false); loadMpConfig(); }}
         title={t("moviepilot.title")}
         size="lg"
       >

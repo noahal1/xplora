@@ -175,15 +175,15 @@ export function DownloadQueue() {
                     </tr>
                   </thead>
                   <tbody>
-                    {seedingList.map((t) => (
-                      <tr key={t.hash} className="hover:bg-accent/30 transition-colors">
-                        <td className="px-3 py-2 text-xs truncate max-w-[200px]">{t.name}</td>
-                        <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{formatBytes(t.size)}</td>
-                        <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{formatSpeed(t.ulspeed)}</td>
-                        <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{t.seeders}</td>
+                    {seedingList.map((tor) => (
+                      <tr key={tor.hash} className="hover:bg-accent/30 transition-colors">
+                        <td className="px-3 py-2 text-xs truncate max-w-[200px]">{tor.name}</td>
+                        <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{formatBytes(tor.size)}</td>
+                        <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{formatSpeed(tor.ulspeed)}</td>
+                        <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{tor.seeders}</td>
                         <td className="px-3 py-2 text-right">
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(t.status)} ${getStatusBg(t.status)}`}>
-                            {getStatusLabel(t.status, t)}
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
+                            {getStatusLabel(tor.status, t)}
                           </span>
                         </td>
                       </tr>
@@ -199,16 +199,16 @@ export function DownloadQueue() {
             <div>
               <h3 className="text-xs font-medium text-muted-foreground mb-2">{t("moviepilot.other")} ({otherList.length})</h3>
               <div className="space-y-1.5">
-                {otherList.map((t) => (
-                  <div key={t.hash} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent/30 transition-colors">
+                {otherList.map((tor) => (
+                  <div key={tor.hash} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent/30 transition-colors">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className={`text-xs ${getStatusColor(t.status)}`}>
-                        {t.status === "error" ? <AlertTriangle size={12} /> : <Download size={12} />}
+                      <span className={`text-xs ${getStatusColor(tor.status)}`}>
+                        {tor.status === "error" ? <AlertTriangle size={12} /> : <Download size={12} />}
                       </span>
-                      <span className="text-xs truncate">{t.name}</span>
+                      <span className="text-xs truncate">{tor.name}</span>
                     </div>
-                    <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(t.status)} ${getStatusBg(t.status)}`}>
-                      {getStatusLabel(t.status, t)}
+                    <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
+                      {getStatusLabel(tor.status, t)}
                     </span>
                   </div>
                 ))}

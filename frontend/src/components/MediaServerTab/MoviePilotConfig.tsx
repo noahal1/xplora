@@ -353,38 +353,38 @@ export function MoviePilotConfig() {
               </div>
 
               {/* Torrent list */}
-              {torrents.map((t) => (
+              {torrents.map((tor) => (
                 <div
-                  key={t.hash}
+                  key={tor.hash}
                   className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent/30 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className={`text-xs font-medium ${getStatusColor(t.status)}`}>
-                      {t.status === "downloading" ? <Download size={12} /> : <Upload size={12} />}
+                    <span className={`text-xs font-medium ${getStatusColor(tor.status)}`}>
+                      {tor.status === "downloading" ? <Download size={12} /> : <Upload size={12} />}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs truncate">{t.name}</p>
+                      <p className="text-xs truncate">{tor.name}</p>
                       <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                        {t.status === "downloading" && (
+                        {tor.status === "downloading" && (
                           <>
-                            <span className="tabular-nums">{formatProgress(t.progress)}</span>
+                            <span className="tabular-nums">{formatProgress(tor.progress)}</span>
                             <span className="tabular-nums">
-                              {formatBytes(t.downloaded)} / {formatBytes(t.size)}
+                              {formatBytes(tor.downloaded)} / {formatBytes(tor.size)}
                             </span>
-                            <span>{t("moviepilot.dl_speed")}: {formatSpeed(t.dlspeed)}</span>
+                            <span>{t("moviepilot.dl_speed")}: {formatSpeed(tor.dlspeed)}</span>
                           </>
                         )}
-                        {t.status === "seeding" && (
+                        {tor.status === "seeding" && (
                           <>
-                            <span>{formatBytes(t.size)}</span>
-                            <span>{t("moviepilot.ul_speed")}: {formatSpeed(t.ulspeed)}</span>
-                            <span>{t("moviepilot.seeders")}: {t.seeders}</span>
+                            <span>{formatBytes(tor.size)}</span>
+                            <span>{t("moviepilot.ul_speed")}: {formatSpeed(tor.ulspeed)}</span>
+                            <span>{t("moviepilot.seeders")}: {tor.seeders}</span>
                           </>
                         )}
-                        {t.status === "paused" && (
-                          <span>{formatBytes(t.size)}</span>
+                        {tor.status === "paused" && (
+                          <span>{formatBytes(tor.size)}</span>
                         )}
-                        {t.status === "error" && (
+                        {tor.status === "error" && (
                           <span className="flex items-center gap-1 text-red-500">
                             <AlertTriangle size={10} />
                             {t("moviepilot.error")}
@@ -394,9 +394,9 @@ export function MoviePilotConfig() {
                     </div>
                   </div>
                   <span
-                    className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(t.status)} bg-current/5`}
+                    className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} bg-current/5`}
                   >
-                    {getStatusLabel(t.status, t)}
+                    {getStatusLabel(tor.status, t)}
                   </span>
                 </div>
               ))}
