@@ -1,13 +1,14 @@
 """Update check router — queries GitHub Releases API for latest version."""
 
-import json
 import re
-import subprocess  # noqa: S404
 import time
 from datetime import datetime, timezone
 
+import docker
 import httpx
+from docker.errors import DockerException, NotFound
 from fastapi import APIRouter, Depends, HTTPException
+
 from __version__ import VERSION
 from auth import get_current_user
 
@@ -19,47 +20,45 @@ router = APIRouter(prefix="/api/update", tags=["update"])
 
 _CACHE: dict | None = None
 _CACHE_TIME: float = 0.0
-_CACHE_TTL = 7200  
+_CACHE_TTL = 7200
 GITHUB_API_URL = "https://api.github.com/repos/noahal1/xplora/releases/latest"
 WATCHTOWER_CONTAINER = "watchtower"
 
+# Docker Unix socket path (mounted volume in the container)
+DOCKER_SOCKET = "unix:///var/run/docker.sock"
+
 
 def _restart_container(container: str) -> dict:
-    """Restart a Docker container via the docker CLI (socket must be mounted).
+    """Restart a Docker container via the Docker Engine API (socket must be mounted).
 
-    Uses subprocess to call `docker restart` instead of the Docker Engine
-    API directly, because sending SIGHUP via the API kill endpoint can
-    cause the target process (watchtower) to exit as PID 1.
+    Uses the docker Python SDK to communicate over the mounted Unix socket
+    at /var/run/docker.sock, instead of shelling out to the docker CLI.
 
     Returns {"ok": True} on success, or {"ok": False, "error": <message>}.
     """
     try:
-        result = subprocess.run(
-            ["docker", "restart", container],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            return {"ok": True, "message": result.stdout.strip()}
-        # Common error: container not found
-        stderr = result.stderr.strip()
-        if "No such container" in stderr:
-            return {"ok": False, "error": f"未检测到 {container} 容器，请确认容器正在运行"}
-        if "Cannot connect to the Docker daemon" in stderr:
-            return {"ok": False, "error": "无法连接 Docker 套接字，请确认 /var/run/docker.sock 已挂载"}
-        return {"ok": False, "error": stderr or f"docker restart 返回码 {result.returncode}"}
-    except FileNotFoundError:
-        return {"ok": False, "error": "容器中未安装 docker CLI，无法执行重启"}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "重启容器超时"}
+        client = docker.DockerClient(base_url=DOCKER_SOCKET, timeout=30)
+        container_obj = client.containers.get(container)
+        container_obj.restart(timeout=30)
+        return {"ok": True, "message": f"已重启 {container} 容器"}
+    except NotFound:
+        return {"ok": False, "error": f"未检测到 {container} 容器，请确认容器正在运行"}
+    except DockerException:
+        return {"ok": False, "error": "无法连接 Docker 套接字，请确认 /var/run/docker.sock 已挂载"}
+    except Exception as e:
+        return {"ok": False, "error": f"重启容器失败: {str(e)}"}
+    finally:
+        try:
+            client.close()
+        except (NameError, AttributeError):
+            pass
 
 
 @router.post("/trigger")
 def trigger_update(current_user: dict = Depends(get_current_user)):
     """Manually trigger watchtower to check for updates immediately.
 
-    Restarts the watchtower container via `docker restart`, which causes
+    Restarts the watchtower container via the Docker API, which causes
     it to run its update cycle immediately (watchtower always runs a check
     on startup).
 

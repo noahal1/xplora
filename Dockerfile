@@ -46,10 +46,11 @@ WORKDIR /app
 
 # Install system dependencies (minimal — curl for healthcheck)
 # Default: Aliyun mirror (China network). Override APT_MIRROR_REPLACE for CI.
+# Note: docker CLI is not needed — we use the docker Python SDK instead.
 RUN sed -i "s/deb.debian.org/${APT_MIRROR_REPLACE}/g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
     sed -i "s/deb.debian.org/${APT_MIRROR_REPLACE}/g" /etc/apt/sources.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends curl docker.io && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Ensure SQLite database directory exists (baked into image)
