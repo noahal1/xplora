@@ -8,11 +8,14 @@ import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 import type { WishlistEntry } from "../../WishlistTab/index";
 
 /* ── Memo-ized mobile card — compact card layout for small screens ── */
-export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMarkWatched, onDelete, onOpenDetail }: {
+export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer }: {
   item: WishlistEntry;
   onMarkWatched: (item: WishlistEntry) => void;
   onDelete: (id: number) => void;
   onOpenDetail: (item: WishlistEntry) => void;
+  onSearchPT?: (item: WishlistEntry) => void;
+  /** undefined = no server, true = on server, false = not on server */
+  onServer?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -40,6 +43,16 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-sm truncate" onClick={() => onOpenDetail(item)}>{item.title}</span>
+                {onServer === true && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 leading-none shrink-0">
+                    📺 {t("wishlist.on_server")}
+                  </span>
+                )}
+                {onServer === false && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 leading-none shrink-0">
+                    📡 {t("wishlist.not_on_server")}
+                  </span>
+                )}
                 {item.media_type === "tv" && (
                   <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 leading-none px-1.5 py-0 shrink-0">TV</Badge>
                 )}
@@ -68,6 +81,15 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
           <Check size={14} />
           <span>{t("wishlist.mark_as_watched")}</span>
         </button>
+        {onSearchPT && (
+          <button
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-orange-500 hover:bg-orange-500/10"
+            onClick={() => onSearchPT(item)}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /><path d="M11 8v6" /><path d="M8 11h6" /></svg>
+            <span>{t("moviepilot.search_pt")}</span>
+          </button>
+        )}
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-sky hover:bg-sky/10"
           onClick={() => onOpenDetail(item)}
@@ -94,5 +116,6 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
   if (prev.item.media_type !== next.item.media_type) return false;
   if (prev.item.season_number !== next.item.season_number) return false;
   if (prev.item.episode_count !== next.item.episode_count) return false;
+  if (prev.onServer !== next.onServer) return false;
   return true;
 });

@@ -57,6 +57,14 @@ from crud.media_servers import (
     delete_media_server,
 )
 
+from crud.moviepilot import (
+    create_mp_connection,
+    get_mp_connection,
+    update_mp_connection,
+    update_mp_last_connected,
+    delete_mp_connection,
+)
+
 __all__ = [
     # Users
     "create_user",
@@ -104,4 +112,10 @@ __all__ = [
     "update_media_server",
     "update_last_connected",
     "delete_media_server",
+    # MoviePilot
+    "create_mp_connection",
+    "get_mp_connection",
+    "update_mp_connection",
+    "update_mp_last_connected",
+    "delete_mp_connection",
 ]

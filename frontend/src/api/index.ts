@@ -481,7 +481,7 @@ export async function removeFromTopRated(mediaId: number): Promise<{ status: str
   });
 }
 
-import type { MediaServer, ServerFormData, VerifyResult, MediaLibrary, MediaServerSearchResult } from "../types";
+import type { MediaServer, ServerFormData, VerifyResult, MediaLibrary, MediaServerSearchResult, LibraryItemResult } from "../types";
 
 // ── Media Server API ──────────────────────────────────────────
 
@@ -544,6 +544,17 @@ export async function getMediaServerLibraries(serverId: number): Promise<MediaLi
   return data.libraries;
 }
 
+/** Get items in a specific library */
+export async function getMediaServerLibraryItems(
+  serverId: number,
+  libraryId: string,
+  limit: number = 50,
+  startIndex: number = 0
+): Promise<LibraryItemResult> {
+  const qs = new URLSearchParams({ limit: String(limit), start_index: String(startIndex) });
+  return fetchJSON(`${API_BASE}/media-servers/${serverId}/libraries/${libraryId}/items?${qs.toString()}`, { headers: getAuthHeaders() });
+}
+
 /** Refresh a media server library (or all libraries) */
 export async function refreshMediaServer(
   serverId: number,
@@ -553,6 +564,38 @@ export async function refreshMediaServer(
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(libraryId ? { library_id: libraryId } : {}),
+  });
+}
+
+/** Sync media server library items into the DB cache */
+export async function syncMediaServerLibrary(
+  serverId: number
+): Promise<{ status: string; cached: number; message: string }> {
+  return fetchJSON(`${API_BASE}/media-servers/${serverId}/sync-library`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Import watched items from a media server into Xplora */
+export async function importWatchedFromServer(
+  serverId: number
+): Promise<{ imported: number; moved_from_wishlist: number; skipped: number; message: string }> {
+  return fetchJSON(`${API_BASE}/media-servers/${serverId}/import-watched`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Batch-search wishlist titles against a media server */
+export async function batchSearchMediaServer(
+  serverId: number,
+  titles: string[]
+): Promise<{ results: Record<string, { found: boolean; title?: string; year?: number | null; id?: string }> }> {
+  return fetchJSON(`${API_BASE}/media-servers/${serverId}/batch-search`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ titles }),
   });
 }
 
@@ -566,6 +609,69 @@ export async function searchMediaServer(
   if (libraryId) qs.set("library_id", libraryId);
   const data = await fetchJSON<{ results: MediaServerSearchResult[] }>(`${API_BASE}/media-servers/${serverId}/search?${qs.toString()}`, { headers: getAuthHeaders() });
   return data.results;
+}
+
+import type { MoviePilotConfig, MoviePilotTorrent, MPSearchResult } from "../types";
+
+// ── MoviePilot API ────────────────────────────────────────────
+
+/** Get the current MoviePilot configuration */
+export async function getMPConfig(): Promise<MoviePilotConfig> {
+  return fetchJSON(`${API_BASE}/moviepilot/config`, { headers: getAuthHeaders() });
+}
+
+/** Save MoviePilot configuration */
+export async function saveMPConfig(
+  data: { host: string; port: number; api_token: string; use_ssl?: boolean; name?: string }
+): Promise<{ status: string; config: MoviePilotConfig }> {
+  return fetchJSON(`${API_BASE}/moviepilot/config`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Delete MoviePilot configuration */
+export async function deleteMPConfig(): Promise<void> {
+  await fetchJSON(`${API_BASE}/moviepilot/config`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Test MoviePilot connection (with optional inline config) */
+export async function testMPConnection(
+  data?: { host: string; port: number; api_token: string; use_ssl?: boolean }
+): Promise<{ online: boolean; message: string; torrent_count?: number }> {
+  return fetchJSON(`${API_BASE}/moviepilot/test`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data || {}),
+  });
+}
+
+/** Search torrents via MoviePilot */
+export async function searchMPTorrents(q: string): Promise<{ results: MPSearchResult[] }> {
+  const qs = new URLSearchParams({ q });
+  return fetchJSON(`${API_BASE}/moviepilot/search?${qs.toString()}`, { headers: getAuthHeaders() });
+}
+
+/** Download a torrent via MoviePilot */
+export async function downloadMPTorrent(
+  title: string,
+  url: string,
+  save_path?: string
+): Promise<{ success: boolean; hash: string; message: string }> {
+  return fetchJSON(`${API_BASE}/moviepilot/download`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ title, url, save_path }),
+  });
+}
+
+/** Get download queue from MoviePilot */
+export async function getMPTorrents(): Promise<{ torrents: MoviePilotTorrent[] }> {
+  return fetchJSON(`${API_BASE}/moviepilot/torrents`, { headers: getAuthHeaders() });
 }
 
 /** Change current user's password */

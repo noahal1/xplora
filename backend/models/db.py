@@ -128,11 +128,52 @@ class MediaServerRecord(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
     name: str = Field(max_length=128, nullable=False, description="User-given alias, e.g. 'My FeiNiu'")
-    server_type: str = Field(max_length=32, nullable=False, description="'plex' or 'jellyfin'")
+    server_type: str = Field(max_length=32, nullable=False, description="'jellyfin' or 'feiniu'")
     host: str = Field(max_length=255, nullable=False, description="IP or hostname")
     port: int = Field(default=8096, nullable=False, description="Port number")
     api_key: str = Field(max_length=512, nullable=False, description="Encrypted API key / token")
+    username: Optional[str] = Field(default=None, max_length=128, nullable=True, description="Username for FeiNiu auth")
+    server_user_id: Optional[str] = Field(default=None, max_length=64, nullable=True, description="User ID on media server (cached from auth)")
     use_ssl: bool = Field(default=False, nullable=False)
     is_active: bool = Field(default=True, nullable=False)
+    last_connected: Optional[datetime] = Field(default=None, nullable=True)
+    last_synced: Optional[datetime] = Field(default=None, nullable=True, description="When library cache was last synced")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class MediaServerLibraryCache(SQLModel, table=True):
+    """Cached titles from a media server's libraries for fast matching.
+
+    Populated by ``POST /api/media-servers/{id}/sync-library``.  This
+    avoids repeatedly fetching all items from the media server API just
+    to see if a wishlist item is available for download.
+    """
+
+    __tablename__ = "media_server_library_cache"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    server_id: int = Field(foreign_key="media_servers.id", nullable=False, index=True)
+    user_id: int = Field(nullable=False, index=True)
+    title: str = Field(max_length=512, nullable=False)
+    normalized_title: str = Field(max_length=512, nullable=False, index=True, description="lowercase stripped version for matching")
+    year: Optional[int] = Field(default=None, nullable=True)
+    server_item_id: str = Field(max_length=64, nullable=False)
+    media_type: str = Field(max_length=16, default="movie", nullable=False)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class MoviePilotRecord(SQLModel, table=True):
+    """MoviePilot connection configuration per user."""
+
+    __tablename__ = "moviepilot_connections"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    name: str = Field(max_length=128, default="MoviePilot")
+    host: str = Field(max_length=255, default="localhost")
+    port: int = Field(default=3000)
+    api_token: str = Field(max_length=512)
+    use_ssl: bool = Field(default=False)
+    is_active: bool = Field(default=True)
     last_connected: Optional[datetime] = Field(default=None, nullable=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)

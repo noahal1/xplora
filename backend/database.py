@@ -579,6 +579,20 @@ def _run_per_user_column_migrations(user_id: int):
         existing_tables = []
     if "media_servers" not in existing_tables:
         _create_media_servers_table(engine, user_id)
+    else:
+        _media_server_add_username_column(engine, user_id)
+        _media_server_add_server_user_id_column(engine, user_id)
+
+    # ── Migration: moviepilot_connections table ──
+    if "moviepilot_connections" not in existing_tables:
+        _create_moviepilot_connections_table(engine, user_id)
+
+    # ── Migration: media_server_library_cache table ──
+    if "media_server_library_cache" not in existing_tables:
+        _create_media_server_library_cache_table(engine, user_id)
+
+    # ── Migration: media_servers.last_synced column ──
+    _media_server_add_last_synced_column(engine, user_id)
 
     # ── Data migration: ensure items with sort_order are marked as pinned ──
     _fix_top_rated_pins(user_id, engine)
@@ -667,6 +681,140 @@ def _create_media_servers_table(engine, user_id: int):
             logger.info(f"  [Migration] Created media_servers table for user id={user_id}")
     except Exception as e:
         logger.warning(f"  [Migration] Error creating media_servers table for user id={user_id}: {e}")
+
+
+def _media_server_add_username_column(engine, user_id: int):
+    """Add username column to media_servers table (for FeiNiu auth)."""
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        columns = [c["name"] for c in inspect(engine).get_columns("media_servers")]
+    except Exception:
+        return
+
+    if "username" not in columns:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE media_servers ADD COLUMN username VARCHAR(128)"))
+                conn.commit()
+                logger.info(f"  [Migration] Added username column to media_servers for user id={user_id}")
+        except OperationalError as e:
+            if "duplicate column" in str(e).lower():
+                pass
+            else:
+                logger.warning(f"  [Migration] Error adding username to media_servers for user id={user_id}: {e}")
+        except Exception as e:
+            logger.warning(f"  [Migration] Error adding username to media_servers for user id={user_id}: {e}")
+
+
+def _media_server_add_server_user_id_column(engine, user_id: int):
+    """Add server_user_id column to media_servers table (cached FeiNiu user ID)."""
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        columns = [c["name"] for c in inspect(engine).get_columns("media_servers")]
+    except Exception:
+        return
+
+    if "server_user_id" not in columns:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE media_servers ADD COLUMN server_user_id VARCHAR(64)"))
+                conn.commit()
+                logger.info(f"  [Migration] Added server_user_id column to media_servers for user id={user_id}")
+        except OperationalError as e:
+            if "duplicate column" in str(e).lower():
+                pass
+            else:
+                logger.warning(f"  [Migration] Error adding server_user_id to media_servers for user id={user_id}: {e}")
+        except Exception as e:
+            logger.warning(f"  [Migration] Error adding server_user_id to media_servers for user id={user_id}: {e}")
+
+
+def _create_media_server_library_cache_table(engine, user_id: int):
+    """Create the media_server_library_cache table for a per-user database."""
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS media_server_library_cache (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    server_id INTEGER NOT NULL REFERENCES media_servers(id),
+                    user_id INTEGER NOT NULL,
+                    title VARCHAR(512) NOT NULL,
+                    normalized_title VARCHAR(512) NOT NULL,
+                    year INTEGER,
+                    server_item_id VARCHAR(64) NOT NULL,
+                    media_type VARCHAR(16) NOT NULL DEFAULT 'movie',
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_lib_cache_server
+                ON media_server_library_cache (server_id)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_lib_cache_normalized
+                ON media_server_library_cache (normalized_title)
+            """))
+            conn.commit()
+            logger.info(f"  [Migration] Created media_server_library_cache table for user id={user_id}")
+    except Exception as e:
+        logger.warning(f"  [Migration] Error creating media_server_library_cache table for user id={user_id}: {e}")
+
+
+def _media_server_add_last_synced_column(engine, user_id: int):
+    """Add last_synced column to media_servers table."""
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        columns = [c["name"] for c in inspect(engine).get_columns("media_servers")]
+    except Exception:
+        return
+
+    if "last_synced" not in columns:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE media_servers ADD COLUMN last_synced TIMESTAMP"))
+                conn.commit()
+                logger.info(f"  [Migration] Added last_synced column to media_servers for user id={user_id}")
+        except OperationalError as e:
+            if "duplicate column" in str(e).lower():
+                pass
+            else:
+                logger.warning(f"  [Migration] Error adding last_synced to media_servers for user id={user_id}: {e}")
+        except Exception as e:
+            logger.warning(f"  [Migration] Error adding last_synced to media_servers for user id={user_id}: {e}")
+
+
+def _create_moviepilot_connections_table(engine, user_id: int):
+    """Create the moviepilot_connections table for a per-user database."""
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS moviepilot_connections (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    name VARCHAR(128) NOT NULL DEFAULT 'MoviePilot',
+                    host VARCHAR(255) NOT NULL DEFAULT 'localhost',
+                    port INTEGER NOT NULL DEFAULT 3000,
+                    api_token VARCHAR(512) NOT NULL,
+                    use_ssl BOOLEAN NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    last_connected TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info(f"  [Migration] Created moviepilot_connections table for user id={user_id}")
+    except Exception as e:
+        logger.warning(f"  [Migration] Error creating moviepilot_connections table for user id={user_id}: {e}")
 
 
 def _drop_column_if_exists(table: str, column: str, engine=None):

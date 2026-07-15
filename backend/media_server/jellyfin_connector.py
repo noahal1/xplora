@@ -24,23 +24,51 @@ class JellyfinConnector(BaseConnector):
     LIBRARY_REFRESH_PATH = "/Library/Refresh?ItemId={library_id}"
     SEARCH_HINTS_PATH = "/Search/Hints"
 
+    def __init__(self, host: str, port: int, api_key: str, use_ssl: bool = False, user_id: str | None = None):
+        super().__init__(host, port, api_key, use_ssl)
+        # Cached user ID from auth response (avoids needing GET /Users
+        # which FeiNiu's SPA intercepts).
+        self._user_id: str | None = user_id
+
     def _build_headers(self) -> dict[str, str]:
+        client_info = 'MediaBrowser Client="Xplora", Device="Xplora", DeviceId="xplora-001", Version="1.0.0"'
         return {
-            "Authorization": f'MediaBrowser Client="Xplora", Device="Xplora", DeviceId="xplora-001", Version="1.0.0", Token="{self.api_key}"',
+            "Authorization": f'{client_info}, Token="{self.api_key}"',
+            "X-Emby-Authorization": f'{client_info}, Token="{self.api_key}"',
             "Accept": "application/json",
         }
 
     # ── Helpers ───────────────────────────────────────────────────
 
     async def _get(self, path: str, params: dict | None = None) -> dict | list | None:
-        """Send an authenticated GET request to the Jellyfin API."""
+        """Send an authenticated GET request; falls back to POST if the
+        response is not JSON (FeiNiu SPA intercepts some GET routes).
+        """
         url = f"{self.base_url}{path}"
         headers = self._build_headers()
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(url, headers=headers, params=params)
                 resp.raise_for_status()
-                return resp.json()
+
+                # Check if response is JSON
+                ct = resp.headers.get("content-type", "")
+                if "application/json" in ct or resp.text[:1] in ("{", "["):
+                    try:
+                        return resp.json()
+                    except Exception:
+                        pass
+
+                # Non-JSON (FeiNiu SPA) → retry with POST
+                logger.info("GET returned %s from %s, retrying POST…", ct or "non-JSON", url)
+                resp2 = await client.post(url, headers=headers, params=params)
+                resp2.raise_for_status()
+                try:
+                    return resp2.json()
+                except Exception as json_err:
+                    logger.warning("POST fallback also non-JSON from %s: %s", url, json_err)
+                    return None
+
         except httpx.HTTPStatusError as e:
             logger.warning("Jellyfin HTTP error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
             return None
@@ -64,6 +92,46 @@ class JellyfinConnector(BaseConnector):
             logger.warning("Jellyfin POST failed: %s — %s", url, e)
             return False
 
+    # ── Authentication ────────────────────────────────────────────
+
+    async def authenticate(self, username: str, password: str) -> str | None:
+        """Authenticate with username/password (FeiNiu login).
+
+        POST /Users/AuthenticateByName to get an AccessToken (Jellyfin
+        protocol).  Requires the X-Emby-Authorization header even before
+        a token is obtained.  Also caches the user ID from the response.
+        """
+        url = f"{self.base_url}/Users/AuthenticateByName"
+        headers = {
+            "X-Emby-Authorization": 'MediaBrowser Client="Xplora", Device="Xplora", DeviceId="xplora-001", Version="1.0.0"',
+            "Accept": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    url,
+                    headers=headers,
+                    json={"Username": username, "Pw": password},
+                )
+                if resp.status_code == 200:
+                    try:
+                        data = resp.json()
+                    except Exception as json_err:
+                        logger.warning("FeiNiu auth: invalid JSON in response (status=200): %s — body=%s", json_err, resp.text[:300])
+                        return None
+                    token = data.get("AccessToken")
+                    if token:
+                        # Cache user ID from auth response
+                        user_obj = data.get("User") if isinstance(data, dict) else {}
+                        self._user_id = str(user_obj.get("Id", "")) if isinstance(user_obj, dict) else None
+                        logger.info("FeiNiu auth succeeded, got AccessToken (user_id=%s)", self._user_id)
+                        return str(token)
+                logger.warning("FeiNiu auth failed: status=%s body=%s", resp.status_code, resp.text[:300])
+                return None
+        except httpx.RequestError as e:
+            logger.warning("FeiNiu auth request failed: %s", e)
+            return None
+
     # ── Public API ────────────────────────────────────────────────
 
     async def test_connection(self) -> ServerStatus:
@@ -82,7 +150,9 @@ class JellyfinConnector(BaseConnector):
         )
 
     async def get_user_id(self) -> str:
-        """Get the first user ID from the Jellyfin server."""
+        """Get the first user ID — prefers cached value from auth response."""
+        if self._user_id:
+            return self._user_id
         data = await self._get(self.USERS_PATH)
         if isinstance(data, list) and data:
             return str(data[0].get("Id", ""))
@@ -123,6 +193,103 @@ class JellyfinConnector(BaseConnector):
             ))
 
         return libraries
+
+    async def get_watched_items(self) -> list[dict]:
+        """Fetch all played/watched media items from the server.
+
+        GET /Users/{user_id}/Items?Filters=IsPlayed&Recursive=true&Fields=
+        ProviderIds,Overview&Limit=500
+
+        Returns a list of items with title, year, etc.
+        """
+        user_id = await self.get_user_id()
+        if not user_id:
+            logger.warning("No user ID found — cannot fetch watched items")
+            return []
+
+        params = {
+            "Filters": "IsPlayed",
+            "Recursive": "true",
+            "Fields": "ProviderIds,Overview",
+            "Limit": 500,
+            "SortBy": "DatePlayed",
+            "SortOrder": "Descending",
+        }
+        path = f"/Users/{user_id}/Items"
+        data = await self._get(path, params=params)
+        if data is None:
+            return []
+
+        items = data.get("Items", []) if isinstance(data, dict) else []
+        results: list[dict] = []
+        for item in items:
+            title = item.get("Name", "") or ""
+            year = item.get("ProductionYear")
+            # Skip items without a title
+            if not title:
+                continue
+            results.append({
+                "title": title,
+                "year": year,
+                "media_type": item.get("Type", "").lower() if item.get("Type") else "movie",
+                "overview": item.get("Overview"),
+                "server_item_id": item.get("Id", ""),
+            })
+
+        logger.info("Fetched %d watched items from media server", len(results))
+        return results
+
+    async def get_library_items(self, library_id: str, limit: int = 50, start_index: int = 0) -> list[dict]:
+        """Fetch media items from a specific library.
+
+        GET /Users/{user_id}/Items?ParentId={library_id}&Recursive=true&
+        Limit={limit}&StartIndex={start_index}&SortBy=SortName&SortOrder=Ascending
+
+        Returns a list of items with title, year, type, etc., plus
+        ``total_count`` as the last dict in the list (with key
+        ``_total_record_count``) so the caller knows the total.
+        """
+        user_id = await self.get_user_id()
+        if not user_id:
+            logger.warning("No user ID found — cannot fetch library items")
+            return []
+
+        params = {
+            "ParentId": library_id,
+            "Recursive": "true",
+            "Limit": limit,
+            "StartIndex": start_index,
+            "SortBy": "SortName",
+            "SortOrder": "Ascending",
+            "Fields": "PrimaryImageAspectRatio,Overview",
+        }
+        path = f"/Users/{user_id}/Items"
+        data = await self._get(path, params=params)
+        if data is None:
+            return []
+
+        items = data.get("Items", []) if isinstance(data, dict) else []
+        total = data.get("TotalRecordCount", 0) if isinstance(data, dict) else 0
+
+        results: list[dict] = []
+        for item in items:
+            title = item.get("Name", "") or ""
+            if not title:
+                continue
+            results.append({
+                "id": item.get("Id", ""),
+                "title": title,
+                "year": item.get("ProductionYear"),
+                "media_type": item.get("Type", "").lower() if item.get("Type") else "movie",
+                "overview": item.get("Overview"),
+                "runtime": item.get("RunTimeTicks"),
+                "image_tags": item.get("ImageTags", {}),
+            })
+
+        logger.info("Fetched %d/%d items from library %s", len(results), total, library_id)
+        # Append total count as pseudo-item
+        results.append({"_total_record_count": total})
+        return results
 
     async def refresh_library(self, library_id: str) -> bool:
         """Trigger a library scan by POSTing to /Library/Refresh."""

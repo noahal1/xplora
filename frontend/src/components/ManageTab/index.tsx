@@ -16,7 +16,7 @@ import { StatusFilter } from "../StatusFilter";
 import { SearchInput } from "../SearchInput";
 import { ScrapeSourceFilter } from "../ScrapeSourceFilter";
 import FadeContent from "../FadeContent";
-import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X } from "lucide-react";
+import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useSort } from "../../hooks/useSort";
 import { isAbortError, getErrMsg } from "../../lib/utils";
@@ -35,6 +35,8 @@ import { TVSeriesGroupItem } from "../tabs/watched/TVSeriesGroupItem";
 import { FilterBar } from "../shared/FilterBar";
 import { groupTVSeries } from "../../utils/groupTVSeries";
 import type { TVSeriesGroup } from "../../utils/groupTVSeries";
+import { DownloadQueue } from "./DownloadQueue";
+import { MediaServerTab } from "../MediaServerTab";
 
 const MANAGE_PAGE_SIZE = 16;
 
@@ -347,6 +349,9 @@ export function ManageTab() {
     return () => { cancelled = true; };
   }, []);
 
+  const [showDownloadQueue, setShowDownloadQueue] = useState(false);
+  const [showMediaServer, setShowMediaServer] = useState(false);
+
   const hasActiveFilters = !!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter.size > 0 || countryFilter.size > 0 || errorFilter);
 
   const SortArrow = ({ field }: { field: SortField }) => {
@@ -361,8 +366,8 @@ export function ManageTab() {
 
   return (
     <FadeContent className="section-card min-h-[300px]">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-5">
+          {/* ── Header ──────────────────────────────────────────── */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-5">
         <h2 className="section-title flex items-center gap-2 text-base">
           <Film size={16} className="text-primary shrink-0" />
           <span className="truncate">{t("manage.title")}</span>
@@ -376,6 +381,20 @@ export function ManageTab() {
           </button>
           <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={handleExportMovies} title={t("manage.export")}>
             <Upload size={13} /><span className="hidden sm:inline">{t("manage.export")}</span>
+          </button>
+          <button
+            onClick={() => setShowMediaServer(true)}
+            className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
+            title={t("media_server.tab_title")}
+          >
+            <Server size={13} /><span className="hidden sm:inline">{t("media_server.tab_title")}</span>
+          </button>
+          <button
+            onClick={() => setShowDownloadQueue(true)}
+            className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
+            title={t("moviepilot.downloading")}
+          >
+            <HardDrive size={13} /><span className="hidden sm:inline">{t("moviepilot.downloading")}</span>
           </button>
           <button className={`btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm gap-1 sm:gap-1.5 shrink-0 ${batchLoading ? "opacity-50" : ""}`}
             onClick={handleBatchAll} disabled={batchLoading} title={t("manage.batch_all")}>
@@ -706,6 +725,26 @@ export function ManageTab() {
           } catch (err) { showToast(t("manage.save_failed", { message: getErrMsg(err) }), "error"); }
         }}
       />
+
+      {/* ── Download Queue Modal ───────────────────────────────── */}
+      <Modal
+        open={showDownloadQueue}
+        onClose={() => setShowDownloadQueue(false)}
+        title={t("moviepilot.overview")}
+        size="lg"
+      >
+        <DownloadQueue />
+      </Modal>
+
+      {/* ── Media Server Modal ─────────────────────────────────── */}
+      <Modal
+        open={showMediaServer}
+        onClose={() => setShowMediaServer(false)}
+        title={t("media_server.title")}
+        size="lg"
+      >
+        <MediaServerTab />
+      </Modal>
     </FadeContent>
   );
 }

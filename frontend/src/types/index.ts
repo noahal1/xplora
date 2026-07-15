@@ -8,7 +8,9 @@ export interface MediaServer {
   use_ssl: boolean;
   is_active: boolean;
   has_api_key: boolean;
+  has_username: boolean;
   last_connected: string | null;
+  last_synced: string | null;
   created_at: string;
 }
 
@@ -16,8 +18,10 @@ export interface ServerFormData {
   name: string;
   server_type: string;
   host: string;
-  port: number;
+  port: number | "";
   api_key: string;
+  username: string;
+  password: string;
   use_ssl: boolean;
 }
 
@@ -33,6 +37,23 @@ export interface MediaLibrary {
   name: string;
   media_type: string;
   item_count: number;
+}
+
+export interface LibraryItem {
+  id: string;
+  title: string;
+  year: number | null;
+  media_type: string;
+  overview: string | null;
+  runtime: number | null;
+  image_tags: Record<string, string> | null;
+}
+
+export interface LibraryItemResult {
+  items: LibraryItem[];
+  total: number;
+  limit: number;
+  start_index: number;
 }
 
 export interface MediaServerSearchResult {
@@ -210,6 +231,45 @@ export interface StatsData {
     created_at: string;
   }>;
   recent_additions: Array<{ title: string; status: string; created_at: string }>;
+}
+
+/** MoviePilot types */
+export interface MoviePilotConfig {
+  id?: number;
+  name: string;
+  host: string;
+  port: number;
+  use_ssl: boolean;
+  is_active?: boolean;
+  last_connected?: string | null;
+  created_at?: string;
+  has_api_token?: boolean;
+  configured?: boolean;
+}
+
+export interface MoviePilotTorrent {
+  hash: string;
+  name: string;
+  status: string;       // downloading / seeding / paused / error
+  progress: number;     // 0-1
+  size: number;
+  downloaded: number;
+  dlspeed: number;      // bytes/s
+  ulspeed: number;      // bytes/s
+  seeders: number;
+  save_path: string;
+}
+
+export interface MPSearchResult {
+  title: string;
+  site: string;
+  size: number;
+  seeders: number;
+  leechers: number;
+  download_url: string;
+  page_url: string;
+  pub_date?: string;
+  is_free: boolean;
 }
 
 export type SortField = "title" | "rating" | "year" | "genre" | "episode_count" | "created_at";

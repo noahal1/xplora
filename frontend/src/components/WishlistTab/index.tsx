@@ -24,6 +24,7 @@ import { WishlistMobileCard } from "../tabs/wishlist/WishlistMobileCard";
 import { WishlistDesktopRow } from "../tabs/wishlist/WishlistDesktopRow";
 import { WishlistSearchModal } from "../tabs/wishlist/WishlistSearchModal";
 import { WishlistAddModal } from "../tabs/wishlist/WishlistAddModal";
+import { PTSearchModal } from "./PTSearchModal";
 
 export interface WishlistEntry {
   id: number;
@@ -75,6 +76,39 @@ export function WishlistTab() {
   // === Modals ===
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+
+  // === Server availability ===
+  const [serverAvailability, setServerAvailability] = useState<Record<string, boolean>>({});
+  const [serverAvailable, setServerAvailable] = useState(false);
+
+  // Check if any media servers are configured and fetch availability
+  useEffect(() => {
+    let cancelled = false;
+    api.listMediaServers().then(async (servers) => {
+      if (cancelled || servers.length === 0) return;
+      setServerAvailable(true);
+      // Use the first active server
+      const server = servers[0];
+      const wishlistTitles = items.map((item) => item.title);
+      if (wishlistTitles.length === 0) return;
+      try {
+        const data = await api.batchSearchMediaServer(server.id, wishlistTitles);
+        if (!cancelled) {
+          const availability: Record<string, boolean> = {};
+          for (const [title, result] of Object.entries(data.results)) {
+            availability[title] = result.found;
+          }
+          setServerAvailability(availability);
+        }
+      } catch {
+        // Silently ignore — server might be offline
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [items.map((i) => i.title).join(",")]);
+
+  // === PT Search modal ===
+  const [searchPTItem, setSearchPTItem] = useState<WishlistEntry | null>(null);
 
   // === Saved item detail modal ===
   const [detailSaved, setDetailSaved] = useState<WishlistEntry | null>(null);
@@ -251,6 +285,8 @@ export function WishlistTab() {
                           onMarkWatched={setMarkingMovie}
                           onDelete={deleteItem}
                           onOpenDetail={setDetailSaved}
+                          onSearchPT={setSearchPTItem}
+                          onServer={serverAvailable ? serverAvailability[m.title] : undefined}
                         />
                       ))}
                     </div>
@@ -263,6 +299,8 @@ export function WishlistTab() {
                           onMarkWatched={setMarkingMovie}
                           onDelete={deleteItem}
                           onOpenDetail={setDetailSaved}
+                          onSearchPT={setSearchPTItem}
+                          onServer={serverAvailable ? serverAvailability[m.title] : undefined}
                         />
                       ))}
                     </div>
@@ -316,6 +354,15 @@ export function WishlistTab() {
             created_at: "",
           }}
           onClose={() => setDetailSaved(null)}
+        />
+      )}
+
+      {/* === PT Search Modal === */}
+      {searchPTItem && (
+        <PTSearchModal
+          open={searchPTItem !== null}
+          onClose={() => setSearchPTItem(null)}
+          searchQuery={`${searchPTItem.title}${searchPTItem.year ? ` ${searchPTItem.year}` : ""}`}
         />
       )}
 

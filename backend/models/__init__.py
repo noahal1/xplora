@@ -8,6 +8,7 @@ from models.db import (
     RecommendationRecord,
     OperationLogRecord,
     MediaServerRecord,
+    MoviePilotRecord,
 )
 
 from models.schemas import (
@@ -36,6 +37,7 @@ __all__ = [
     "RecommendationRecord",
     "OperationLogRecord",
     "MediaServerRecord",
+    "MoviePilotRecord",
     "LoginRequest",
     "LoginResponse",
     "CreateUserRequest",
