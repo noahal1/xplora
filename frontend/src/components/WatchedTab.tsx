@@ -300,6 +300,7 @@ export function WatchedTab() {
         });
       } catch (err) {
         showToast(t("watched.save_rating_failed", { message: getErrMsg(err) }), "error");
+        throw err; // re-throw so useRatingEditor's catch can keep the editor open
       }
     },
     [showToast, t]

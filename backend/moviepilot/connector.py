@@ -4,18 +4,36 @@ MoviePilot is a self-hosted PT (Private Tracker) download management
 service. Xplora communicates with it via its REST API to search torrents,
 trigger downloads, and query download status.
 
-API Reference (based on MoviePilot source code):
+MoviePilot API Reference (v2):
     GET  /api/v1/search/title?keyword=xxx&token=xxx  → search torrents
     POST /api/v1/download/add?token=xxx               → add download task
-    GET  /api/v1/torrent/state?token=xxx              → query download queue
+    GET  /api/v1/download/?token=xxx                  → query download queue
 """
 
 import logging
+import re
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# ── Helpers ────────────────────────────────────────────────────────
+
+
+def _parse_mp_speed(speed_str: str) -> int:
+    """Parse a MoviePilot speed string (e.g. '8.47M', '0.0B') to bytes/s."""
+    if not speed_str or not speed_str.strip():
+        return 0
+    speed_str = speed_str.strip().upper()
+    match = re.match(r"^([\d.]+)\s*([BKMG]?)B?$", speed_str)
+    if not match:
+        return 0
+    num = float(match.group(1))
+    unit = match.group(2)
+    multipliers = {"": 1, "B": 1, "K": 1024, "M": 1024**2, "G": 1024**3}
+    return int(num * multipliers.get(unit, 1))
 
 # ── Shared HTTP client with connection pooling ─────────────────────
 # Reuse a single AsyncClient across all requests to keep TCP
@@ -101,26 +119,14 @@ class MoviePilotConnector:
     # ── Public API ────────────────────────────────────────────────
 
     async def test_connection(self) -> dict:
-        """Test the connection to MoviePilot by fetching torrent state.
+        """Test the connection to MoviePilot by fetching the download queue.
 
-        We use GET /api/v1/torrent/state as a health check since it
-        requires authentication and returns a structured response
-        (even if empty). If the server responds, the connection is valid.
+        Uses GET /api/v1/download/ as a health check — it requires
+        authentication and returns a list (possibly empty).
         """
-        data = await self._get("/api/v1/torrent/state")
+        data = await self._get("/api/v1/download/")
         if data is None:
             return {"online": False, "message": "无法连接 MoviePilot，请检查地址、端口和 API Token"}
-
-        if isinstance(data, dict):
-            # Check for error responses
-            if data.get("code") and data["code"] != 0:
-                return {"online": False, "message": f"MoviePilot 返回错误: {data.get('message', '未知错误')}"}
-            torrents = data.get("torrents", []) if isinstance(data.get("torrents"), list) else []
-            return {
-                "online": True,
-                "message": "MoviePilot 连接成功",
-                "torrent_count": len(torrents),
-            }
 
         if isinstance(data, list):
             return {
@@ -168,16 +174,21 @@ class MoviePilotConnector:
 
         POST /api/v1/download/add
 
+        The request body must be wrapped in a ``torrent_in`` object per
+        MoviePilot's OpenAPI schema.
+
         Returns:
             {"success": true, "hash": "...", "message": "..."}
             or {"success": false, "message": "..."}
         """
         payload: dict[str, Any] = {
-            "title": title,
-            "url": url,
+            "torrent_in": {
+                "title": title,
+                "url": url,
+            }
         }
         if save_path:
-            payload["save_path"] = save_path
+            payload["torrent_in"]["save_path"] = save_path
 
         data = await self._post("/api/v1/download/add", json_data=payload)
         if data is None:
@@ -192,27 +203,27 @@ class MoviePilotConnector:
     async def get_torrents(self) -> list[dict]:
         """Get the current download queue from MoviePilot.
 
-        GET /api/v1/torrent/state
+        GET /api/v1/download/
 
-        Returns a list of torrents with hash, name, status, progress,
-        size, downloaded, dlspeed, ulspeed, seeders, save_path.
+        Returns a list of torrents with fields normalised to match the
+        ``MoviePilotTorrent`` frontend type.
         """
-        data = await self._get("/api/v1/torrent/state")
+        data = await self._get("/api/v1/download/")
         if data is None:
             return []
 
-        torrents = data.get("torrents", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+        torrents = data if isinstance(data, list) else []
         return [
             {
                 "hash": t.get("hash", ""),
                 "name": t.get("name", ""),
-                "status": t.get("status", "unknown"),  # downloading/seeding/paused/error
-                "progress": t.get("progress", 0.0),      # 0-1
+                "status": t.get("state", "unknown"),  # downloading/seeding/paused/error
+                "progress": t.get("progress", 0.0) / 100.0,  # API returns 0-100 → normalise to 0-1
                 "size": t.get("size", 0),
-                "downloaded": t.get("downloaded", 0),
-                "dlspeed": t.get("dlspeed", 0),          # bytes/s
-                "ulspeed": t.get("ulspeed", 0),          # bytes/s
-                "seeders": t.get("seeders", 0),
+                "downloaded": int(t.get("progress", 0) * t.get("size", 0) / 100.0),  # derive from progress
+                "dlspeed": _parse_mp_speed(t.get("dlspeed", "0B")),  # bytes/s
+                "ulspeed": _parse_mp_speed(t.get("ulspeed", "0B")),  # bytes/s
+                "seeders": 0,  # not provided by this API version
                 "save_path": t.get("save_path", ""),
             }
             for t in torrents

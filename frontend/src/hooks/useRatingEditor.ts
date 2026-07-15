@@ -36,11 +36,16 @@ export function useRatingEditor({
     setEditing(true);
   }, [currentRating]);
 
-  const handleSave = useCallback(() => {
-    setEditing(false);
-    setJustSaved(true);
-    setTimeout(() => setJustSaved(false), 1500);
-    onSaveRating(movieId, localSlider);
+  const handleSave = useCallback(async () => {
+    try {
+      await onSaveRating(movieId, localSlider);
+      setEditing(false);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 1500);
+    } catch {
+      // onSaveRating handles error display internally (toast),
+      // keep editor open so user can retry
+    }
   }, [movieId, localSlider, onSaveRating]);
 
   const handleCancel = useCallback(() => setEditing(false), []);
