@@ -127,27 +127,27 @@ export function DownloadQueue() {
                 {t("moviepilot.downloading")} ({downloadingList.length})
               </h3>
               <div className="space-y-2">
-                {downloadingList.map((t) => (
-                  <div key={t.hash} className="p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors">
+                {downloadingList.map((tor) => (
+                  <div key={tor.hash} className="p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{t.name}</p>
+                        <p className="text-sm font-medium truncate">{tor.name}</p>
                         <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground tabular-nums flex-wrap">
-                          <span>{formatProgress(t.progress)}</span>
-                          <span>{formatBytes(t.downloaded)} / {formatBytes(t.size)}</span>
-                          <span>{t("moviepilot.dl_speed")}: {formatSpeed(t.dlspeed)}</span>
-                          <span>{t("moviepilot.ul_speed")}: {formatSpeed(t.ulspeed)}</span>
+                          <span>{formatProgress(tor.progress)}</span>
+                          <span>{formatBytes(tor.downloaded)} / {formatBytes(tor.size)}</span>
+                          <span>{t("moviepilot.dl_speed")}: {formatSpeed(tor.dlspeed)}</span>
+                          <span>{t("moviepilot.ul_speed")}: {formatSpeed(tor.ulspeed)}</span>
                         </div>
                       </div>
-                      <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(t.status)} ${getStatusBg(t.status)}`}>
-                        {formatProgress(t.progress)}
+                      <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
+                        {formatProgress(tor.progress)}
                       </span>
                     </div>
                     {/* Progress bar */}
                     <div className="mt-2 h-1.5 rounded-full bg-accent/30 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-blue-500 transition-all duration-500"
-                        style={{ width: `${Math.min(t.progress * 100, 100)}%` }}
+                        style={{ width: `${Math.min(tor.progress * 100, 100)}%` }}
                       />
                     </div>
                   </div>
