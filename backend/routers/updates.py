@@ -123,7 +123,13 @@ def _get_update_info() -> dict:
             return default_result
 
         data = resp.json()
-        latest_tag = data.get("tag_name", "").lstrip("v")
+        # Strip leading "v" only when followed by a digit (e.g. "v2.0.0" → "2.0.0")
+        # but preserve version names like "voyage-2.0.0"
+        raw_tag = data.get("tag_name", "")
+        if raw_tag.startswith("v") and len(raw_tag) > 1 and raw_tag[1].isdigit():
+            latest_tag = raw_tag[1:]
+        else:
+            latest_tag = raw_tag
         release_url = data.get("html_url")
         published_at = data.get("published_at")
         body = data.get("body", "")
