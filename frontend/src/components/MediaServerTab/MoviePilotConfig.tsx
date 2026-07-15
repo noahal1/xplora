@@ -11,7 +11,7 @@ import {
 import type { MoviePilotConfig as MPConfig, MoviePilotTorrent } from "../../types";
 import { Modal } from "../Modal";
 import FadeContent from "../FadeContent";
-import { getErrMsg } from "../../lib/utils";
+import { getErrMsg, formatBytes, formatSpeed, formatProgress, getStatusLabel, getStatusColor } from "../../lib/utils";
 import {
   Download,
   CheckCircle2,
@@ -22,43 +22,6 @@ import {
   HardDrive,
   AlertTriangle,
 } from "lucide-react";
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-}
-
-function formatSpeed(bytesPerSec: number): string {
-  if (bytesPerSec === 0) return "—";
-  return formatBytes(bytesPerSec) + "/s";
-}
-
-function formatProgress(progress: number): string {
-  return (progress * 100).toFixed(1) + "%";
-}
-
-function getStatusLabel(status: string, t: (key: string) => string): string {
-  const map: Record<string, string> = {
-    downloading: t("moviepilot.downloading"),
-    seeding: t("moviepilot.seeding"),
-    paused: t("moviepilot.paused"),
-    error: t("moviepilot.error"),
-  };
-  return map[status] || t("moviepilot.unknown");
-}
-
-function getStatusColor(status: string): string {
-  switch (status) {
-    case "downloading": return "text-blue-500";
-    case "seeding": return "text-green-500";
-    case "paused": return "text-yellow-500";
-    case "error": return "text-red-500";
-    default: return "text-muted-foreground";
-  }
-}
 
 // ── Component ─────────────────────────────────────────────────────
 

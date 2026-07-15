@@ -97,3 +97,58 @@ export function titleInSet(title: string, titles: string[]): boolean {
   return titles.some((t) => titleMatches(title, t));
 }
 
+// ── MoviePilot utility functions ──────────────────────────────────
+
+/** Format bytes into a human-readable string (e.g. "1.5 GB"). */
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+/** Format speed in bytes/s to a human-readable string (e.g. "2.3 MB/s"). */
+export function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec === 0) return "—";
+  return formatBytes(bytesPerSec) + "/s";
+}
+
+/** Format a 0–1 progress value as a percentage string (e.g. "45.2%"). */
+export function formatProgress(progress: number): string {
+  return (progress * 100).toFixed(1) + "%";
+}
+
+/** Map a MoviePilot torrent status code to an i18n label. */
+export function getStatusLabel(status: string, t: (key: string) => string): string {
+  const map: Record<string, string> = {
+    downloading: t("moviepilot.downloading"),
+    seeding: t("moviepilot.seeding"),
+    paused: t("moviepilot.paused"),
+    error: t("moviepilot.error"),
+  };
+  return map[status] || t("moviepilot.unknown");
+}
+
+/** Get the Tailwind text color class for a given torrent status. */
+export function getStatusColor(status: string): string {
+  switch (status) {
+    case "downloading": return "text-blue-500";
+    case "seeding": return "text-green-500";
+    case "paused": return "text-yellow-500";
+    case "error": return "text-red-500";
+    default: return "text-muted-foreground";
+  }
+}
+
+/** Get the Tailwind background class for a given torrent status. */
+export function getStatusBg(status: string): string {
+  switch (status) {
+    case "downloading": return "bg-blue-500/10";
+    case "seeding": return "bg-green-500/10";
+    case "paused": return "bg-yellow-500/10";
+    case "error": return "bg-red-500/10";
+    default: return "bg-accent/30";
+  }
+}
+

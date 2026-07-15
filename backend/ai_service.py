@@ -978,8 +978,8 @@ Format 2 - For explanation or other questions:
             all_excluded.extend(r.get("title", "") for r in new_recs)
 
         if total_filtered > 0:
-            print(f"[FollowUp] Filtered out {total_filtered} already-watched titles "
-                  f"({len(all_recs[:count])}/{count} final)")
+            logger.info("FollowUp filtered out %d already-watched titles (%d/%d final)",
+                        total_filtered, len(all_recs[:count]), count)
 
         # Resolve poster URLs + TMDB IDs from TMDB
         all_recs = self._resolve_metadata(all_recs)

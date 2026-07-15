@@ -171,6 +171,9 @@ async def test_connection(
         connector = _get_connector_from_db(current_user["id"], db)
 
     result = await connector.test_connection()
+    # Update last_connected only when we know the connection is good
+    if result.get("online"):
+        update_mp_last_connected(current_user["id"], db=db)
     return result
 
 
@@ -238,8 +241,4 @@ async def list_torrents(
     """Get the download queue from MoviePilot."""
     connector = _get_connector_from_db(current_user["id"], db)
     torrents = await connector.get_torrents()
-
-    # Update last_connected on success
-    update_mp_last_connected(current_user["id"], db=db)
-
     return {"torrents": torrents}

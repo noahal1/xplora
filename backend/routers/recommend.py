@@ -1,9 +1,12 @@
 """Recommendation endpoints — sync, SSE streaming, and follow-up conversations."""
 
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
@@ -212,7 +215,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
                     finally:
                         user_session.close()
             except Exception as e:
-                print(f"[DB] Error saving session: {e}")
+                logger.warning("Error saving session: %s", e)
 
 
 def _followup_stream_with_persistence(movies, count, model, api_key, user_id, watched_titles=None, excluded_tmdb_ids=None, previous_recommendations=None, conversation=None, question=""):
@@ -279,7 +282,7 @@ def _followup_stream_with_persistence(movies, count, model, api_key, user_id, wa
                 finally:
                     user_session.close()
         except Exception as e:
-            print(f"[DB] Error saving follow-up session: {e}")
+            logger.warning("Error saving follow-up session: %s", e)
 
 
 # ── Endpoints ───────────────────────────────────────────────────────
@@ -321,7 +324,7 @@ async def recommend(
                     db=db,
                 )
             except Exception as e:
-                print(f"[DB] Error saving session (sync): {e}")
+                logger.warning("Error saving session (sync): %s", e)
         return RecommendationResponse(
             recommendations=recommendations,
             model_used=request.model,

@@ -3,54 +3,8 @@ import { useTranslation } from "react-i18next";
 import { getMPTorrents } from "../../api";
 import type { MoviePilotTorrent } from "../../types";
 import FadeContent from "../FadeContent";
+import { formatBytes, formatSpeed, formatProgress, getStatusLabel, getStatusColor, getStatusBg } from "../../lib/utils";
 import { Download, Upload, HardDrive, AlertTriangle, RefreshCw } from "lucide-react";
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-}
-
-function formatSpeed(bytesPerSec: number): string {
-  if (bytesPerSec === 0) return "—";
-  return formatBytes(bytesPerSec) + "/s";
-}
-
-function formatProgress(progress: number): string {
-  return (progress * 100).toFixed(1) + "%";
-}
-
-function getStatusLabel(status: string, t: (key: string) => string): string {
-  const map: Record<string, string> = {
-    downloading: t("moviepilot.downloading"),
-    seeding: t("moviepilot.seeding"),
-    paused: t("moviepilot.paused"),
-    error: t("moviepilot.error"),
-  };
-  return map[status] || t("moviepilot.unknown");
-}
-
-function getStatusColor(status: string): string {
-  switch (status) {
-    case "downloading": return "text-blue-500";
-    case "seeding": return "text-green-500";
-    case "paused": return "text-yellow-500";
-    case "error": return "text-red-500";
-    default: return "text-muted-foreground";
-  }
-}
-
-function getStatusBg(status: string): string {
-  switch (status) {
-    case "downloading": return "bg-blue-500/10";
-    case "seeding": return "bg-green-500/10";
-    case "paused": return "bg-yellow-500/10";
-    case "error": return "bg-red-500/10";
-    default: return "bg-accent/30";
-  }
-}
 
 export function DownloadQueue() {
   const { t } = useTranslation();

@@ -238,6 +238,9 @@ async def add_server(
         db=db,
     )
 
+    # Server was successfully added — mark as connected
+    update_last_connected(record.id, current_user["id"], db=db)
+
     log_operation(current_user["id"], current_user["username"], "add_media_server", f"添加媒体服务器: {name} ({server_type})", db=db)
 
     return _strip_media_server(record)

@@ -17,13 +17,35 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# ── Shared HTTP client with connection pooling ─────────────────────
+# Reuse a single AsyncClient across all requests to keep TCP
+# connections alive (HTTP keep-alive).  The client is created lazily
+# and can be closed via close_mp_client() on app shutdown.
+
+_shared_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = httpx.AsyncClient(timeout=15.0)
+    return _shared_client
+
+
+async def close_mp_client():
+    """Close the shared HTTP client (call on app shutdown)."""
+    global _shared_client
+    if _shared_client is not None:
+        await _shared_client.aclose()
+        _shared_client = None
+
 
 class MoviePilotConnector:
     """Connector to MoviePilot REST API.
 
     Wraps all HTTP calls to a MoviePilot instance with async/await
-    and consistent error handling. Designed to be stateless — create
-    a new connector per request.
+    and consistent error handling. Uses a shared httpx.AsyncClient
+    with connection pooling for better performance.
     """
 
     def __init__(self, host: str, port: int, api_token: str, use_ssl: bool = False):
@@ -49,11 +71,11 @@ class MoviePilotConnector:
     async def _get(self, path: str, params: dict | None = None) -> dict | list | None:
         """Send an authenticated GET request."""
         url = self._build_url(path)
+        client = _get_client()
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.get(url, params=params)
-                resp.raise_for_status()
-                return resp.json()
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            return resp.json()
         except httpx.HTTPStatusError as e:
             logger.warning("MP HTTP error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
             return None
@@ -64,11 +86,11 @@ class MoviePilotConnector:
     async def _post(self, path: str, json_data: dict | None = None) -> dict | None:
         """Send an authenticated POST request."""
         url = self._build_url(path)
+        client = _get_client()
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(url, json=json_data)
-                resp.raise_for_status()
-                return resp.json()
+            resp = await client.post(url, json=json_data)
+            resp.raise_for_status()
+            return resp.json()
         except httpx.HTTPStatusError as e:
             logger.warning("MP POST error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
             return None
