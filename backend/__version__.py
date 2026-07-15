@@ -1,3 +1,1 @@
-"""Centralized version string for the Xplora application."""
-
-VERSION = "dawn-1.7.0"
+__version__ = "voyage-2.0.0"
