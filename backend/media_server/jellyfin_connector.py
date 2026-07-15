@@ -14,6 +14,33 @@ from .base import BaseConnector, LibraryInfo, ServerStatus
 logger = logging.getLogger(__name__)
 
 
+# ── Shared HTTP client with connection pooling ─────────────────────
+# Reuse a single AsyncClient across all requests to keep TCP
+# connections alive (HTTP keep-alive).
+
+_shared_jellyfin_client: httpx.AsyncClient | None = None
+
+
+def _get_jf_client() -> httpx.AsyncClient:
+    global _shared_jellyfin_client
+    if _shared_jellyfin_client is None:
+        _shared_jellyfin_client = httpx.AsyncClient(timeout=10.0)
+    return _shared_jellyfin_client
+
+
+def _page_size() -> int:
+    """Return the page size for paginated watched-item fetches."""
+    return 200
+
+
+async def close_jf_client():
+    """Close the shared HTTP client (call on app shutdown)."""
+    global _shared_jellyfin_client
+    if _shared_jellyfin_client is not None:
+        await _shared_jellyfin_client.aclose()
+        _shared_jellyfin_client = None
+
+
 class JellyfinConnector(BaseConnector):
     """Connector for Jellyfin / FeiNiu media servers."""
 
@@ -43,31 +70,33 @@ class JellyfinConnector(BaseConnector):
     async def _get(self, path: str, params: dict | None = None) -> dict | list | None:
         """Send an authenticated GET request; falls back to POST if the
         response is not JSON (FeiNiu SPA intercepts some GET routes).
+
+        Uses the shared ``_get_jf_client()`` for connection pooling.
         """
         url = f"{self.base_url}{path}"
         headers = self._build_headers()
+        client = _get_jf_client()
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(url, headers=headers, params=params)
-                resp.raise_for_status()
+            resp = await client.get(url, headers=headers, params=params)
+            resp.raise_for_status()
 
-                # Check if response is JSON
-                ct = resp.headers.get("content-type", "")
-                if "application/json" in ct or resp.text[:1] in ("{", "["):
-                    try:
-                        return resp.json()
-                    except Exception:
-                        pass
-
-                # Non-JSON (FeiNiu SPA) → retry with POST
-                logger.info("GET returned %s from %s, retrying POST…", ct or "non-JSON", url)
-                resp2 = await client.post(url, headers=headers, params=params)
-                resp2.raise_for_status()
+            # Check if response is JSON
+            ct = resp.headers.get("content-type", "")
+            if "application/json" in ct or resp.text[:1] in ("{", "["):
                 try:
-                    return resp2.json()
-                except Exception as json_err:
-                    logger.warning("POST fallback also non-JSON from %s: %s", url, json_err)
-                    return None
+                    return resp.json()
+                except Exception:
+                    pass
+
+            # Non-JSON (FeiNiu SPA) → retry with POST
+            logger.info("GET returned %s from %s, retrying POST…", ct or "non-JSON", url)
+            resp2 = await client.post(url, headers=headers, params=params)
+            resp2.raise_for_status()
+            try:
+                return resp2.json()
+            except Exception as json_err:
+                logger.warning("POST fallback also non-JSON from %s: %s", url, json_err)
+                return None
 
         except httpx.HTTPStatusError as e:
             logger.warning("Jellyfin HTTP error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
@@ -77,14 +106,17 @@ class JellyfinConnector(BaseConnector):
             return None
 
     async def _post(self, path: str) -> bool:
-        """Send an authenticated POST request; returns True on success."""
+        """Send an authenticated POST request; returns True on success.
+
+        Uses the shared ``_get_jf_client()`` for connection pooling.
+        """
         url = f"{self.base_url}{path}"
         headers = self._build_headers()
+        client = _get_jf_client()
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(url, headers=headers)
-                resp.raise_for_status()
-                return True
+            resp = await client.post(url, headers=headers)
+            resp.raise_for_status()
+            return True
         except httpx.HTTPStatusError as e:
             logger.warning("Jellyfin POST error %s: %s", e.response.status_code, url)
             return False
@@ -100,34 +132,36 @@ class JellyfinConnector(BaseConnector):
         POST /Users/AuthenticateByName to get an AccessToken (Jellyfin
         protocol).  Requires the X-Emby-Authorization header even before
         a token is obtained.  Also caches the user ID from the response.
+
+        Uses the shared ``_get_jf_client()`` for connection pooling.
         """
         url = f"{self.base_url}/Users/AuthenticateByName"
         headers = {
             "X-Emby-Authorization": 'MediaBrowser Client="Xplora", Device="Xplora", DeviceId="xplora-001", Version="1.0.0"',
             "Accept": "application/json",
         }
+        client = _get_jf_client()
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    url,
-                    headers=headers,
-                    json={"Username": username, "Pw": password},
-                )
-                if resp.status_code == 200:
-                    try:
-                        data = resp.json()
-                    except Exception as json_err:
-                        logger.warning("FeiNiu auth: invalid JSON in response (status=200): %s — body=%s", json_err, resp.text[:300])
-                        return None
-                    token = data.get("AccessToken")
-                    if token:
-                        # Cache user ID from auth response
-                        user_obj = data.get("User") if isinstance(data, dict) else {}
-                        self._user_id = str(user_obj.get("Id", "")) if isinstance(user_obj, dict) else None
-                        logger.info("FeiNiu auth succeeded, got AccessToken (user_id=%s)", self._user_id)
-                        return str(token)
-                logger.warning("FeiNiu auth failed: status=%s body=%s", resp.status_code, resp.text[:300])
-                return None
+            resp = await client.post(
+                url,
+                headers=headers,
+                json={"Username": username, "Pw": password},
+            )
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                except Exception as json_err:
+                    logger.warning("FeiNiu auth: invalid JSON in response (status=200): %s — body=%s", json_err, resp.text[:300])
+                    return None
+                token = data.get("AccessToken")
+                if token:
+                    # Cache user ID from auth response
+                    user_obj = data.get("User") if isinstance(data, dict) else {}
+                    self._user_id = str(user_obj.get("Id", "")) if isinstance(user_obj, dict) else None
+                    logger.info("FeiNiu auth succeeded, got AccessToken (user_id=%s)", self._user_id)
+                    return str(token)
+            logger.warning("FeiNiu auth failed: status=%s body=%s", resp.status_code, resp.text[:300])
+            return None
         except httpx.RequestError as e:
             logger.warning("FeiNiu auth request failed: %s", e)
             return None
@@ -197,8 +231,11 @@ class JellyfinConnector(BaseConnector):
     async def get_watched_items(self) -> list[dict]:
         """Fetch all played/watched media items from the server.
 
-        GET /Users/{user_id}/Items?Filters=IsPlayed&Recursive=true&Fields=
-        ProviderIds,Overview&Limit=500
+        GET /Users/{user_id}/Items?Filters=IsPlayed&Recursive=true&
+        Fields=ProviderIds,Overview&Limit={page_size}&StartIndex={n}
+
+        Automatically paginates through all results using
+        ``TotalRecordCount`` and ``StartIndex`` — no hard cap.
 
         Returns a list of items with title, year, etc.
         """
@@ -207,34 +244,47 @@ class JellyfinConnector(BaseConnector):
             logger.warning("No user ID found — cannot fetch watched items")
             return []
 
-        params = {
-            "Filters": "IsPlayed",
-            "Recursive": "true",
-            "Fields": "ProviderIds,Overview",
-            "Limit": 500,
-            "SortBy": "DatePlayed",
-            "SortOrder": "Descending",
-        }
+        page_size = _page_size()
         path = f"/Users/{user_id}/Items"
-        data = await self._get(path, params=params)
-        if data is None:
-            return []
-
-        items = data.get("Items", []) if isinstance(data, dict) else []
         results: list[dict] = []
-        for item in items:
-            title = item.get("Name", "") or ""
-            year = item.get("ProductionYear")
-            # Skip items without a title
-            if not title:
-                continue
-            results.append({
-                "title": title,
-                "year": year,
-                "media_type": item.get("Type", "").lower() if item.get("Type") else "movie",
-                "overview": item.get("Overview"),
-                "server_item_id": item.get("Id", ""),
-            })
+        start_index = 0
+        total = None
+
+        while total is None or start_index < total:
+            params = {
+                "Filters": "IsPlayed",
+                "Recursive": "true",
+                "Fields": "ProviderIds,Overview",
+                "Limit": page_size,
+                "StartIndex": start_index,
+                "SortBy": "DatePlayed",
+                "SortOrder": "Descending",
+            }
+            data = await self._get(path, params=params)
+            if data is None:
+                break
+
+            if total is None:
+                total = data.get("TotalRecordCount", 0) if isinstance(data, dict) else 0
+
+            items = data.get("Items", []) if isinstance(data, dict) else []
+            if not items:
+                break
+
+            for item in items:
+                title = item.get("Name", "") or ""
+                year = item.get("ProductionYear")
+                if not title:
+                    continue
+                results.append({
+                    "title": title,
+                    "year": year,
+                    "media_type": item.get("Type", "").lower() if item.get("Type") else "movie",
+                    "overview": item.get("Overview"),
+                    "server_item_id": item.get("Id", ""),
+                })
+
+            start_index += page_size
 
         logger.info("Fetched %d watched items from media server", len(results))
         return results

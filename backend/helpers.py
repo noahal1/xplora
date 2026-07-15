@@ -23,24 +23,19 @@ def get_api_key(model: str) -> str:
 
 
 def _normalize_ratings(movies: list[MediaRating]) -> list[MediaRating]:
-    """Normalize ratings to a 0-10 scale."""
+    """Normalize ratings to a 0-10 scale.
+
+    The frontend CSV parser normalises all ratings to 0-10 before
+    sending them to the API, so by the time this function runs,
+    ratings should already be on a 0-10 scale.  We just clamp and
+    round to avoid floating-point artifacts.
+    """
     if not movies:
         return movies
-    max_rating = max(m.rating for m in movies)
-    if max_rating <= 5:
-        return [
-            MediaRating(
-                title=m.title,
-                rating=round(m.rating * 2, 1),
-                year=m.year,
-                genre=m.genre,
-            )
-            for m in movies
-        ]
     return [
         MediaRating(
             title=m.title,
-            rating=max(0.0, min(10.0, m.rating)),
+            rating=max(0.0, min(10.0, round(m.rating, 1))),
             year=m.year,
             genre=m.genre,
         )

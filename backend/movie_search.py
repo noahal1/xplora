@@ -109,18 +109,30 @@ def search_tmdb(query: str, api_key: str, language: str = "zh-CN", year: Optiona
 
     If ``year`` is provided, passes ``&year=YYYY`` to TMDB so results
     are filtered to that specific release year.
+
+    Retries once on SSL/connection errors to handle transient
+    TLS handshake issues (same pattern as ``search_tmdb_tv``).
     """
     url = f"{TMDB_BASE}/search/movie"
     params = {"api_key": api_key, "query": query, "language": language}
     if year is not None:
         params["year"] = year
-    try:
+
+    def _do_request() -> dict:
         client = get_shared_client()
         resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
         resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        raise RuntimeError(f"TMDB search failed: {e}")
+        return resp.json()
+
+    try:
+        data = _do_request()
+    except Exception:
+        # Retry once for transient SSL/network failures
+        logger.debug("TMDB movie search retrying for '%s' (%s)", query, language)
+        try:
+            data = _do_request()
+        except Exception as e:
+            raise RuntimeError(f"TMDB search failed: {e}")
 
     results: list[MovieSearchResult] = []
     for item in data.get("results", []):
