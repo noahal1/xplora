@@ -30,6 +30,19 @@ export function isAbortError(err: unknown): boolean {
 }
 
 /**
+ * Common stop words in movie titles (EN / FR / DE / ES / IT).
+ * Matches the backend's ``_STOP_WORDS`` in ``scraper/match.py``.
+ */
+const _STOP_WORDS: Set<string> = new Set([
+  "the", "a", "an", "and", "or", "of", "in", "to", "for",
+  "is", "it", "on", "at", "by", "with", "from", "as", "its",
+  "das", "der", "die", "dem", "den", "des", "ein", "eine",
+  "el", "la", "le", "les", "de", "un", "une", "du",
+  "il", "lo", "gli", "i",
+  "y", "los", "las",
+]);
+
+/**
  * Normalize a title for fuzzy comparison.
  * Lowercases, strips, removes special characters, and normalizes unicode accents.
  */
@@ -44,11 +57,11 @@ function normalizeTitle(s: string): string {
 }
 
 /**
- * Extract meaningful words from a title (>=2 chars, no single letters).
+ * Extract meaningful words from a title (>=2 chars, no single letters, no stop words).
  */
 function meaningfulWords(s: string): Set<string> {
   const words = s.split(/\s+/).filter(Boolean);
-  return new Set(words.filter((w) => w.length >= 2));
+  return new Set(words.filter((w) => w.length >= 2 && !_STOP_WORDS.has(w)));
 }
 
 /**
@@ -57,11 +70,16 @@ function meaningfulWords(s: string): Set<string> {
  * Returns true if two titles refer to the same movie.
  * Matching strategies (in order):
  * 1. Exact match after normalization
- * 2. One title is contained within the other (substring check)
- * 3. Jaccard word overlap >= 0.70 for multi-word titles
+ * 2. Jaccard word overlap >= 0.70
  *
- * This mirrors the backend's ``_filter_watched`` matching approach
- * but is simplified to avoid TMDB API calls in the browser.
+ * This is intentionally **conservative** — false negatives (showing an "Add"
+ * button for a movie already in the list) are preferable to false positives
+ * (showing "Already added" for a movie not in the list), because the user
+ * can still try to add it and will get a duplicate warning.
+ *
+ * Compared to the backend's ``title_similarity`` in ``scraper/match.py``,
+ * this omits the substring check (which causes false positives for sequels
+ * like "The Dark Knight" → "The Dark Knight Rises").
  */
 export function titleMatches(a: string, b: string): boolean {
   if (!a || !b) return false;
@@ -74,10 +92,7 @@ export function titleMatches(a: string, b: string): boolean {
   // 1. Exact match after normalization
   if (na === nb) return true;
 
-  // 2. Substring match (one title contained in the other)
-  if (na.includes(nb) || nb.includes(na)) return true;
-
-  // 3. Jaccard word overlap for multi-word titles
+  // 2. Jaccard word overlap (with stop words filtered out)
   const wordsA = meaningfulWords(na);
   const wordsB = meaningfulWords(nb);
   if (wordsA.size > 0 && wordsB.size > 0) {

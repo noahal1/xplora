@@ -166,7 +166,10 @@ export function WheelPicker({ open, onClose }: WheelPickerProps) {
   // ── Celebration sound (Web Audio API, no external files) ────────
   const playCelebrationSound = useCallback(() => {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtx = window.AudioContext ||
+        (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
       const masterGain = ctx.createGain();
       masterGain.gain.value = 0.12; // quiet
       masterGain.connect(ctx.destination);

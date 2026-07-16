@@ -149,8 +149,9 @@ export function MediaServerTab() {
       const result = await verifyMediaServer({ ...form, port: resolvePort(form) });
       setVerifyResult(result);
       // If feiniu verify returned a token, store it
-      if (form.server_type === "feiniu" && (result as any)._token) {
-        setForm(prev => ({ ...prev, api_key: (result as any)._token }));
+      const feiniuResult = result as VerifyResult & { _token?: string };
+      if (form.server_type === "feiniu" && feiniuResult._token) {
+        setForm(prev => ({ ...prev, api_key: feiniuResult._token! }));
       }
       if (result.online) {
         showToast(t("media_server.verify_success"), "success");

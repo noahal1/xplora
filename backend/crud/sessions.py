@@ -51,6 +51,7 @@ def save_session(
                 reason=rec.reason,
                 confidence=rec.confidence,
                 tmdb_id=rec.tmdb_id,
+                media_type=rec.media_type,
                 session_id=sess.id,
                 created_at=now,
             )

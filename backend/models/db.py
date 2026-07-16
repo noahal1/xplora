@@ -100,6 +100,7 @@ class RecommendationRecord(SQLModel, table=True):
     genre: Optional[str] = Field(default=None, max_length=255, nullable=True)
     reason: str = Field(nullable=False, default="")
     confidence: float = Field(nullable=False, default=0.0)
+    media_type: Optional[str] = Field(default=None, max_length=10, nullable=True)
     tmdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 

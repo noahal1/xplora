@@ -69,6 +69,8 @@ export function RecommendTab() {
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [sessionPosterMap, setSessionPosterMap] = useState<Record<number, string | null>>({});
   const [addingFromSession, setAddingFromSession] = useState<Record<number, boolean>>({});
+  // In-memory cache: normalized title → poster_url, persists across session views
+  const tmdbPosterCacheRef = useRef<Map<string, string>>(new Map());
 
   // Load watched movies + wishlist titles from DB on mount
   const loadMoviesFromDB = useCallback(async () => {
@@ -130,14 +132,23 @@ export function RecommendTab() {
     setSelectedSessionLoading(true);
     setSelectedSession(null);
     setSessionPosterMap({});
+    const cache = tmdbPosterCacheRef.current;
     try {
       const data = await api.getSessionDetail(id);
       setSelectedSession(data);
-      // Resolve posters in the background
+      // Resolve posters in the background (with in-memory cache to avoid repeated TMDB calls)
       const posterMap: Record<number, string | null> = {};
       await Promise.allSettled(
         data.recommendations.map(async (rec, idx) => {
           try {
+            // Check cache first
+            const cacheKey = (rec.title + "|" + (rec.year ?? "")).toLowerCase();
+            const cached = cache.get(cacheKey);
+            if (cached !== undefined) {
+              if (cached) posterMap[idx] = cached;
+              return;
+            }
+            // Cache miss — call TMDB API
             const searchData = await api.searchMedia(rec.title, "tmdb");
             const matches = searchData.results ?? [];
             const yearMatch = rec.year
@@ -145,7 +156,10 @@ export function RecommendTab() {
               : undefined;
             const fallback = matches.find((m) => m.poster_url);
             const match = yearMatch ?? fallback ?? matches[0];
-            if (match?.poster_url) posterMap[idx] = match.poster_url;
+            const posterUrl = match?.poster_url ?? null;
+            if (posterUrl) posterMap[idx] = posterUrl;
+            // Populate cache (cache both found and not-found to avoid re-querying)
+            cache.set(cacheKey, posterUrl ?? "");
           } catch {
             // Poster resolution is best-effort — silently skip failures
           }
@@ -264,7 +278,7 @@ export function RecommendTab() {
         return {
           ...rec,
           poster_url: rec.poster_url || null,
-          media_type: matched?.media_type || rec.media_type,
+          media_type: rec.media_type || matched?.media_type,
           watched: !!matched,
           inWishlist: titleInSet(rec.title, wishlistTitlesArray),
         };

@@ -121,14 +121,13 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
     return [...searchResults]
       .filter((r) => !searchSourceFilter || r.source === searchSourceFilter)
       .sort((a, b) => {
-        let va: any, vb: any;
         if (searchSortField === "year") {
-          va = a.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
-          vb = b.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
-        } else {
-          va = (a.title || "").toLowerCase();
-          vb = (b.title || "").toLowerCase();
+          const va = a.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
+          const vb = b.year ?? (searchSortDir === "asc" ? Infinity : -Infinity);
+          return searchSortDir === "asc" ? va - vb : vb - va;
         }
+        const va = (a.title || "").toLowerCase();
+        const vb = (b.title || "").toLowerCase();
         if (va < vb) return searchSortDir === "asc" ? -1 : 1;
         if (va > vb) return searchSortDir === "asc" ? 1 : -1;
         return 0;

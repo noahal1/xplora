@@ -563,13 +563,14 @@ def _run_per_user_column_migrations(user_id: int):
         ("detail", "VARCHAR(500)"),
     ], engine=engine)
 
-    # ── Migration: recommendations.tmdb_id ──
+    # ── Migration: recommendations.tmdb_id / media_type ──
     try:
         rec_columns = [c["name"] for c in inspector.get_columns("recommendations")]
     except Exception:
         rec_columns = []
     _add_columns_if_missing("recommendations", rec_columns, [
         ("tmdb_id", "VARCHAR(50)"),
+        ("media_type", "VARCHAR(10)"),
     ], engine=engine)
 
     # ── Migration: media_servers table ──

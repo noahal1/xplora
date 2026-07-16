@@ -122,7 +122,7 @@ def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str
     if not past_sessions:
         return {"liked_titles": [], "ignored_titles": []}
 
-    from scraper.match import normalize
+    from scraper.match import normalize, title_similarity
 
     liked: list[str] = []
     ignored: list[str] = []
@@ -138,9 +138,10 @@ def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str
             seen.add(norm)
 
             # Check if this recommended title is now in the user's wishlist
-            # (fuzzy match against wishlist titles)
+            # (fuzzy match against wishlist titles using proper title_similarity)
             is_in_wishlist = any(
-                normalize(wt) == norm for wt in wishlist_titles
+                title_similarity(rec.title, wt) >= 0.70
+                for wt in wishlist_titles
             )
             if is_in_wishlist:
                 liked.append(rec.title)
@@ -195,6 +196,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
                         reason=r.get("reason", ""),
                         confidence=min(max(float(r.get("confidence", 0.5)), 0.0), 1.0),
                         tmdb_id=r.get("tmdb_id"),
+                        media_type=r.get("media_type"),
                     )
                     for r in recommendations_cache
                 ]
@@ -265,6 +267,7 @@ def _followup_stream_with_persistence(movies, count, model, api_key, user_id, wa
                     reason=r.get("reason", ""),
                     confidence=min(max(float(r.get("confidence", 0.5)), 0.0), 1.0),
                     tmdb_id=r.get("tmdb_id"),
+                    media_type=r.get("media_type"),
                 )
                 for r in recommendations_cache
             ]

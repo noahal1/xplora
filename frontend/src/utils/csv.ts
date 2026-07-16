@@ -176,14 +176,27 @@ export function parseCSV(text: string): RawMovie[] {
   return items;
 }
 
+/* ── Local type for unknown JSON movie data ────────────────── */
+interface JsonMovie {
+  title?: string;
+  name?: string;
+  user_rating?: number;
+  rating?: number;
+  score?: number;
+  year?: number;
+  genre?: string;
+}
+
 /** Parse JSON data into movie objects */
 export function parseMovieData(data: unknown): RawMovie[] {
-  let items: any[] = [];
+  let items: unknown[] = [];
 
   if (Array.isArray(data)) {
     items = data;
   } else if (data && typeof data === "object") {
-    items = (data as any).items || (data as any).movies || [];
+    const d = data as Record<string, unknown>;
+    if (Array.isArray(d.items)) items = d.items;
+    else if (Array.isArray(d.movies)) items = d.movies;
   }
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -193,16 +206,17 @@ export function parseMovieData(data: unknown): RawMovie[] {
   const movies: RawMovie[] = [];
   for (let i = 0; i < items.length; i++) {
     const m = items[i];
-    if (!m || (!m.title && !m.name)) continue;
+    const item = m as JsonMovie;
+    if (!item || (!item.title && !item.name)) continue;
 
-    let rating = parseFloat(m.user_rating ?? m.rating ?? m.score ?? 0);
+    let rating = parseFloat(String(item.user_rating ?? item.rating ?? item.score ?? 0));
     rating = isNaN(rating) ? 0 : Math.max(0, Math.min(10, rating));
 
     movies.push({
-      title: m.title || m.name,
+      title: item.title || item.name!,
       rating,
-      year: m.year || null,
-      genre: m.genre || null,
+      year: item.year || null,
+      genre: item.genre || null,
     });
   }
 

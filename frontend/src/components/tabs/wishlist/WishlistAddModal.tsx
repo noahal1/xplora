@@ -46,9 +46,9 @@ export function WishlistAddModal({ open, onClose, onAddSuccess }: WishlistAddMod
       const raw = JSON.parse(jsonText);
       const list = Array.isArray(raw) ? raw : raw.movies || raw.items || [];
       if (!Array.isArray(list) || list.length === 0) { showToast(t("wishlist.json_invalid"), "error"); return; }
-      const parsedItems = list
-        .map((item: any) => ({ title: (item.title || item.name || "").trim(), year: item.year ?? null, genre: item.genre ?? null }))
-        .filter((m: any) => m.title);
+      const parsedItems = (list as { title?: string; name?: string; year?: number; genre?: string }[])
+        .map((item) => ({ title: (item.title || item.name || "").trim(), year: item.year ?? null, genre: item.genre ?? null }))
+        .filter((m) => m.title);
       if (parsedItems.length === 0) { showToast(t("wishlist.json_invalid"), "error"); return; }
       // Fetch ALL existing titles for dedup (not just current page)
       const existingTitles = await api.listMediaTitles();

@@ -237,20 +237,45 @@ export function ManageTab() {
 
   const cancelInlineEdit = useCallback(() => { setEditingCell(null); }, []);
 
+  /* ── Local type for inline edit fields ──────────────────── */
+  interface InlineEditFields {
+    title?: string;
+    rating?: number;
+    year?: number | null;
+    episode_count?: number | null;
+    created_at?: string;
+  }
+
   const saveInlineEdit = useCallback(async (movieId: number, field: string, value: string) => {
     const movie = mediaList.find((m) => m.id === movieId);
     if (!movie) return;
-    let newValue: any = value.trim();
-    let updatedFields: Record<string, any> = {};
+    const trimmed = value.trim();
+    const updatedFields: InlineEditFields = {};
     switch (field) {
-      case "title": if (!newValue) return; updatedFields.title = newValue; break;
-      case "rating": newValue = parseFloat(value); if (isNaN(newValue) || newValue < 0 || newValue > 10) return; updatedFields.rating = Math.round(newValue * 10) / 10; break;
-      case "year": newValue = value ? parseInt(value) : null; if (value && (isNaN(newValue) || newValue < 1888 || newValue > 2030)) return; updatedFields.year = newValue; break;
-      case "episode_count": newValue = value ? parseInt(value) : null; if (value && (isNaN(newValue) || newValue < 0)) return; updatedFields.episode_count = newValue; break;
-      case "created_at": newValue = value || null; updatedFields.created_at = newValue; break;
+      case "title": if (!trimmed) return; updatedFields.title = trimmed; break;
+      case "rating": {
+        const val = parseFloat(value);
+        if (isNaN(val) || val < 0 || val > 10) return;
+        updatedFields.rating = Math.round(val * 10) / 10;
+        break;
+      }
+      case "year": {
+        const val = value ? parseInt(value) : null;
+        if (value && (isNaN(val) || val < 1888 || val > 2030)) return;
+        updatedFields.year = val;
+        break;
+      }
+      case "episode_count": {
+        const val = value ? parseInt(value) : null;
+        if (value && (isNaN(val) || val < 0)) return;
+        updatedFields.episode_count = val;
+        break;
+      }
+      case "created_at": updatedFields.created_at = value || undefined; break;
     }
     const currentVal = movie[field as keyof MediaDetail];
-    if (updatedFields[field] === currentVal || (currentVal == null && updatedFields[field] == null)) { cancelInlineEdit(); return; }
+    const updatedVal = updatedFields[field as keyof InlineEditFields];
+    if (updatedVal === currentVal || (currentVal == null && updatedVal == null)) { cancelInlineEdit(); return; }
     try {
       const updated = await api.updateMedia(movieId, {
         title: updatedFields.title ?? movie.title,
@@ -259,7 +284,7 @@ export function ManageTab() {
         episode_count: updatedFields.episode_count !== undefined ? updatedFields.episode_count : movie.episode_count,
         genre: movie.genre || "",
         created_at: updatedFields.created_at !== undefined ? updatedFields.created_at : movie.created_at,
-      } as any);
+      });
       // Update local state immediately
       setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
       showToast(t("manage.updated"), "success");
@@ -716,7 +741,7 @@ export function ManageTab() {
           if (!movie) return;
           if (genre === (movie.genre || "")) { setGenreDialogMovie(null); return; }
           try {
-            await api.updateMedia(movieId, { title: movie.title, rating: movie.rating, year: movie.year, genre: genre || null } as any);
+            await api.updateMedia(movieId, { title: movie.title, rating: movie.rating, year: movie.year, genre: genre || null });
             // Update local state immediately
             setMediaList((prev) => prev.map((m) => m.id === movieId ? { ...m, genre: genre || null } : m));
             showToast(t("manage.genre_updated"), "success");

@@ -424,6 +424,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 genre=r.get("genre"),
                 reason=r.get("reason", ""),
                 confidence=min(max(float(r.get("confidence", 0.5)), 0.0), 1.0),
+                media_type=r.get("media_type"),
             )
             for r in recs
         ]
@@ -477,6 +478,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     if poster_url:
                         set_field(rec, "poster_url", poster_url)
                         set_field(rec, "tmdb_id", source_id)
+                        set_field(rec, "media_type", "movie")
                         return
 
                 # Step 2: Fallback — if movie search didn't find anything, try TV
@@ -493,6 +495,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     if poster_url:
                         set_field(rec, "poster_url", poster_url)
                         set_field(rec, "tmdb_id", source_id)
+                        set_field(rec, "media_type", "tv")
             except Exception:
                 pass
 
@@ -744,7 +747,10 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 continue
 
             all_recs.extend(new_recs)
-            all_excluded.extend(r.title for r in new_recs)
+            for r in new_recs:
+                t = _get_title(r)
+                if t and t not in all_excluded:
+                    all_excluded.append(t)
 
         if total_filtered > 0:
             print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
@@ -1141,6 +1147,8 @@ Format 2 - For explanation or other questions:
             poster_url = rec.get("poster_url") if isinstance(rec, dict) else getattr(rec, "poster_url", None)
             tmdb_id = rec.get("tmdb_id") if isinstance(rec, dict) else getattr(rec, "tmdb_id", None)
 
+            media_type = rec.get("media_type") if isinstance(rec, dict) else getattr(rec, "media_type", None)
+
             rec_data = json.dumps({
                 "title": title,
                 "year": year,
@@ -1149,6 +1157,7 @@ Format 2 - For explanation or other questions:
                 "confidence": min(max(float(confidence_raw), 0.0), 1.0),
                 "poster_url": poster_url,
                 "tmdb_id": tmdb_id,
+                "media_type": media_type,
             })
             yield f"event: recommendation\ndata: {rec_data}\n\n"
 

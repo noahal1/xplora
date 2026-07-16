@@ -247,7 +247,9 @@ export function WorldMapChart({ data }: Props) {
         const features = countries.features;
 
         // Exclude Antarctica (ISO "010") from rendering
-        const renderFeatures = features.filter((f: any) => String(f.id ?? "") !== "010");
+        const renderFeatures = features.filter(
+          (f: { id?: string | number }) => String(f.id ?? "") !== "010"
+        );
 
         // Manual Mercator projection — balanced between hemispheres,
         // tighter than full-world but keeps Southern Hemisphere visible.
@@ -259,15 +261,17 @@ export function WorldMapChart({ data }: Props) {
           .translate([width / 2, height / 2]);
 
         const pathGen = geoPath().projection(projection);
-        const records: FeatureRecord[] = renderFeatures.map((f: any, idx: number) => {
-          const pathData = pathGen(f) || "";
-          const numericId = String(f.id ?? "");
-          return {
-            key: numericId || `feat-${idx}`,
-            path: pathData,
-            iso2: NUMERIC_TO_ISO2[numericId] || null,
-          };
-        });
+        const records: FeatureRecord[] = renderFeatures.map(
+          (f: { id?: string | number }, idx: number) => {
+            const pathData = pathGen(f) || "";
+            const numericId = String(f.id ?? "");
+            return {
+              key: numericId || `feat-${idx}`,
+              path: pathData,
+              iso2: NUMERIC_TO_ISO2[numericId] || null,
+            };
+          }
+        );
 
         if (!cancelled) {
           setGeoFeatures(records);
