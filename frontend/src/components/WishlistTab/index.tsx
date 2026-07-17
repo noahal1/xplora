@@ -77,9 +77,14 @@ export function WishlistTab() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
 
-  // === Server availability ===
-  const [serverAvailability, setServerAvailability] = useState<Record<string, boolean>>({});
+  // === Server availability (with item ID for playback link) ===
+  interface ServerMatch {
+    found: boolean;
+    itemId?: string;
+  }
+  const [serverMatches, setServerMatches] = useState<Record<string, ServerMatch>>({});
   const [serverAvailable, setServerAvailable] = useState(false);
+  const [serverBaseUrl, setServerBaseUrl] = useState("");
 
   // Check if any media servers are configured and fetch availability
   useEffect(() => {
@@ -89,16 +94,21 @@ export function WishlistTab() {
       setServerAvailable(true);
       // Use the first active server
       const server = servers[0];
+      const scheme = server.use_ssl ? "https" : "http";
+      setServerBaseUrl(`${scheme}://${server.host}:${server.port}`);
       const wishlistTitles = items.map((item) => item.title);
       if (wishlistTitles.length === 0) return;
       try {
         const data = await api.batchSearchMediaServer(server.id, wishlistTitles);
         if (!cancelled) {
-          const availability: Record<string, boolean> = {};
+          const matches: Record<string, ServerMatch> = {};
           for (const [title, result] of Object.entries(data.results)) {
-            availability[title] = result.found;
+            matches[title] = {
+              found: result.found,
+              itemId: result.id,
+            };
           }
-          setServerAvailability(availability);
+          setServerMatches(matches);
         }
       } catch {
         // Silently ignore — server might be offline
@@ -286,7 +296,10 @@ export function WishlistTab() {
                           onDelete={deleteItem}
                           onOpenDetail={setDetailSaved}
                           onSearchPT={setSearchPTItem}
-                          onServer={serverAvailable ? serverAvailability[m.title] : undefined}
+                          onServer={serverAvailable ? serverMatches[m.title]?.found : undefined}
+                          serverPlayUrl={serverAvailable && serverMatches[m.title]?.found && serverMatches[m.title]?.itemId
+                            ? `${serverBaseUrl}/web/index.html#!/details?id=${serverMatches[m.title].itemId}`
+                            : undefined}
                         />
                       ))}
                     </div>
@@ -300,7 +313,10 @@ export function WishlistTab() {
                           onDelete={deleteItem}
                           onOpenDetail={setDetailSaved}
                           onSearchPT={setSearchPTItem}
-                          onServer={serverAvailable ? serverAvailability[m.title] : undefined}
+                          onServer={serverAvailable ? serverMatches[m.title]?.found : undefined}
+                          serverPlayUrl={serverAvailable && serverMatches[m.title]?.found && serverMatches[m.title]?.itemId
+                            ? `${serverBaseUrl}/web/index.html#!/details?id=${serverMatches[m.title].itemId}`
+                            : undefined}
                         />
                       ))}
                     </div>

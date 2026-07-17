@@ -8,7 +8,7 @@ import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 import type { WishlistEntry } from "../../WishlistTab/index";
 
 /* ── Memo-ized mobile card — compact card layout for small screens ── */
-export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer }: {
+export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer, serverPlayUrl }: {
   item: WishlistEntry;
   onMarkWatched: (item: WishlistEntry) => void;
   onDelete: (id: number) => void;
@@ -16,6 +16,8 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
   onSearchPT?: (item: WishlistEntry) => void;
   /** undefined = no server, true = on server, false = not on server */
   onServer?: boolean;
+  /** Direct playback URL on the media server (Jellyfin web player) */
+  serverPlayUrl?: string;
 }) {
   const { t } = useTranslation();
 
@@ -44,9 +46,21 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-sm truncate" onClick={() => onOpenDetail(item)}>{item.title}</span>
                 {onServer === true && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 leading-none shrink-0">
-                    📺 {t("wishlist.on_server")}
-                  </span>
+                  serverPlayUrl ? (
+                    <a
+                      href={serverPlayUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 leading-none shrink-0 hover:bg-green-500/20 transition-colors"
+                      title={t("wishlist.play_on_server")}
+                    >
+                      📺 {t("wishlist.on_server")}
+                    </a>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 leading-none shrink-0">
+                      📺 {t("wishlist.on_server")}
+                    </span>
+                  )
                 )}
                 {onServer === false && (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 leading-none shrink-0">
@@ -117,5 +131,6 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
   if (prev.item.season_number !== next.item.season_number) return false;
   if (prev.item.episode_count !== next.item.episode_count) return false;
   if (prev.onServer !== next.onServer) return false;
+  if (prev.serverPlayUrl !== next.serverPlayUrl) return false;
   return true;
 });

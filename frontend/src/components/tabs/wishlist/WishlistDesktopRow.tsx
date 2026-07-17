@@ -14,9 +14,11 @@ interface WishlistDesktopRowProps {
   onSearchPT?: (item: WishlistEntry) => void;
   /** undefined = no server, true = on server, false = not on server */
   onServer?: boolean;
+  /** Direct playback URL on the media server (Jellyfin web player) */
+  serverPlayUrl?: string;
 }
 
-export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer }: WishlistDesktopRowProps) {
+export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer, serverPlayUrl }: WishlistDesktopRowProps) {
   const { t } = useTranslation();
 
   return (
@@ -35,9 +37,22 @@ export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-[510] text-foreground">{item.title}</p>
             {onServer === true && (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 leading-none">
-                📺 {t("wishlist.on_server")}
-              </span>
+              serverPlayUrl ? (
+                <a
+                  href={serverPlayUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 leading-none hover:bg-green-500/20 transition-colors"
+                  title={t("wishlist.play_on_server")}
+                >
+                  📺 {t("wishlist.on_server")}
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 leading-none">
+                  📺 {t("wishlist.on_server")}
+                </span>
+              )
             )}
             {onServer === false && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 leading-none">

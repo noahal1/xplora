@@ -24,24 +24,28 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
 
   return (
     <div
-      className={`p-3 rounded-xl transition-all duration-200 bg-bg-card border border-border ${isSelected ? "ring-1 ring-primary/40" : ""}`}
+      className={`p-3 rounded-xl transition-all duration-200 bg-bg-card border ${
+        isSelected
+          ? "border-primary/30 bg-primary/[0.03] ring-1 ring-primary/20"
+          : "border-border hover:border-border/80 hover:shadow-sm"
+      }`}
     >
       {/* Row 1: Checkbox + Poster + Title/Meta + Rating */}
       <div className="flex items-start gap-2.5">
         <input type="checkbox"
-          className="shrink-0 w-5 h-5 accent-primary cursor-pointer mt-1"
+          className="shrink-0 w-5 h-5 accent-primary cursor-pointer mt-1 rounded"
           checked={isSelected} onChange={() => onToggle(movie.id)} />
 
         {/* Poster */}
         <div
-          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer border border-border-subtle"
+          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/40 flex items-center justify-center cursor-pointer border border-border/40 shadow-sm"
           onClick={() => onSetDetailMovie(movie)}
         >
           {movie.poster_url ? (
             <img src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" loading="lazy"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
           ) : (
-            <Film size={16} className="text-muted-foreground/30" />
+            <Film size={16} className="text-muted-foreground/20" />
           )}
         </div>
 
@@ -50,33 +54,33 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
           <div className="flex items-start justify-between gap-1">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="font-medium text-sm truncate" onClick={() => onSetDetailMovie(movie)}>{movie.title}</span>
+                <span className="font-medium text-sm truncate leading-snug" onClick={() => onSetDetailMovie(movie)}>{movie.title}</span>
                 {movie.media_type === "tv" && (
                   <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 leading-none px-1.5 py-0 shrink-0">TV</Badge>
                 )}
               </div>
-              <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/80">
-                {movie.year && <span>{movie.year}</span>}
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground/70">
+                {movie.year && <span className="tabular-nums">{movie.year}</span>}
                 {movie.genre && (
                   <span className="truncate">{translateGenres(movie.genre)}</span>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                 {/* Status badge */}
                 {movie.status === "wish" ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-pink px-1.5 py-0.5 rounded-full bg-pink/10 border border-pink/20">
-                    <Heart size={10} />
-                    {t("manage.status_wish")}
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-pink px-2 py-0.5 rounded-full bg-pink/8 border border-pink/15">
+                    <Heart size={9} />
+                    <span>{t("manage.status_wish")}</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-green px-1.5 py-0.5 rounded-full bg-green/10 border border-green/20">
-                    <Check size={10} />
-                    {t("manage.status_watched")}
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green px-2 py-0.5 rounded-full bg-green/8 border border-green/15">
+                    <Check size={9} />
+                    <span>{t("manage.status_watched")}</span>
                   </span>
                 )}
                 {/* Rating */}
-                {movie.status === "watched" && (
-                  <span className="inline-flex items-center gap-0.5 text-xs font-medium text-amber tabular-nums">
+                {movie.status === "watched" && movie.rating > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-amber tabular-nums">
                     <Star size={10} fill="currentColor" />
                     <CountUp end={movie.rating} decimals={1} />
                   </span>
@@ -90,50 +94,49 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
                 {/* Scrape error indicator */}
                 {movie.scrape_error && !movie.poster_url && (
                   <span title={movie.scrape_error} className="shrink-0">
-                    <AlertCircle size={11} className="text-destructive" />
+                    <AlertCircle size={10} className="text-destructive/70" />
                   </span>
                 )}
               </div>
             </div>
-            <ChevronRight size={14} className="shrink-0 mt-0.5 text-fg-dim" />
+            <ChevronRight size={14} className="shrink-0 mt-0.5 text-muted-foreground/30" />
           </div>
         </div>
       </div>
 
       {/* Row 2: Action buttons */}
-      <div className="flex items-center gap-1 mt-2.5 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+      <div className="flex items-center gap-1 mt-3 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
         {movie.status === "wish" && (
           <MobileActionBtn
-            icon={<Check size={13} />}
+            icon={<Check size={12} />}
             label={t("wishlist.mark_as_watched")}
             onClick={() => onSetMarkWatchedMovie(movie)}
             className="text-green hover:bg-green/10"
           />
         )}
         <MobileActionBtn
-          icon={<Info size={13} />}
+          icon={<Info size={12} />}
           label={t("manage.detail")}
           onClick={() => onSetDetailMovie(movie)}
         />
-
         <MobileActionBtn
-          icon={<Search size={13} />}
+          icon={<Search size={12} />}
           label={t("manage.rematch")}
           onClick={() => onSetRematchMovie(movie)}
           className={movie.scrape_error ? "text-amber" : ""}
         />
         <MobileActionBtn
-          icon={enrichingIds.has(movie.id) ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          icon={enrichingIds.has(movie.id) ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
           label={t("manage.enrich")}
           onClick={() => onEnrich(movie.id)}
           disabled={enrichingIds.has(movie.id)}
           className={enrichingIds.has(movie.id) ? "text-primary" : "hover:text-amber"}
         />
         <MobileActionBtn
-          icon={<Trash2 size={13} />}
+          icon={<Trash2 size={12} />}
           label={t("common.delete")}
           onClick={() => onConfirmDelete(movie.id, movie.title)}
-          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
         />
       </div>
     </div>

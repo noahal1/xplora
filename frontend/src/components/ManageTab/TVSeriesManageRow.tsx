@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { TableEditableCell } from "./TableEditableCell";
 import CountUp from "../CountUp";
+import { ActionBtn } from "./ActionBtn";
 
 interface TVSeriesManageRowProps {
   group: TVSeriesGroup;
@@ -83,22 +84,21 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
   return (
     <>
       {/* ── Group header row ── */}
-      <tr className={`transition-colors ${isSelected ? "bg-primary/[0.04]" : "hover:bg-accent/20"}`}>
+      <tr className={`transition-all duration-150 ${isSelected ? "bg-primary/[0.04]" : "hover:bg-accent/15"}`}>
         {/* Checkbox */}
-        <td className="px-3 py-2 border-b border-border text-center">
+        <td className="px-3 py-2.5 border-b border-border/60 text-center">
           <input
             type="checkbox"
-            className="w-4 h-4 accent-primary cursor-pointer"
+            className="w-4 h-4 accent-primary cursor-pointer rounded"
             checked={isSelected}
             onChange={() => onToggleGroup(group.tvSeriesId)}
           />
         </td>
 
         {/* Poster */}
-        <td className="px-1 py-2 border-b border-border text-center">
+        <td className="px-1 py-2.5 border-b border-border/60 text-center">
           <div
-            className="relative w-[38px] h-[52px] rounded overflow-hidden bg-muted flex items-center justify-center mx-auto cursor-pointer"
-            style={{ border: "1px solid var(--border-subtle)" }}
+            className="relative w-[38px] h-[52px] rounded-lg overflow-hidden bg-muted/40 flex items-center justify-center mx-auto cursor-pointer border border-border/30 shadow-sm"
             onClick={() => onOpenDetail(firstSeason)}
           >
             {group.posterUrl ? (
@@ -110,29 +110,29 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             ) : (
-              <Film size={14} className="text-muted-foreground/30" />
+              <Film size={14} className="text-muted-foreground/20" />
             )}
             {hasEnrichError && (
               <div className="absolute bottom-0.5 right-0.5">
-                <AlertCircle size={12} className="text-destructive" />
+                <AlertCircle size={11} className="text-destructive/70" />
               </div>
             )}
           </div>
         </td>
 
         {/* Status */}
-        <td className="px-3 py-2 border-b border-border">
-          <span className="inline-flex items-center gap-1 text-[11px] text-sky px-1.5 py-0.5 rounded-full bg-sky/10 border border-sky/20">
+        <td className="px-3 py-2.5 border-b border-border/60">
+          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-sky px-2 py-0.5 rounded-full bg-sky/8 border border-sky/15">
             TV
           </span>
         </td>
 
         {/* Title + Season chips + expand toggle */}
-        <td className="px-3 py-2 border-b border-border">
+        <td className="px-3 py-2.5 border-b border-border/60">
           <div className="flex items-center gap-1 min-w-0">
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="shrink-0 text-muted-foreground/50 hover:text-foreground transition-colors p-0.5 -ml-1"
+              className="shrink-0 text-muted-foreground/40 hover:text-foreground transition-colors p-0.5 -ml-1"
               title={expanded ? t("manage.filter_collapse") : t("manage.filter_expand")}
             >
               {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -146,11 +146,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
               <button
                 key={season.id}
                 onClick={() => onOpenDetail(season)}
-                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-all hover:scale-[1.04] active:scale-95 cursor-pointer"
-                style={{
-                  background: "var(--bg-input)",
-                  border: "1px solid var(--border-subtle)",
-                }}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium transition-all hover:scale-[1.04] active:scale-95 cursor-pointer bg-accent/30 border border-border/30 hover:border-border/60 hover:shadow-sm"
                 title={season.title}
               >
                 <span className="text-amber text-[9px]">★</span>
@@ -164,68 +160,50 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
         </td>
 
         {/* Rating (avg) */}
-        <td className="px-3 py-2 border-b border-border">
+        <td className="px-3 py-2.5 border-b border-border/60">
           <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap">
             <Star size={12} fill="currentColor" className="text-amber" />
             <span>{avgRating.toFixed(1)}</span>
-            <span className="text-[10px] text-muted-foreground/60 ml-0.5">avg</span>
+            <span className="text-[10px] text-muted-foreground/50 ml-0.5">avg</span>
           </span>
         </td>
 
         {/* Episode count */}
-        <td className="px-3 py-2 border-b border-border">
+        <td className="px-3 py-2.5 border-b border-border/60">
           <span className="text-muted-foreground text-xs tabular-nums">—</span>
         </td>
 
         {/* Year range */}
-        <td className="px-3 py-2 border-b border-border">
+        <td className="px-3 py-2.5 border-b border-border/60">
           <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">{yearRange}</span>
         </td>
 
         {/* Genre */}
-        <td className="px-3 py-2 border-b border-border">
+        <td className="px-3 py-2.5 border-b border-border/60">
           <span className="text-muted-foreground truncate block text-xs">
             {translateGenres(genre) || "—"}
           </span>
         </td>
 
         {/* Date */}
-        <td className="px-3 py-2 border-b border-border">
+        <td className="px-3 py-2.5 border-b border-border/60">
           <span className="text-muted-foreground text-[11px] whitespace-nowrap tabular-nums">{dateRange}</span>
         </td>
 
         {/* Actions */}
-        <td className="px-1 py-2 border-b border-border text-center whitespace-nowrap">
-          <div
-            className="inline-flex items-center gap-0.5"
-            style={{
-              border: "1px solid var(--border-subtle)",
-              borderRadius: "var(--seed-radius)",
-              padding: "1px",
-            }}
-          >
-            <button
-              className="text-muted-foreground hover:text-sky px-1.5 py-1 rounded transition-colors hover:bg-sky/10"
-              onClick={() => onOpenDetail(firstSeason)}
-              title={t("manage.detail")}
-            >
-              <Info size={14} />
-            </button>
-            <button
-              className={`px-1.5 py-1 rounded transition-colors ${anyEnriching ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
+        <td className="px-1 py-2.5 border-b border-border/60 text-center whitespace-nowrap">
+          <div className="inline-flex items-center gap-px rounded-lg p-0.5 bg-accent/20 border border-border/30" style={{ borderRadius: "8px" }}>
+            <ActionBtn icon={<Info size={13} />} label={t("manage.detail")}
+              onClick={() => onOpenDetail(firstSeason)} color="sky" />
+            <ActionBtn
+              icon={anyEnriching ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              label={anyEnriching ? t("manage.enriching") : t("manage.enrich")}
               onClick={() => Promise.all(group.seasons.map((s) => onEnrich(s.id)))}
               disabled={anyEnriching}
-              title={anyEnriching ? t("manage.enriching") : t("manage.enrich")}
-            >
-              {anyEnriching ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            </button>
-            <button
-              className="text-muted-foreground hover:text-destructive px-1.5 py-1 rounded transition-colors hover:bg-destructive/10"
-              onClick={() => onRemoveGroup(group.seasons.map((s) => s.id))}
-              title={t("watched.remove_all_seasons")}
-            >
-              <Trash2 size={14} />
-            </button>
+              color="amber"
+              highlight={anyEnriching} />
+            <ActionBtn icon={<Trash2 size={13} />} label={t("watched.remove_all_seasons")}
+              onClick={() => onRemoveGroup(group.seasons.map((s) => s.id))} color="destructive" />
           </div>
         </td>
       </tr>
@@ -234,38 +212,37 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
       {expanded && group.seasons.map((season) => (
         <tr
           key={season.id}
-          className={`transition-colors ${editingCell?.movieId === season.id ? "bg-primary/[0.03]" : "hover:bg-accent/10"}`}
+          className={`transition-all duration-150 ${editingCell?.movieId === season.id ? "bg-primary/[0.03]" : "hover:bg-accent/10"}`}
         >
           {/* Checkbox (individual season) */}
-          <td className="px-3 py-1.5 border-b border-border/50 text-center">
+          <td className="px-3 py-1.5 border-b border-border/40 text-center">
             <input
               type="checkbox"
-              className="w-3.5 h-3.5 accent-primary cursor-pointer"
+              className="w-3.5 h-3.5 accent-primary cursor-pointer rounded"
               checked={selected.has(season.id)}
               onChange={() => onToggle(season.id)}
             />
           </td>
 
           {/* Poster (season poster) */}
-          <td className="px-1 py-1.5 border-b border-border/50 text-center">
+          <td className="px-1 py-1.5 border-b border-border/40 text-center">
             {season.poster_url && (
-              <div className="relative w-[30px] h-[40px] rounded overflow-hidden bg-muted mx-auto"
-                style={{ border: "1px solid var(--border-subtle)" }}>
+              <div className="relative w-[30px] h-[40px] rounded-md overflow-hidden bg-muted/40 mx-auto border border-border/20 shadow-sm">
                 <img src={season.poster_url} alt="" className="w-full h-full object-cover" loading="lazy" />
               </div>
             )}
           </td>
 
           {/* Status */}
-          <td className="px-3 py-1.5 border-b border-border/50">
+          <td className="px-3 py-1.5 border-b border-border/40">
             {season.status === "wish" ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-pink px-1.5 py-0.5 rounded-full bg-pink/10 border border-pink/20">
-                <Heart size={10} />
+              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-pink px-1.5 py-0.5 rounded-full bg-pink/8 border border-pink/15">
+                <Heart size={9} />
                 {t("manage.status_wish")}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] text-green px-1.5 py-0.5 rounded-full bg-green/10 border border-green/20">
-                <Check size={10} />
+              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-green px-1.5 py-0.5 rounded-full bg-green/8 border border-green/15">
+                <Check size={9} />
                 {t("manage.status_watched")}
               </span>
             )}
@@ -329,37 +306,23 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
           </TableEditableCell>
 
           {/* Actions */}
-          <td className="px-1 py-1.5 border-b border-border/50 text-center whitespace-nowrap">
-            <div className="inline-flex items-center gap-0.5"
-              style={{
-                border: "1px solid var(--border-subtle)",
-                borderRadius: "var(--seed-radius)",
-                padding: "1px",
-              }}>
+          <td className="px-1 py-1.5 border-b border-border/40 text-center whitespace-nowrap">
+            <div className="inline-flex items-center gap-px rounded-md p-0.5 bg-accent/20 border border-border/20">
               {season.status === "wish" && (
-                <button className="text-muted-foreground hover:text-green px-1 py-0.5 rounded transition-colors hover:bg-green/10"
-                  onClick={() => onSetMarkWatchedMovie(season)} title={t("wishlist.mark_as_watched")}>
-                  <Check size={12} />
-                </button>
+                <ActionBtn icon={<Check size={11} />} label={t("wishlist.mark_as_watched")}
+                  onClick={() => onSetMarkWatchedMovie(season)} color="green" size="sm" />
               )}
-              <button className="text-muted-foreground hover:text-sky px-1 py-0.5 rounded transition-colors hover:bg-sky/10"
-                onClick={() => onOpenDetail(season)} title={t("manage.detail")}>
-                <Info size={12} />
-              </button>
-              <button className={`px-1 py-0.5 rounded transition-colors ${season.scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
-                onClick={() => onSetRematchMovie(season)}
-                title={season.scrape_error ? t("manage.rematch_error_hint") : t("manage.rematch")}>
-                <Search size={12} />
-              </button>
-              <button className={`px-1 py-0.5 rounded transition-colors ${enrichingIds.has(season.id) ? "text-primary animate-pulse" : "text-muted-foreground hover:text-amber"} hover:bg-amber/10`}
+              <ActionBtn icon={<Info size={11} />} label={t("manage.detail")}
+                onClick={() => onOpenDetail(season)} color="sky" size="sm" />
+              <ActionBtn icon={<Search size={11} />} label={season.scrape_error ? t("manage.rematch_error_hint") : t("manage.rematch")}
+                onClick={() => onSetRematchMovie(season)} color="sky" highlight={!!season.scrape_error} size="sm" />
+              <ActionBtn
+                icon={enrichingIds.has(season.id) ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                label={enrichingIds.has(season.id) ? t("manage.enriching") : t("manage.enrich")}
                 onClick={() => onEnrich(season.id)} disabled={enrichingIds.has(season.id)}
-                title={enrichingIds.has(season.id) ? t("manage.enriching") : t("manage.enrich")}>
-                {enrichingIds.has(season.id) ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              </button>
-              <button className="text-muted-foreground hover:text-destructive px-1 py-0.5 rounded transition-colors hover:bg-destructive/10"
-                onClick={() => onConfirmDelete(season.id, season.title)} title={t("common.delete")}>
-                <Trash2 size={12} />
-              </button>
+                color="amber" highlight={enrichingIds.has(season.id)} size="sm" />
+              <ActionBtn icon={<Trash2 size={11} />} label={t("common.delete")}
+                onClick={() => onConfirmDelete(season.id, season.title)} color="destructive" size="sm" />
             </div>
           </td>
         </tr>

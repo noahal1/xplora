@@ -136,7 +136,14 @@ class MoviePilotConnector:
             return None
 
     async def _post(self, path: str, json_data: dict | None = None) -> dict | None:
-        """Send an authenticated POST request with automatic retry on transient errors."""
+        """Send an authenticated POST request with automatic retry on transient errors.
+
+        Returns the parsed JSON response on success, or a dict with
+        ``{"success": False, "message": "..."}`` extracted from the
+        response body on HTTP errors so callers can surface the real
+        error message from MoviePilot instead of a generic one.
+        Returns ``None`` only on network/connection failures.
+        """
         url = self._build_url(path)
         params = {"token": self.api_token}
 
@@ -149,8 +156,28 @@ class MoviePilotConnector:
         try:
             return await _retry_on_request_error(_do_post)
         except httpx.HTTPStatusError as e:
-            logger.warning("MP POST error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
-            return None
+            logger.warning(
+                "MP POST error %s: %s — %s",
+                e.response.status_code, url, e.response.text[:300],
+            )
+            # Try to parse the error message from MoviePilot's response body
+            # so the user sees the real reason instead of a generic message.
+            try:
+                err_body = e.response.json()
+                if isinstance(err_body, dict):
+                    msg = (
+                        err_body.get("message")
+                        or err_body.get("detail")
+                        or err_body.get("error")
+                        or e.response.text[:200]
+                    )
+                    return {"success": False, "message": str(msg)}
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "message": f"HTTP {e.response.status_code}: {e.response.text[:200]}",
+            }
         except httpx.RequestError as e:
             logger.warning("MP POST failed after %s retries: %s — %s", _MAX_RETRIES, url, e)
             return None
@@ -270,30 +297,39 @@ class MoviePilotConnector:
 
         POST /api/v1/download/add
 
-        The request body must be wrapped in a ``torrent_in`` object per
-        MoviePilot's OpenAPI schema.
+        The request body is a flat JSON object per MoviePilot's OpenAPI
+        schema.
 
         Returns:
             {"success": true, "hash": "...", "message": "..."}
             or {"success": false, "message": "..."}
         """
+        # MoviePilot v2 expects a flat JSON body (no ``torrent_in`` wrapper)
+        # per its OpenAPI schema. ``title`` and ``url`` are the minimum
+        # required fields.
         payload: dict[str, Any] = {
-            "torrent_in": {
-                "title": title,
-                "url": url,
-            }
+            "title": title,
+            "url": url,
         }
         if save_path:
-            payload["torrent_in"]["save_path"] = save_path
+            payload["save_path"] = save_path
 
         data = await self._post("/api/v1/download/add", json_data=payload)
         if data is None:
-            return {"success": False, "hash": "", "message": "添加下载任务失败，请检查 MoviePilot 连接"}
+            return {
+                "success": False,
+                "hash": "",
+                "message": "无法连接 MoviePilot，请检查地址、端口和 API Token",
+            }
+
+        # MoviePilot v2 returns {"success": true/false, "hash": "...", "message": "..."}
+        # but some versions may nest the result in a "data" key.
+        result = data.get("data", data)
 
         return {
-            "success": data.get("success", False),
-            "hash": data.get("hash", ""),
-            "message": data.get("message", "添加成功" if data.get("success") else "添加失败"),
+            "success": result.get("success", False),
+            "hash": result.get("hash", ""),
+            "message": result.get("message", "添加成功" if result.get("success") else "添加失败"),
         }
 
     async def get_torrents(self) -> list[dict]:

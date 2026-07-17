@@ -5,7 +5,7 @@ import type { MPSearchResult } from "../../types";
 import { Modal } from "../Modal";
 import { useToast } from "../../context/ToastContext";
 import { getErrMsg, formatBytes } from "../../lib/utils";
-import { Search, Download, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Filter, Subtitles } from "lucide-react";
+import { Search, Download, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Filter, Subtitles, Globe } from "lucide-react";
 
 interface PTSearchModalProps {
   open: boolean;
@@ -126,6 +126,19 @@ const FILTER_OPTIONS: FilterOption[] = [
   },
 ];
 
+/* ── Site filter button style ───────────────────────────────────── */
+
+function siteBtnClass(site: string, active: boolean): string {
+  const base = [
+    "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all",
+    "border border-transparent",
+  ].join(" ");
+  if (active) {
+    return `${base} bg-primary/15 text-primary shadow-sm border-primary/20`;
+  }
+  return `${base} bg-accent/50 text-muted-foreground hover:bg-accent hover:text-foreground`;
+}
+
 /* ── Component ─────────────────────────────────────────────────── */
 
 export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps) {
@@ -138,12 +151,26 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
   const [searched, setSearched] = useState(false);
   const [downloadingHash, setDownloadingHash] = useState<string | null>(null);
   const [promoFilter, setPromoFilter] = useState<PromoFilter>("all");
+  const [siteFilter, setSiteFilter] = useState<string>("all");
 
-  // ── Filtered results ──
+  // ── Extract unique site names ──
+
+  const siteNames = useMemo(() => {
+    const sites = new Set<string>();
+    for (const r of results) {
+      sites.add(r.site || "未知");
+    }
+    return Array.from(sites).sort();
+  }, [results]);
+
+  // ── Filtered results (site + promo) ──
 
   const filteredResults = useMemo(
-    () => results.filter((r) => matchesFilter(r, promoFilter)),
-    [results, promoFilter],
+    () => results.filter((r) => {
+      if (siteFilter !== "all" && r.site !== siteFilter) return false;
+      return matchesFilter(r, promoFilter);
+    }),
+    [results, promoFilter, siteFilter],
   );
 
   // ── Search ──
@@ -153,6 +180,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
     setLoading(true);
     setSearched(false);
     setPromoFilter("all");
+    setSiteFilter("all");
     try {
       const data = await searchMPTorrents(q);
       setResults(data.results);
@@ -177,6 +205,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
       setSearched(false);
       setDownloadingHash(null);
       setPromoFilter("all");
+      setSiteFilter("all");
     }
   }, [open]);
 
@@ -198,7 +227,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
     }
   };
 
-  // ── Filter counts ──
+  // ── Filter counts (promotion) ──
 
   const filterCounts = useMemo(() => {
     const counts: Record<PromoFilter, number> = { all: results.length, free: 0, "2x": 0, discount: 0, sub: 0 };
@@ -207,6 +236,17 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
       if (r.uploadvolumefactor === 2) counts["2x"]++;
       if (r.downloadvolumefactor !== null && r.downloadvolumefactor !== undefined && r.downloadvolumefactor > 0 && r.downloadvolumefactor < 1) counts.discount++;
       if (hasChineseSubtitle(r.title)) counts.sub++;
+    }
+    return counts;
+  }, [results]);
+
+  // ── Site filter counts ──
+
+  const siteCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: results.length };
+    for (const r of results) {
+      const s = r.site || "未知";
+      counts[s] = (counts[s] || 0) + 1;
     }
     return counts;
   }, [results]);
@@ -240,26 +280,46 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
           </button>
         </div>
 
-        {/* Promotion & subtitle filter pills */}
+        {/* Filters */}
         {searched && results.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Filter size={12} className="text-muted-foreground/50 shrink-0" />
-            {FILTER_OPTIONS.map((opt) => {
-              const count = filterCounts[opt.value];
-              if (count === 0 && opt.value !== "all") return null;
-              return (
-                <button
-                  key={opt.value}
-                  onClick={() => setPromoFilter(opt.value)}
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                    promoFilter === opt.value ? opt.activeColor : opt.color
-                  }`}
-                >
-                  {opt.labelKey}
-                  <span className="text-[10px] opacity-60">{count}</span>
-                </button>
-              );
-            })}
+          <div className="space-y-2">
+            {/* Promotion & subtitle filter pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Filter size={12} className="text-muted-foreground/50 shrink-0" />
+              {FILTER_OPTIONS.map((opt) => {
+                const count = filterCounts[opt.value];
+                if (count === 0 && opt.value !== "all") return null;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPromoFilter(opt.value)}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                      promoFilter === opt.value ? opt.activeColor : opt.color
+                    }`}
+                  >
+                    {opt.labelKey}
+                    <span className="text-[10px] opacity-60">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Site filter pills (only show when multiple sites) */}
+            {siteNames.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Globe size={12} className="text-muted-foreground/50 shrink-0" />
+                {[{ site: "all", label: "全部站点" }, ...siteNames.map((s) => ({ site: s, label: s }))].map(({ site, label }) => (
+                  <button
+                    key={site}
+                    onClick={() => setSiteFilter(site)}
+                    className={siteBtnClass(site, siteFilter === site)}
+                  >
+                    {label}
+                    <span className="text-[10px] opacity-60">{siteCounts[site] || 0}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -281,12 +341,14 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
         ) : searched && filteredResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Filter size={20} className="text-muted-foreground/30 mb-2" />
-            <p className="text-sm text-muted-foreground">筛选项下没有结果</p>
+            <p className="text-sm text-muted-foreground">
+              {siteFilter !== "all" ? `当前站点「${siteFilter}」下没有匹配的种子` : "筛选项下没有结果"}
+            </p>
             <button
-              onClick={() => setPromoFilter("all")}
+              onClick={() => { setPromoFilter("all"); setSiteFilter("all"); }}
               className="text-xs text-primary underline mt-1"
             >
-              显示全部
+              清除全部筛选
             </button>
           </div>
         ) : (
@@ -297,7 +359,11 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
               return (
                 <div
                   key={idx}
-                  className="p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors overflow-hidden"
+                  className={`p-3 rounded-lg border transition-all overflow-hidden ${
+                    hasSub
+                      ? "border-sky-500/15 bg-sky-500/[0.02] hover:bg-sky-500/5"
+                      : "border-border hover:bg-accent/30"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -307,14 +373,14 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
                       {/* Meta row */}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                          {r.site}
+                          {r.site || "未知"}
                         </span>
                         <span className="text-[10px] text-muted-foreground tabular-nums">
                           {formatBytes(r.size)}
                         </span>
                         {hasSub && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                            <Subtitles size={8} />
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/15 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20">
+                            <Subtitles size={10} />
                             中字
                           </span>
                         )}

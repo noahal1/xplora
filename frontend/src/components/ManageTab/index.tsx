@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail, MediaSearchResult, SortField } from "../../types";
 import * as api from "../../api";
@@ -39,6 +39,26 @@ import { DownloadQueue } from "./DownloadQueue";
 import { MediaServerTab } from "../MediaServerTab";
 
 const MANAGE_PAGE_SIZE = 16;
+
+/* ── Toolbar button helper ────────────────────────────────────── */
+function ToolbarBtn({ icon, label, onClick, disabled }: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-all shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+    >
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
 
 /* ── Delete confirmation type ─────────────────────────────────── */
 type DeleteAction =
@@ -391,42 +411,33 @@ export function ManageTab() {
 
   return (
     <FadeContent className="section-card min-h-[300px]">
-          {/* ── Header ──────────────────────────────────────────── */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-5">
-        <h2 className="section-title flex items-center gap-2 text-base">
-          <Film size={16} className="text-primary shrink-0" />
-          <span className="truncate">{t("manage.title")}</span>
-          <span className="badge font-mono text-xs shrink-0">
-            {t("manage.total").split("{{count}}")[0]}<CountUp end={total} />{t("manage.total").split("{{count}}")[1]}
-          </span>
-        </h2>
-        <div className="flex gap-1.5 items-center w-full sm:w-auto overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1">
-          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={() => fetchData()} title={t("manage.refresh")}>
-            <RefreshCw size={13} /><span className="hidden sm:inline">{t("manage.refresh")}</span>
-          </button>
-          <button className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={handleExportMovies} title={t("manage.export")}>
-            <Upload size={13} /><span className="hidden sm:inline">{t("manage.export")}</span>
-          </button>
-          <button
-            onClick={() => setShowMediaServer(true)}
-            className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
-            title={t("media_server.tab_title")}
-          >
-            <Server size={13} /><span className="hidden sm:inline">{t("media_server.tab_title")}</span>
-          </button>
-          <button
-            onClick={() => setShowDownloadQueue(true)}
-            className="btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0"
-            title={t("moviepilot.downloading")}
-          >
-            <HardDrive size={13} /><span className="hidden sm:inline">{t("moviepilot.downloading")}</span>
-          </button>
-          <button className={`btn btn-ghost btn-xs sm:py-1.5 sm:px-3 sm:text-sm gap-1 sm:gap-1.5 shrink-0 ${batchLoading ? "opacity-50" : ""}`}
-            onClick={handleBatchAll} disabled={batchLoading} title={t("manage.batch_all")}>
-            {batchLoading ? <Loader2 size={13} className="animate-spin" /> : <WandSparkles size={13} />}
-            <span className="hidden sm:inline">{t("manage.batch_all")}</span>
-          </button>
-          <button className="btn btn-primary btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0" onClick={openSearchDialog} title={t("manage.add_movie")}>
+      {/* ── Header ──────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <Film size={15} className="text-primary" />
+          </div>
+          <div>
+            <h2 className="section-title text-base leading-tight">{t("manage.title")}</h2>
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+              {t("manage.total").split("{{count}}")[0]}
+              <span className="font-semibold text-foreground/80 tabular-nums"><CountUp end={total} /></span>
+              {t("manage.total").split("{{count}}")[1]}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-1 items-center w-full sm:w-auto overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1">
+          <ToolbarBtn icon={<RefreshCw size={12} />} label={t("manage.refresh")} onClick={() => fetchData()} />
+          <ToolbarBtn icon={<Upload size={12} />} label={t("manage.export")} onClick={handleExportMovies} />
+          <ToolbarBtn icon={<Server size={12} />} label={t("media_server.tab_title")} onClick={() => setShowMediaServer(true)} />
+          <ToolbarBtn icon={<HardDrive size={12} />} label={t("moviepilot.downloading")} onClick={() => setShowDownloadQueue(true)} />
+          <ToolbarBtn
+            icon={batchLoading ? <Loader2 size={12} className="animate-spin" /> : <WandSparkles size={12} />}
+            label={t("manage.batch_all")}
+            onClick={handleBatchAll}
+            disabled={batchLoading}
+          />
+          <button className="btn btn-primary btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0 gap-1" onClick={openSearchDialog}>
             <Plus size={13} /><span className="hidden sm:inline">{t("manage.add_movie")}</span>
           </button>
         </div>
@@ -442,13 +453,13 @@ export function ManageTab() {
           showClear={!!search.debouncedValue}
         />
         <div className="flex gap-1.5 shrink-0 w-full sm:w-auto">
-          <button className={`btn btn-xs gap-1.5 transition-all flex-1 sm:flex-none justify-center ${selected.size > 0 ? "btn-destructive" : "btn-ghost opacity-50"}`}
+          <button className={`btn btn-xs gap-1.5 transition-all flex-1 sm:flex-none justify-center ${selected.size > 0 ? "btn-destructive shadow-sm" : "btn-ghost opacity-40"}`}
             disabled={selected.size === 0} onClick={confirmDeleteSelected}
             title={selected.size > 0 ? t("manage.delete_selected") : undefined}>
             <Trash2 size={12} /><span className="sm:hidden">{t("manage.delete")}</span><span className="hidden sm:inline">{t("manage.delete_selected")}</span>
             {selected.size > 0 && <span className="tabular-nums font-mono"><CountUp end={selected.size} /></span>}
           </button>
-          <button className="btn btn-ghost btn-xs gap-1.5 flex-1 sm:flex-none justify-center" onClick={confirmDeleteAll} title={t("manage.clear_all")}>
+          <button className="btn btn-ghost btn-xs gap-1.5 flex-1 sm:flex-none justify-center opacity-60 hover:opacity-100" onClick={confirmDeleteAll}>
             <Trash2 size={12} /><span className="hidden sm:inline">{t("manage.clear_all")}</span>
           </button>
         </div>
@@ -575,27 +586,40 @@ export function ManageTab() {
       {/* ── Table (desktop) ────────────────────────────────────── */}
       {!loading && !error && mediaList.length > 0 && (
         <div className="max-sm:hidden">
-          <div className="overflow-x-auto border border-border rounded-xl">
-            <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
+          <div className="overflow-x-auto rounded-xl border border-border shadow-sm bg-bg-card">
+            <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="sticky top-0 z-10">
-                  <th className="w-10 text-center px-3 py-2.5 font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none">
-                    <input type="checkbox" ref={selectAllRef} className="w-4 h-4 accent-primary cursor-pointer"
+                  <th className="w-10 text-center px-3 py-3 font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none">
+                    <input type="checkbox" ref={selectAllRef} className="w-4 h-4 accent-primary cursor-pointer rounded"
                       checked={mediaList.length > 0 && mediaList.every((m) => selected.has(m.id))} onChange={toggleSelectAll} />
                   </th>
-                  <th className="w-[52px] px-1 py-2.5 text-center font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none max-sm:hidden">{t("manage.col_poster")}</th>
-                  <th className="w-14 px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none">{t("manage.col_status")}</th>
-                  {(["title", "rating", "episode_count", "year", "genre", "created_at"] as const).map((field) => {
-                    const widths: Record<string, number | undefined> = { title: 200, rating: 140, episode_count: 72, year: 72, genre: undefined, created_at: 100 };
-                    return (
-                      <th key={field} className={`px-3 py-2.5 text-left font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none cursor-pointer hover:text-foreground transition-colors${field === 'created_at' ? ' max-sm:hidden' : ''}`}
-                        style={widths[field] ? { width: widths[field] } : undefined} onClick={() => handleSort(field)}>
-                        {field === "title" ? t("manage.col_title") : field === "rating" ? t("manage.col_rating") : field === "year" ? t("manage.col_year") : field === "episode_count" ? t("manage.col_episode_count", "集数") : field === "genre" ? t("manage.col_genre") : t("manage.col_date")}
-                        <SortArrow field={field} />
-                      </th>
-                    );
-                  })}
-                  <th className="w-[120px] max-sm:w-[160px] text-center px-1 py-2.5 font-medium text-xs text-muted-foreground bg-bg-canvas border-b border-border select-none">{t("manage.col_actions")}</th>
+                  <th className="w-[52px] px-1 py-3 text-center font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none max-sm:hidden">{t("manage.col_poster")}</th>
+                  <th className="w-14 px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none">{t("manage.col_status")}</th>
+                  <th className="px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none cursor-pointer hover:text-foreground/80 transition-colors"
+                    onClick={() => handleSort("title")}>
+                    <span className="inline-flex items-center gap-1">{t("manage.col_title")}<SortArrow field="title" /></span>
+                  </th>
+                  <th className="w-20 px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none cursor-pointer hover:text-foreground/80 transition-colors"
+                    onClick={() => handleSort("rating")}>
+                    <span className="inline-flex items-center gap-1">{t("manage.col_rating")}<SortArrow field="rating" /></span>
+                  </th>
+                  <th className="w-14 px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none">
+                    <span className="inline-flex items-center gap-1">集数</span>
+                  </th>
+                  <th className="w-20 px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none cursor-pointer hover:text-foreground/80 transition-colors"
+                    onClick={() => handleSort("year")}>
+                    <span className="inline-flex items-center gap-1">{t("manage.col_year")}<SortArrow field="year" /></span>
+                  </th>
+                  <th className="px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none cursor-pointer hover:text-foreground/80 transition-colors"
+                    onClick={() => handleSort("genre")}>
+                    <span className="inline-flex items-center gap-1">{t("manage.col_genre")}<SortArrow field="genre" /></span>
+                  </th>
+                  <th className="w-[90px] px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none cursor-pointer hover:text-foreground/80 transition-colors"
+                    onClick={() => handleSort("created_at")}>
+                    <span className="inline-flex items-center gap-1">{t("manage.col_date")}<SortArrow field="created_at" /></span>
+                  </th>
+                  <th className="w-[120px] text-center px-1 py-3 font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none">{t("manage.col_actions")}</th>
                 </tr>
               </thead>
               <tbody>
