@@ -1,17 +1,132 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { searchMPTorrents, downloadMPTorrent } from "../../api";
 import type { MPSearchResult } from "../../types";
 import { Modal } from "../Modal";
 import { useToast } from "../../context/ToastContext";
 import { getErrMsg, formatBytes } from "../../lib/utils";
-import { Search, Download, ExternalLink, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Search, Download, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Filter, Subtitles } from "lucide-react";
 
 interface PTSearchModalProps {
   open: boolean;
   onClose: () => void;
   searchQuery: string;
 }
+
+/* ── Promotion helpers ──────────────────────────────────────────── */
+
+type PromoFilter = "all" | "free" | "2x" | "discount" | "sub";
+
+interface PromoInfo {
+  label: string;
+  color: string;
+  icon?: React.ReactNode;
+}
+
+function getPromotions(r: MPSearchResult): PromoInfo[] {
+  const promotions: PromoInfo[] = [];
+  const uvf = r.uploadvolumefactor;
+  const dvf = r.downloadvolumefactor;
+
+  if (uvf === 0 || dvf === 0) {
+    promotions.push({
+      label: "FREE",
+      color: "bg-green-500/10 text-green-600 dark:text-green-400",
+      icon: <CheckCircle2 size={8} />,
+    });
+  }
+
+  if (uvf === 2) {
+    promotions.push({
+      label: "2x",
+      color: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+    });
+  }
+
+  if (dvf !== null && dvf !== undefined && dvf > 0 && dvf < 1) {
+    const pct = Math.round(dvf * 100);
+    promotions.push({
+      label: `${pct}%`,
+      color: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    });
+  }
+
+  return promotions;
+}
+
+/** Check whether a torrent matches a given promotion filter. */
+function matchesFilter(r: MPSearchResult, filter: PromoFilter): boolean {
+  if (filter === "all") return true;
+  const uvf = r.uploadvolumefactor;
+  const dvf = r.downloadvolumefactor;
+  switch (filter) {
+    case "free":
+      return uvf === 0 || dvf === 0;
+    case "2x":
+      return uvf === 2;
+    case "discount":
+      return dvf !== null && dvf !== undefined && dvf > 0 && dvf < 1;
+    case "sub":
+      return hasChineseSubtitle(r.title);
+  }
+}
+
+/** Detect Chinese subtitles from a torrent title by common release naming patterns. */
+function hasChineseSubtitle(title: string): boolean {
+  return /中字|简中|繁中|简繁|双语|双字|\bCHS\b|\bCHT\b/i.test(title);
+}
+
+function PromotionBadge({ promo }: { promo: PromoInfo }) {
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${promo.color}`}>
+      {promo.icon}{promo.label}
+    </span>
+  );
+}
+
+/* ── Filter config ──────────────────────────────────────────────── */
+
+interface FilterOption {
+  value: PromoFilter;
+  labelKey: string;
+  color: string;
+  activeColor: string;
+}
+
+const FILTER_OPTIONS: FilterOption[] = [
+  {
+    value: "all",
+    labelKey: "全部",
+    color: "bg-accent/50 text-muted-foreground hover:bg-accent hover:text-foreground",
+    activeColor: "bg-primary/15 text-primary shadow-sm",
+  },
+  {
+    value: "free",
+    labelKey: "FREE",
+    color: "bg-accent/50 text-muted-foreground hover:bg-green-500/10 hover:text-green-600 dark:hover:text-green-400",
+    activeColor: "bg-green-500/15 text-green-600 dark:text-green-400 shadow-sm",
+  },
+  {
+    value: "2x",
+    labelKey: "2x",
+    color: "bg-accent/50 text-muted-foreground hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400",
+    activeColor: "bg-blue-500/15 text-blue-600 dark:text-blue-400 shadow-sm",
+  },
+  {
+    value: "discount",
+    labelKey: "折扣",
+    color: "bg-accent/50 text-muted-foreground hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400",
+    activeColor: "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-sm",
+  },
+  {
+    value: "sub",
+    labelKey: "中字",
+    color: "bg-accent/50 text-muted-foreground hover:bg-sky-500/10 hover:text-sky-600 dark:hover:text-sky-400",
+    activeColor: "bg-sky-500/15 text-sky-600 dark:text-sky-400 shadow-sm",
+  },
+];
+
+/* ── Component ─────────────────────────────────────────────────── */
 
 export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps) {
   const { t } = useTranslation();
@@ -22,6 +137,14 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [downloadingHash, setDownloadingHash] = useState<string | null>(null);
+  const [promoFilter, setPromoFilter] = useState<PromoFilter>("all");
+
+  // ── Filtered results ──
+
+  const filteredResults = useMemo(
+    () => results.filter((r) => matchesFilter(r, promoFilter)),
+    [results, promoFilter],
+  );
 
   // ── Search ──
 
@@ -29,6 +152,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
     if (!q.trim()) return;
     setLoading(true);
     setSearched(false);
+    setPromoFilter("all");
     try {
       const data = await searchMPTorrents(q);
       setResults(data.results);
@@ -52,6 +176,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
       setResults([]);
       setSearched(false);
       setDownloadingHash(null);
+      setPromoFilter("all");
     }
   }, [open]);
 
@@ -72,6 +197,19 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
       setDownloadingHash(null);
     }
   };
+
+  // ── Filter counts ──
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<PromoFilter, number> = { all: results.length, free: 0, "2x": 0, discount: 0, sub: 0 };
+    for (const r of results) {
+      if (r.uploadvolumefactor === 0 || r.downloadvolumefactor === 0) counts.free++;
+      if (r.uploadvolumefactor === 2) counts["2x"]++;
+      if (r.downloadvolumefactor !== null && r.downloadvolumefactor !== undefined && r.downloadvolumefactor > 0 && r.downloadvolumefactor < 1) counts.discount++;
+      if (hasChineseSubtitle(r.title)) counts.sub++;
+    }
+    return counts;
+  }, [results]);
 
   // ── Render ──
 
@@ -102,6 +240,29 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
           </button>
         </div>
 
+        {/* Promotion & subtitle filter pills */}
+        {searched && results.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Filter size={12} className="text-muted-foreground/50 shrink-0" />
+            {FILTER_OPTIONS.map((opt) => {
+              const count = filterCounts[opt.value];
+              if (count === 0 && opt.value !== "all") return null;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setPromoFilter(opt.value)}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                    promoFilter === opt.value ? opt.activeColor : opt.color
+                  }`}
+                >
+                  {opt.labelKey}
+                  <span className="text-[10px] opacity-60">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Results */}
         {loading ? (
           <div className="flex items-center justify-center py-8">
@@ -117,70 +278,88 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
               {t("moviepilot.no_results_hint")}
             </p>
           </div>
+        ) : searched && filteredResults.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Filter size={20} className="text-muted-foreground/30 mb-2" />
+            <p className="text-sm text-muted-foreground">筛选项下没有结果</p>
+            <button
+              onClick={() => setPromoFilter("all")}
+              className="text-xs text-primary underline mt-1"
+            >
+              显示全部
+            </button>
+          </div>
         ) : (
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {results.map((r, idx) => (
-              <div
-                key={idx}
-                className="p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    {/* Title */}
-                    <p className="text-sm font-medium line-clamp-2" title={r.title}>{r.title}</p>
+            {filteredResults.map((r, idx) => {
+              const promos = getPromotions(r);
+              const hasSub = hasChineseSubtitle(r.title);
+              return (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors overflow-hidden"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      {/* Title */}
+                      <p className="text-sm font-medium line-clamp-2 break-words" title={r.title}>{r.title}</p>
 
-                    {/* Meta row */}
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                        {r.site}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        {formatBytes(r.size)}
-                      </span>
-                      {r.is_free && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/10 text-green-600 dark:text-green-400">
-                          <CheckCircle2 size={8} />
-                          {t("moviepilot.free")}
+                      {/* Meta row */}
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                          {r.site}
                         </span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          {formatBytes(r.size)}
+                        </span>
+                        {hasSub && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                            <Subtitles size={8} />
+                            中字
+                          </span>
+                        )}
+                        {promos.map((p, i) => (
+                          <PromotionBadge key={i} promo={p} />
+                        ))}
+                      </div>
+
+                      {/* Stats row */}
+                      <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground tabular-nums">
+                        <span>↑ {r.seeders}</span>
+                        <span>↓ {r.leechers}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {r.page_url && (
+                        <a
+                          href={r.page_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-ghost btn-xs p-1"
+                          title={t("common.open")}
+                        >
+                          <ExternalLink size={12} />
+                        </a>
                       )}
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground tabular-nums">
-                      <span>↑ {r.seeders}</span>
-                      <span>↓ {r.leechers}</span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {r.page_url && (
-                      <a
-                        href={r.page_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-ghost btn-xs p-1"
-                        title={t("common.open")}
+                      <button
+                        onClick={() => handleDownload(r)}
+                        disabled={downloadingHash === r.download_url}
+                        className="btn btn-primary btn-xs gap-1"
                       >
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
-                    <button
-                      onClick={() => handleDownload(r)}
-                      disabled={downloadingHash === r.download_url}
-                      className="btn btn-primary btn-xs gap-1"
-                    >
-                      {downloadingHash === r.download_url ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <Download size={12} />
-                      )}
-                      {t("moviepilot.download")}
-                    </button>
+                        {downloadingHash === r.download_url ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Download size={12} />
+                        )}
+                        {t("moviepilot.download")}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

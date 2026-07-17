@@ -7,7 +7,6 @@ import { useEnrich } from "../../../context/EnrichContext";
 import { getErrMsg } from "../../../lib/utils";
 import { Modal } from "../../Modal";
 import { SearchSourceSelector } from "../../SearchSourceSelector";
-import { MediaTypeFilter } from "../../MediaTypeFilter";
 import { SearchResultCard } from "../../shared/SearchResultCard";
 import { Loader2 } from "lucide-react";
 import { SearchResultSkeleton } from "../../Skeleton";
@@ -24,7 +23,6 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
   const { startPolling } = useEnrich();
 
   const [searchSource, setSearchSource] = useState("auto");
-  const [searchMediaType, setSearchMediaType] = useState("all");
   const [externalQuery, setExternalQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MediaSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -34,24 +32,25 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
 
-  // Stable refs for latest search params (avoids stale closures in callbacks/effects)
-  const searchParamsRef = useRef({ query: externalQuery, mediaType: searchMediaType });
-  searchParamsRef.current = { query: externalQuery, mediaType: searchMediaType };
+  // Stable ref for latest search query (avoids stale closures in callbacks/effects)
+  const searchParamsRef = useRef({ query: externalQuery });
+  searchParamsRef.current = { query: externalQuery };
   const searchSeqRef = useRef(0);
+  const searchingRef = useRef(false);
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   // Stable search function (reads from refs, won't trigger re-renders)
   const handleSearch = useCallback(async () => {
-    const { query: q, mediaType: mt } = searchParamsRef.current;
+    const { query: q } = searchParamsRef.current;
     if (!q.trim()) { setSearchResults([]); setSearchError(""); setSearchDone(false); return; }
 
+    searchingRef.current = true;
     const seq = ++searchSeqRef.current;
     setSearchLoading(true);
     setSearchError("");
     try {
-      const mediaTypeParam = mt === "all" ? undefined : mt;
-      const data = await api.searchMedia(q.trim(), searchSourceRef.current, mediaTypeParam);
+      const data = await api.searchMedia(q.trim(), searchSourceRef.current, "movie");
       if (seq !== searchSeqRef.current || !mountedRef.current) return;
       setSearchResults(data.results);
       setSearchDone(true);
@@ -61,9 +60,8 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
       setSearchResults([]);
       setSearchDone(true);
     } finally {
-      if (seq === searchSeqRef.current && mountedRef.current) {
-        setSearchLoading(false);
-      }
+      searchingRef.current = false;
+      if (mountedRef.current) setSearchLoading(false);
     }
   }, []);
 
@@ -87,13 +85,6 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
     }
   }, [addingSearchIds, showToast, startPolling, t, onAddSuccess]);
 
-  // Auto-refresh search when media_type filter changes (only if there's an active query)
-  useEffect(() => {
-    if (searchParamsRef.current.query.trim()) {
-      handleSearch();
-    }
-  }, [searchMediaType]);
-
   const clearSearch = useCallback(() => {
     setExternalQuery("");
     setSearchResults([]);
@@ -113,16 +104,11 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
           onSelect={changeSearchSource}
         />
 
-        <MediaTypeFilter
-          selected={searchMediaType}
-          onSelect={setSearchMediaType}
-        />
-
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <input type="text" placeholder={t("watched.search_placeholder_external")}
               value={externalQuery} onChange={(e) => setExternalQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !searchingRef.current) handleSearch(); }}
               className="input-field w-full h-10 text-sm pl-3 pr-10" />
             {externalQuery && (
               <button className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
@@ -131,7 +117,7 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
               </button>
             )}
           </div>
-          <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={handleSearch} disabled={searchLoading || !externalQuery.trim()}>
+          <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={() => { if (!searchingRef.current) handleSearch(); }} disabled={searchLoading || !externalQuery.trim()}>
             {searchLoading ? (
               <><Loader2 size={13} className="animate-spin" />{t("manage.searching")}</>
             ) : (

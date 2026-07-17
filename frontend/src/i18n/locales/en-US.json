@@ -733,5 +733,10 @@
     "runtime": "Runtime",
     "minutes": "min",
     "edit_title": "Edit Metadata"
+  },
+  "pwa_update": {
+    "available": "New version ready! Update to get the latest features",
+    "update": "Update Now",
+    "dismiss": "Later"
   }
 }

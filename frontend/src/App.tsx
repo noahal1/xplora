@@ -11,6 +11,7 @@ import { TabNav } from "./components/TabNav";
 import { HistorySidebar } from "./components/HistorySidebar";
 import { EnrichBanner } from "./components/EnrichBanner";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { SWUpdatePrompt } from "./components/SWUpdatePrompt";
 import { Footer } from "./components/Footer";
 import "./style.css";
 
@@ -92,6 +93,7 @@ function MainApp() {
 
         {/* Main content area */}
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] sm:pb-8">
+          <SWUpdatePrompt />
           <UpdateBanner />
           <EnrichBanner />
           <TabNav />

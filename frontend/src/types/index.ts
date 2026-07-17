@@ -270,6 +270,10 @@ export interface MPSearchResult {
   page_url: string;
   pub_date?: string;
   is_free: boolean;
+  /** Raw upload volume factor from MoviePilot (0=free, 1=normal, 2=2x) */
+  uploadvolumefactor?: number | null;
+  /** Raw download volume factor from MoviePilot (0=free, 0.5=50% off, 1=normal) */
+  downloadvolumefactor?: number | null;
 }
 
 export type SortField = "title" | "rating" | "year" | "genre" | "episode_count" | "created_at";

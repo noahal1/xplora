@@ -6,7 +6,6 @@ import { useToast } from "../../context/ToastContext";
 import { getErrMsg } from "../../lib/utils";
 import { Modal } from "../Modal";
 import { SearchResultCard } from "../shared/SearchResultCard";
-import { MediaTypeFilter } from "../MediaTypeFilter";
 import { Search, Loader2, Plus, ExternalLink } from "lucide-react";
 import { SearchResultSkeleton } from "../Skeleton";
 
@@ -21,7 +20,6 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchMediaType, setSearchMediaType] = useState("all");
   const [searchResults, setSearchResults] = useState<MediaSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedSearchIds, setSelectedSearchIds] = useState<Set<number>>(new Set());
@@ -29,10 +27,11 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
   const [batchImportProgress, setBatchImportProgress] = useState<{ current: number; total: number } | null>(null);
   const searchTmdbRef = useRef<HTMLInputElement>(null);
 
-  // Stable refs for latest search params (avoids stale closures in callbacks/effects)
-  const searchParamsRef = useRef({ query: searchQuery, mediaType: searchMediaType });
-  searchParamsRef.current = { query: searchQuery, mediaType: searchMediaType };
+  // Stable ref for latest search query (avoids stale closures in callbacks/effects)
+  const searchParamsRef = useRef({ query: searchQuery });
+  searchParamsRef.current = { query: searchQuery };
   const searchSeqRef = useRef(0);
+  const searchingRef = useRef(false);
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
@@ -42,33 +41,25 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
 
   // Stable search function (reads from refs, won't trigger re-renders)
   const handleSearch = useCallback(async () => {
-    const { query: q, mediaType: mt } = searchParamsRef.current;
+    const { query: q } = searchParamsRef.current;
     if (!q.trim()) { setSearchResults([]); setSelectedSearchIds(new Set()); return; }
 
+    searchingRef.current = true;
     const seq = ++searchSeqRef.current;
     setSearchLoading(true);
     setSelectedSearchIds(new Set());
     try {
-      const mediaTypeParam = mt === "all" ? undefined : mt;
-      const data = await api.searchMedia(q, "auto", mediaTypeParam);
+      const data = await api.searchMedia(q, "auto", "movie");
       if (seq !== searchSeqRef.current || !mountedRef.current) return; // stale or unmounted
       setSearchResults(data.results);
     } catch (err: unknown) {
       if (seq !== searchSeqRef.current || !mountedRef.current) return;
       showToast(getErrMsg(err), "error");
     } finally {
-      if (seq === searchSeqRef.current && mountedRef.current) {
-        setSearchLoading(false);
-      }
+      searchingRef.current = false;
+      if (mountedRef.current) setSearchLoading(false);
     }
   }, [showToast]);
-
-  // Auto-refresh search when media_type filter changes (only if there's an active query)
-  useEffect(() => {
-    if (searchParamsRef.current.query.trim()) {
-      handleSearch();
-    }
-  }, [searchMediaType]);
 
   const handleImportFromSearch = useCallback(async (result: MediaSearchResult) => {
     try {
@@ -129,18 +120,13 @@ export function SearchImportModal({ open, onClose, onImportComplete }: SearchImp
     <Modal open={open} onClose={() => { onClose(); setSearchQuery(""); setSearchResults([]); setSearchLoading(false); setSelectedSearchIds(new Set()); }}    title={t("manage.search_tmdb")} description={t("manage.search_tmdb_desc")}
   >
       <div className="space-y-4">
-        <MediaTypeFilter
-          selected={searchMediaType}
-          onSelect={setSearchMediaType}
-        />
-
         <div className="flex items-center gap-2">
           <input ref={searchTmdbRef} type="text" placeholder={t("manage.search_tmdb_placeholder")}
             value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !searchingRef.current) handleSearch(); }}
             className="input-field flex-1"
           />
-          <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={handleSearch} disabled={searchLoading || !searchQuery.trim()}>
+          <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={() => { if (!searchingRef.current) handleSearch(); }} disabled={searchLoading || !searchQuery.trim()}>
             {searchLoading ? (
               <><Loader2 size={13} className="animate-spin" />{t("manage.searching")}</>
             ) : (

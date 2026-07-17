@@ -6,13 +6,34 @@ import { AuthProvider } from "./context/AuthContext";
 import "./i18n/config";
 import App from "./App";
 
-// ── Register Service Worker for PWA support ────────────────────────
+// ── PWA Service Worker registration ───────────────────────────────
+// Expose registration so SWUpdatePrompt can trigger updates
+const swReady = { current: null as ServiceWorkerRegistration | null };
+(window as any).__swRegistration = swReady;
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").then(
-      (reg) => console.log("[SW] registered", reg.scope),
-      (err) => console.warn("[SW] registration failed", err)
-    );
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      swReady.current = reg;
+
+      // Notify UI if a worker is already waiting
+      if (reg.waiting) window.dispatchEvent(new CustomEvent("sw-update-available"));
+
+      reg.addEventListener("updatefound", () => {
+        const w = reg.installing;
+        if (!w) return;
+        w.addEventListener("statechange", () => {
+          if (w.state === "installed" && navigator.serviceWorker.controller) {
+            window.dispatchEvent(new CustomEvent("sw-update-available"));
+          }
+        });
+      });
+    }, (err) => console.warn("[SW] register fail", err));
+
+    // Reload after SKIP_WAITING activates a new SW
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      window.location.reload();
+    });
   });
 }
 

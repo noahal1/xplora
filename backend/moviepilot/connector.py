@@ -14,6 +14,7 @@ Auth: MoviePilot v2 authenticates via ``?token=...`` query parameter only.
       See https://mattoid.top/docs/moviepilot/configuration
 """
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -21,6 +22,29 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# ── Retry helper ───────────────────────────────────────────────────
+# MoviePilot connections can be intermittently flaky (TCP handshake
+# timeouts, DNS glitches), so we retry transient RequestError failures.
+
+_MAX_RETRIES = 2
+_RETRY_DELAY = 1.0  # seconds between retries
+
+
+async def _retry_on_request_error(fn):
+    """Call ``fn()`` and retry on ``httpx.RequestError`` up to ``_MAX_RETRIES`` times."""
+    last_exc = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            return await fn()
+        except httpx.RequestError as e:
+            last_exc = e
+            if attempt < _MAX_RETRIES:
+                logger.debug("MP request attempt %s failed, retrying in %ss: %s", attempt + 1, _RETRY_DELAY, e)
+                await asyncio.sleep(_RETRY_DELAY)
+    raise last_exc  # type: ignore[misc]
+
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -90,40 +114,45 @@ class MoviePilotConnector:
     # ── HTTP helpers ──────────────────────────────────────────────
 
     async def _get(self, path: str, params: dict | None = None) -> dict | list | None:
-        """Send an authenticated GET request."""
+        """Send an authenticated GET request with automatic retry on transient errors."""
         url = self._build_url(path)
-        client = _get_client()
-        # httpx's ``copy_with(params=...)`` replaces existing query params,
-        # so we inject the token via the params dict rather than embedding
-        # it in the URL string.
         merged_params: dict[str, str] = {"token": self.api_token}
         if params:
             merged_params.update(params)
-        try:
+
+        async def _do_get():
+            client = _get_client()
             resp = await client.get(url, params=merged_params)
             resp.raise_for_status()
             return resp.json()
+
+        try:
+            return await _retry_on_request_error(_do_get)
         except httpx.HTTPStatusError as e:
             logger.warning("MP HTTP error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
             return None
         except httpx.RequestError as e:
-            logger.warning("MP request failed: %s — %s", url, e)
+            logger.warning("MP request failed after %s retries: %s — %s", _MAX_RETRIES, url, e)
             return None
 
     async def _post(self, path: str, json_data: dict | None = None) -> dict | None:
-        """Send an authenticated POST request."""
+        """Send an authenticated POST request with automatic retry on transient errors."""
         url = self._build_url(path)
-        client = _get_client()
         params = {"token": self.api_token}
-        try:
+
+        async def _do_post():
+            client = _get_client()
             resp = await client.post(url, params=params, json=json_data)
             resp.raise_for_status()
             return resp.json()
+
+        try:
+            return await _retry_on_request_error(_do_post)
         except httpx.HTTPStatusError as e:
             logger.warning("MP POST error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
             return None
         except httpx.RequestError as e:
-            logger.warning("MP POST failed: %s — %s", url, e)
+            logger.warning("MP POST failed after %s retries: %s — %s", _MAX_RETRIES, url, e)
             return None
 
     # ── Public API ────────────────────────────────────────────────
@@ -214,9 +243,10 @@ class MoviePilotConnector:
             if not title:
                 continue
 
-            # Free status: uploadvolumefactor == 0 means free leech
+            # Compute promotion status from volume factors
             uvf = ti.get("uploadvolumefactor")
-            is_free = uvf is not None and uvf == 0
+            dvf = ti.get("downloadvolumefactor")
+            is_free = (uvf is not None and uvf == 0) or (dvf is not None and dvf == 0)
 
             results.append({
                 "title": title,
@@ -228,6 +258,9 @@ class MoviePilotConnector:
                 "page_url": ti.get("page_url") or "",
                 "pub_date": ti.get("pubdate") or "",
                 "is_free": is_free,
+                # Pass raw factors so the frontend can render rich promotion labels
+                "uploadvolumefactor": uvf,
+                "downloadvolumefactor": dvf,
             })
 
         return results

@@ -7,7 +7,6 @@ import { useEnrich } from "../../../context/EnrichContext";
 import { getErrMsg } from "../../../lib/utils";
 import { Modal } from "../../Modal";
 import { SearchSourceSelector } from "../../SearchSourceSelector";
-import { MediaTypeFilter } from "../../MediaTypeFilter";
 import { SearchResultCard } from "../../shared/SearchResultCard";
 import { Loader2 } from "lucide-react";
 import { SearchResultSkeleton } from "../../Skeleton";
@@ -26,7 +25,6 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
   const { startPolling } = useEnrich();
 
   const [searchSource, setSearchSource] = useState("auto");
-  const [searchMediaType, setSearchMediaType] = useState("all");
   const [externalQuery, setExternalQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MediaSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -46,24 +44,23 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
 
-  // Stable refs for latest search params (avoids stale closures in callbacks/effects)
-  const searchParamsRef = useRef({ query: externalQuery, mediaType: searchMediaType });
-  searchParamsRef.current = { query: externalQuery, mediaType: searchMediaType };
+  // Stable ref for latest search query (avoids stale closures in callbacks/effects)
+  const searchParamsRef = useRef({ query: externalQuery });
+  searchParamsRef.current = { query: externalQuery };
   const searchSeqRef = useRef(0);
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   // Stable search function (reads from refs, won't trigger re-renders)
   const handleSearch = useCallback(async () => {
-    const { query: q, mediaType: mt } = searchParamsRef.current;
+    const { query: q } = searchParamsRef.current;
     if (!q.trim()) { setSearchResults([]); setSearchError(""); setSearchDone(false); return; }
 
     const seq = ++searchSeqRef.current;
     setSearchLoading(true);
     setSearchError("");
     try {
-      const mediaTypeParam = mt === "all" ? undefined : mt;
-      const data = await api.searchMedia(q.trim(), searchSourceRef.current, mediaTypeParam);
+      const data = await api.searchMedia(q.trim(), searchSourceRef.current, "movie");
       if (seq !== searchSeqRef.current || !mountedRef.current) return;
       setSearchResults(data.results);
       setSearchDone(true);
@@ -78,13 +75,6 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
       }
     }
   }, []);
-
-  // Auto-refresh search when media_type filter changes (only if there's an active query)
-  useEffect(() => {
-    if (searchParamsRef.current.query.trim()) {
-      handleSearch();
-    }
-  }, [searchMediaType]);
 
   const changeSearchSource = useCallback((source: string) => {
     setSearchSource(source);
@@ -162,16 +152,10 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
         title={t("wishlist.search_movies")}
       >
         <div className="space-y-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <SearchSourceSelector
-              selected={searchSource}
-              onSelect={changeSearchSource}
-            />
-            <MediaTypeFilter
-              selected={searchMediaType}
-              onSelect={setSearchMediaType}
-            />
-          </div>
+          <SearchSourceSelector
+            selected={searchSource}
+            onSelect={changeSearchSource}
+          />
 
           <div className="flex items-center gap-2">
             <div className="relative flex-1">

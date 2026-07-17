@@ -142,10 +142,8 @@ function DiagMobileCard({ item, enrichingIds, onEnrich, onDetail, onRematch }: {
           <XCircle size={10} className="inline mr-0.5 shrink-0" />
           {item.scrape_error}
         </div>
-      )}
-
-      {/* Action buttons */}
-      <div className="flex items-center gap-1 mt-2.5 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+      )}          {/* Action buttons — wrap on narrow screens */}
+      <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5" style={{ borderTop: "1px solid var(--border-subtle)" }}>
         <MobileActionBtn
           icon={enrichingIds.has(item.id) ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
           label={enrichingIds.has(item.id) ? "刮削中" : "刮削"}
@@ -179,7 +177,7 @@ function MobileActionBtn({ icon, label, onClick, disabled, className }: {
 }) {
   return (
     <button
-      className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:pointer-events-none ${className || ''}`}
+      className={`flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 disabled:pointer-events-none ${className || ''}`}
       onClick={onClick}
       disabled={disabled}
       title={label}
@@ -316,8 +314,7 @@ export function AdminDiagnosticsPage() {
         <h1 className="text-lg font-semibold tracking-tight">媒体诊断</h1>
       </div>
 
-      <FadeContent className="section-card">
-        <div className="section-header">
+      <FadeContent className="section-card">          <div className="section-header max-sm:flex-wrap max-sm:gap-2">
           <h2 className="section-title flex items-center gap-2">
             <Search className="w-4 h-4 text-primary" />
             媒体诊断
@@ -356,94 +353,94 @@ export function AdminDiagnosticsPage() {
         ) : diagData ? (
           <div className="space-y-6">
             {/* ── Summary Cards ─────────────────────────────── */}
-            <div className="grid grid-cols-3 gap-2.5">
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <CheckCircle size={16} className="text-primary" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <CheckCircle size={14} className="sm:size-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.healthy}</div>
-                  <div className="text-[10px] text-muted-foreground">正常 / {diagData.summary.total}</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.healthy}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">正常 / {diagData.summary.total}</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-                  <AlertTriangle size={16} className="text-destructive" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={14} className="sm:size-4 text-destructive" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.has_issues}</div>
-                  <div className="text-[10px] text-muted-foreground">有问题的条目</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.has_issues}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">有问题的条目</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <Image size={16} className="text-amber-600 dark:text-amber-400" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Image size={14} className="sm:size-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_poster_url}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失海报</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_poster_url}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失海报</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <FileText size={16} className="text-amber-600 dark:text-amber-400" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <FileText size={14} className="sm:size-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_overview}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失简介</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_overview}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失简介</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <Clock size={16} className="text-amber-600 dark:text-amber-400" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Clock size={14} className="sm:size-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_runtime}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失时长</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_runtime}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失时长</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-                  <Hash size={16} className="text-violet-600 dark:text-violet-400" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                  <Hash size={14} className="sm:size-4 text-violet-600 dark:text-violet-400" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_episode_count}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失集数（TV）</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_episode_count}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失集数（TV）</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <Hash size={16} className="text-amber-600 dark:text-amber-400" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Hash size={14} className="sm:size-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_tmdb_id}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失 TMDB ID</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_tmdb_id}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失 TMDB ID</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <MapPin size={16} className="text-amber-600 dark:text-amber-400" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <MapPin size={14} className="sm:size-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.missing_country}</div>
-                  <div className="text-[10px] text-muted-foreground">缺失国家</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_country}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失国家</div>
                 </div>
               </div>
 
-              <div className="card p-3 flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-                  <XCircle size={16} className="text-red-600 dark:text-red-400" />
+              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                  <XCircle size={14} className="sm:size-4 text-red-600 dark:text-red-400" />
                 </div>
                 <div>
-                  <div className="text-lg font-semibold tabular-nums">{diagData.summary.has_scrape_error}</div>
-                  <div className="text-[10px] text-muted-foreground">刮削异常</div>
+                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.has_scrape_error}</div>
+                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">刮削异常</div>
                 </div>
               </div>
             </div>
@@ -454,7 +451,7 @@ export function AdminDiagnosticsPage() {
                 <button
                   key={opt.value}
                   onClick={() => { setDiagFilter(opt.value); setDiagPage(0); }}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-[11px] font-medium transition-all ${
                     diagFilter === opt.value
                       ? "bg-primary/15 text-primary shadow-sm"
                       : "bg-accent/50 text-muted-foreground hover:bg-accent hover:text-foreground"

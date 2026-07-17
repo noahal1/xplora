@@ -1,24 +1,17 @@
-/* Xplora Service Worker — v2 */
+/* Xplora Service Worker — v3 */
 
-const CACHE_NAME = "xplora-v2";
+const CACHE_NAME = "xplora-v3";
 
-// Assets to pre-cache on install (the app shell)
-const PRECACHE_URLS = [
-  "/",
-  "/manifest.json",
-];
+// App shell to pre-cache on install
+const PRECACHE_URLS = ["/", "/manifest.json"];
 
-// ── Install: pre-cache the app shell ───────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
   self.skipWaiting();
 });
 
-// ── Activate: clean up old caches, take over clients ───────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -32,26 +25,19 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// ── Fetch strategy ────────────────────────────────────────────────
-//   API            → network-first  (fresh data always)
-//   Static assets  → network-first  (always check for new build, fallback to cache)
-//   Navigation     → network-first  (fresh HTML, fallback to cached shell)
-//   Everything else → network-first
-//
-// Using network-first for everything means the app always loads the
-// latest code when online, while still working offline thanks to the
-// cache fallback.  Vite's content-based hashing ensures that new
-// deployments always have unique filenames, so there's never a risk
-// of serving the wrong cached chunk for a given HTML page.
-// ──────────────────────────────────────────────────────────────────
-
+// Strategy: API → network-only, everything else → network-first
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  if (request.url.includes("/api/")) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   event.respondWith(networkFirst(request));
 });
 
-// ── Network-first strategy ─────────────────────────────────────────
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
@@ -66,3 +52,7 @@ async function networkFirst(request) {
     return new Response("Offline", { status: 503 });
   }
 }
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
