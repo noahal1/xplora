@@ -223,7 +223,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
                   <span className="font-medium">{movie.year}</span>
                 )}
                 {movie.genre && (
-                  <span className="truncate max-w-[160px] sm:max-w-full opacity-70">{translateGenres(movie.genre)}</span>
+                  <span className="line-clamp-2 max-w-[160px] sm:max-w-full opacity-70" title={translateGenres(movie.genre)}>{translateGenres(movie.genre)}</span>
                 )}
                 {movie.runtime && (
                   <span className="opacity-70">{movie.runtime} {t("detail_modal.minutes")}</span>

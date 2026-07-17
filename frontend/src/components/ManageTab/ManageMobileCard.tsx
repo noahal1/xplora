@@ -24,8 +24,7 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
 
   return (
     <div
-      className={`p-3 rounded-xl transition-all duration-200 ${isSelected ? "ring-1 ring-primary/40" : ""}`}
-      className="bg-bg-card border border-border"
+      className={`p-3 rounded-xl transition-all duration-200 bg-bg-card border border-border ${isSelected ? "ring-1 ring-primary/40" : ""}`}
     >
       {/* Row 1: Checkbox + Poster + Title/Meta + Rating */}
       <div className="flex items-start gap-2.5">

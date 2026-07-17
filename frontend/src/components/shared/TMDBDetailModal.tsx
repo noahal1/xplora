@@ -37,7 +37,7 @@ export function TMDBDetailModal({
       onClose={onClose}
       title={
         <div className="flex items-center gap-2">
-          <span className="truncate">{title || ""}</span>
+          <span className="line-clamp-2" title={title || ""}>{title || ""}</span>
           {mediaType === "tv" && (
             <Badge
               variant="outline"

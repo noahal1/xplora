@@ -115,7 +115,7 @@ export const SearchResultCard = memo(function SearchResultCard({
 
       {/* Info */}
       <div className="flex-1 min-w-0" onClick={onDetail ?? (() => {})}>
-        <p className="text-sm font-medium truncate">{result.title}</p>
+        <p className="text-sm font-medium line-clamp-2" title={result.title}>{result.title}</p>
         <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
           {result.year && (
             <span className="text-[10px] sm:text-xs text-muted-foreground tabular-nums">

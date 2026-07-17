@@ -8,6 +8,10 @@ MoviePilot API Reference (v2):
     GET  /api/v1/search/title?keyword=xxx&token=xxx  → search torrents
     POST /api/v1/download/add?token=xxx               → add download task
     GET  /api/v1/download/?token=xxx                  → query download queue
+
+Auth: MoviePilot v2 authenticates via ``?token=...`` query parameter only.
+      ``Authorization: Bearer`` is **not** supported.
+      See https://mattoid.top/docs/moviepilot/configuration
 """
 
 import logging
@@ -83,16 +87,6 @@ class MoviePilotConnector:
         """Build a base URL for the given path (no query params)."""
         return f"{self.base_url}{path}"
 
-    def _auth_headers(self) -> dict[str, str]:
-        """Return auth headers for MoviePilot API requests.
-
-        MoviePilot v2 accepts the API token via:
-          1. ``Authorization: Bearer <token>`` header (primary)
-          2. ``?token=...`` query parameter (fallback)
-        We send both for maximum compatibility.
-        """
-        return {"Authorization": f"Bearer {self.api_token}"}
-
     # ── HTTP helpers ──────────────────────────────────────────────
 
     async def _get(self, path: str, params: dict | None = None) -> dict | list | None:
@@ -106,7 +100,7 @@ class MoviePilotConnector:
         if params:
             merged_params.update(params)
         try:
-            resp = await client.get(url, params=merged_params, headers=self._auth_headers())
+            resp = await client.get(url, params=merged_params)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as e:
@@ -122,7 +116,7 @@ class MoviePilotConnector:
         client = _get_client()
         params = {"token": self.api_token}
         try:
-            resp = await client.post(url, params=params, json=json_data, headers=self._auth_headers())
+            resp = await client.post(url, params=params, json=json_data)
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as e:
@@ -158,32 +152,85 @@ class MoviePilotConnector:
 
         GET /api/v1/search/title?keyword={keyword}
 
-        Returns a list of search results with title, site, size,
-        seeders, leechers, download_url, etc.
+        MoviePilot v2 Response format::
+
+            {
+              "success": true,
+              "data": [
+                {
+                  "meta_info": {"title": "...", "year": "..."},
+                  "media_info": {"title": "...", "tmdb_id": ...},
+                  "torrent_info": {
+                    "title": "...",
+                    "site_name": "...",     # PT site display name
+                    "size": 1234567890,       # bytes
+                    "seeders": 10,
+                    "peers": 2,               # leechers
+                    "enclosure": "...",       # download URL
+                    "page_url": "...",        # torrent detail page
+                    "pubdate": "...",
+                    "uploadvolumefactor": 0,  # 0 = free
+                    "downloadvolumefactor": 1
+                  }
+                }
+              ]
+            }
+
+        Returns a normalised list of dicts with consistent field names.
         """
         if not keyword.strip():
             return []
 
         data = await self._get("/api/v1/search/title", params={"keyword": keyword.strip()})
         if data is None:
+            logger.debug("MP search returned None (HTTP error)")
             return []
 
-        results = data.get("results", []) if isinstance(data, dict) else data if isinstance(data, list) else []
-        return [
-            {
-                "title": r.get("title", ""),
-                "site": r.get("site", ""),
-                "size": r.get("size", 0),
-                "seeders": r.get("seeders", 0),
-                "leechers": r.get("leechers", 0),
-                "download_url": r.get("download_url", ""),
-                "page_url": r.get("page_url", ""),
-                "pub_date": r.get("pub_date", ""),
-                "is_free": r.get("status", 0) == 0,
-            }
-            for r in results
-            if r.get("title")
-        ]
+        # The API wraps results in {"success": true, "data": [...]}
+        raw_items = []
+        if isinstance(data, dict):
+            if data.get("success") and "data" in data:
+                raw_items = data["data"]
+                logger.debug("MP search: got %s results from 'data' key", len(raw_items))
+            else:
+                logger.debug("MP search: unexpected dict keys=%s", list(data.keys()))
+        elif isinstance(data, list):
+            raw_items = data
+        else:
+            logger.debug("MP search: unexpected type=%s", type(data).__name__)
+
+        if not raw_items:
+            return []
+
+        results = []
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            ti = item.get("torrent_info") or {}
+            mi = item.get("meta_info") or {}
+
+            # Determine the display title (torrent name, fallback to meta title)
+            title = ti.get("title") or mi.get("title") or ""
+            if not title:
+                continue
+
+            # Free status: uploadvolumefactor == 0 means free leech
+            uvf = ti.get("uploadvolumefactor")
+            is_free = uvf is not None and uvf == 0
+
+            results.append({
+                "title": title,
+                "site": ti.get("site_name") or "",
+                "size": int(ti.get("size") or 0),
+                "seeders": int(ti.get("seeders") or 0),
+                "leechers": int(ti.get("peers") or 0),
+                "download_url": ti.get("enclosure") or "",
+                "page_url": ti.get("page_url") or "",
+                "pub_date": ti.get("pubdate") or "",
+                "is_free": is_free,
+            })
+
+        return results
 
     async def download(self, title: str, url: str, save_path: str = "") -> dict:
         """Send a torrent to MoviePilot's downloader (qBittorrent).

@@ -127,7 +127,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     {/* Title */}
-                    <p className="text-sm font-medium truncate">{r.title}</p>
+                    <p className="text-sm font-medium line-clamp-2" title={r.title}>{r.title}</p>
 
                     {/* Meta row */}
                     <div className="flex items-center gap-2 mt-1 flex-wrap">

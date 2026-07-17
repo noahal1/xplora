@@ -125,7 +125,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold truncate">{movie.title}</p>
+                <p className="text-sm font-semibold line-clamp-2" title={movie.title}>{movie.title}</p>
                 {movie.media_type === "tv" && (
                   <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>
                 )}
@@ -243,7 +243,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className={`text-sm truncate ${isCurrentMatch ? "font-semibold" : "font-medium"}`}>{result.title}</p>
+                          <p className={`text-sm line-clamp-2 ${isCurrentMatch ? "font-semibold" : "font-medium"}`} title={result.title}>{result.title}</p>
                           {isCurrentMatch && (
                             <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-green bg-green/10 px-1.5 py-0.5 rounded-full whitespace-nowrap border border-green/20">
                               <Check size={10} />{t("manage.rematch_current")}
