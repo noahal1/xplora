@@ -8,6 +8,7 @@ from sqlalchemy import func as sa_func
 from sqlmodel import Session, select, delete as sa_delete
 
 from database import get_session
+from helpers import NORMALIZE_GENRE, REVERSE_GENRE_MAP
 from models import MediaItemRecord, MediaRating, WishlistItem
 
 
@@ -179,13 +180,24 @@ def get_media(
         if genre:
             # Support comma-separated genres (OR logic)
             genre_list = [g.strip() for g in genre.split(",") if g.strip()]
-            if len(genre_list) == 1:
-                escaped_genre = genre_list[0].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            # Expand each genre to include variant names (Chinese translations,
+            # alternative spellings) so that selecting "Action" also matches
+            # items tagged with "动作".
+            expanded: list[str] = []
+            for g in genre_list:
+                canonical = NORMALIZE_GENRE.get(g, g)
+                variants = REVERSE_GENRE_MAP.get(canonical.lower(), [])
+                expanded.append(canonical)
+                expanded.extend(v for v in variants if v != canonical)
+            # Deduplicate while preserving order
+            expanded = list(dict.fromkeys(expanded))
+            if len(expanded) == 1:
+                escaped_genre = expanded[0].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                 query = query.where(MediaItemRecord.genre.ilike(f"%{escaped_genre}%", escape="\\"))
             else:
                 from sqlalchemy import or_
                 conditions = []
-                for g in genre_list:
+                for g in expanded:
                     escaped = g.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                     conditions.append(MediaItemRecord.genre.ilike(f"%{escaped}%", escape="\\"))
                 query = query.where(or_(*conditions))

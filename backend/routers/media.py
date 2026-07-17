@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from auth import get_current_user
 from deps import get_user_db
-from helpers import parse_movie_data
+from helpers import parse_movie_data, NORMALIZE_GENRE
 from models import (
     MediaData,
     MediaRating,
@@ -593,6 +593,7 @@ async def delete_all_media_endpoint(
 # ── Media Filters (countries & genres for filter dropdowns) ─────────
 
 
+
 @router.get("/media/filters")
 async def media_filters(
     current_user: dict = Depends(get_current_user),
@@ -629,9 +630,13 @@ async def media_filters(
             normalized = genre.replace("/", " / ").replace(",", " / ")
             for g in normalized.split(" / "):
                 g = g.strip()
-                if g and g.lower() not in genres_seen:
-                    genres_seen.add(g.lower())
-                    genres_set.add(g)
+                if not g:
+                    continue
+                # Normalise variant / translated names to canonical English
+                canonical = NORMALIZE_GENRE.get(g, g)
+                if canonical.lower() not in genres_seen:
+                    genres_seen.add(canonical.lower())
+                    genres_set.add(canonical)
 
     return {
         "countries": sorted(countries_set),

@@ -6,6 +6,62 @@ from config_manager import get_api_key as get_config_api_key
 from models import MediaRating
 
 
+# ── Genre name normalisation ──────────────────────────────────
+# Maps variant names (Chinese translations, alternative spellings)
+# to canonical English names, used by both the filters endpoint
+# (for deduplication) and the media search (for cross-language matching).
+
+NORMALIZE_GENRE: dict[str, str] = {
+    # Chinese → English
+    "动作": "Action",
+    "冒险": "Adventure",
+    "动画": "Animation",
+    "喜剧": "Comedy",
+    "犯罪": "Crime",
+    "纪录片": "Documentary",
+    "剧情": "Drama",
+    "家庭": "Family",
+    "奇幻": "Fantasy",
+    "历史": "History",
+    "恐怖": "Horror",
+    "音乐": "Music",
+    "悬疑": "Mystery",
+    "爱情": "Romance",
+    "科幻": "Sci-Fi",
+    "电视电影": "TV Movie",
+    "惊悚": "Thriller",
+    "战争": "War",
+    "西部": "Western",
+    "动作冒险": "Action & Adventure",
+    "儿童": "Kids",
+    "新闻": "News",
+    "真人秀": "Reality",
+    "科幻奇幻": "Sci-Fi & Fantasy",
+    "肥皂剧": "Soap",
+    "脱口秀": "Talk",
+    "战争政治": "War & Politics",
+    # Variant English spellings → canonical
+    "Science-Fiction": "Sci-Fi",
+    "Science Fiction": "Sci-Fi",
+}
+
+
+def _build_reverse_genre_map() -> dict[str, list[str]]:
+    """Build a reverse mapping from canonical (lowercased) → list of variant names.
+
+    This is used by the media search to expand a genre filter so that
+    selecting "Action" also matches items tagged with "动作".
+    """
+    result: dict[str, list[str]] = {}
+    for variant, canonical in NORMALIZE_GENRE.items():
+        key = canonical.lower()
+        result.setdefault(key, []).append(variant)
+    return result
+
+
+REVERSE_GENRE_MAP: dict[str, list[str]] = _build_reverse_genre_map()
+
+
 def get_api_key(model: str) -> str:
     """Get the configured API key for a given model type."""
     key_map = {"deepseek": "deepseek", "openai": "openai"}

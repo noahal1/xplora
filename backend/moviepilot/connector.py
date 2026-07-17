@@ -80,9 +80,18 @@ class MoviePilotConnector:
         return f"{scheme}://{self.host}:{self.port}"
 
     def _build_url(self, path: str) -> str:
-        """Build a full URL with the API token."""
-        sep = "&" if "?" in path else "?"
-        return f"{self.base_url}{path}{sep}token={self.api_token}"
+        """Build a base URL for the given path (no query params)."""
+        return f"{self.base_url}{path}"
+
+    def _auth_headers(self) -> dict[str, str]:
+        """Return auth headers for MoviePilot API requests.
+
+        MoviePilot v2 accepts the API token via:
+          1. ``Authorization: Bearer <token>`` header (primary)
+          2. ``?token=...`` query parameter (fallback)
+        We send both for maximum compatibility.
+        """
+        return {"Authorization": f"Bearer {self.api_token}"}
 
     # ── HTTP helpers ──────────────────────────────────────────────
 
@@ -90,8 +99,14 @@ class MoviePilotConnector:
         """Send an authenticated GET request."""
         url = self._build_url(path)
         client = _get_client()
+        # httpx's ``copy_with(params=...)`` replaces existing query params,
+        # so we inject the token via the params dict rather than embedding
+        # it in the URL string.
+        merged_params: dict[str, str] = {"token": self.api_token}
+        if params:
+            merged_params.update(params)
         try:
-            resp = await client.get(url, params=params)
+            resp = await client.get(url, params=merged_params, headers=self._auth_headers())
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as e:
@@ -105,8 +120,9 @@ class MoviePilotConnector:
         """Send an authenticated POST request."""
         url = self._build_url(path)
         client = _get_client()
+        params = {"token": self.api_token}
         try:
-            resp = await client.post(url, json=json_data)
+            resp = await client.post(url, params=params, json=json_data, headers=self._auth_headers())
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as e:
