@@ -5,7 +5,6 @@ import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { Pagination } from "../Pagination";
 import { DetailModal } from "../ManageTab/DetailModal";
-import CountUp from "../CountUp";
 import { MediaTypeFilter } from "../MediaTypeFilter";
 import { CountryFilter } from "../CountryFilter";
 import { SortControls } from "../SortControls";
@@ -147,13 +146,14 @@ export function WishlistTab() {
       setTotal(data.total);
     } catch (err: unknown) {
       if (isAbortError(err)) return;
+      showToast(t("wishlist.load_failed", { message: getErrMsg(err) }), "error");
     }
     finally {
       if (!signal?.aborted) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [showToast, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -223,7 +223,7 @@ export function WishlistTab() {
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 <span className="hidden sm:inline">{t("wishlist.manual_add")}</span>
               </button>
-              <span className="badge font-mono text-xs shrink-0">{t("wishlist.movie_count").split("{{count}}")[0]}<CountUp end={total} />{t("wishlist.movie_count").split("{{count}}")[1]}</span>
+              <span className="badge font-mono text-xs shrink-0">{t("wishlist.movie_count", { count: total })}</span>
             </div>
           </div>
           <SearchInput

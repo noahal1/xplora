@@ -34,6 +34,7 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
   const [searchSortField, setSearchSortField] = useState<"year" | "title">("year");
   const [searchSortDir, setSearchSortDir] = useState<"asc" | "desc">("desc");
   const [searchSourceFilter, setSearchSourceFilter] = useState<string>("");
+  const [searchMediaType, setSearchMediaType] = useState<string>("movie");
 
   // External search detail modal
   const [detailMovie, setDetailMovie] = useState<MediaSearchResult | null>(null);
@@ -60,7 +61,11 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
     setSearchLoading(true);
     setSearchError("");
     try {
-      const data = await api.searchMedia(q.trim(), searchSourceRef.current, "movie");
+      const data = await api.searchMedia(
+        q.trim(),
+        searchSourceRef.current,
+        searchMediaType === "all" ? undefined : searchMediaType,
+      );
       if (seq !== searchSeqRef.current || !mountedRef.current) return;
       setSearchResults(data.results);
       setSearchDone(true);
@@ -156,6 +161,25 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
             selected={searchSource}
             onSelect={changeSearchSource}
           />
+
+          {/* Media type filter pills */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground shrink-0">{t("manage.media_type")}</span>
+            {[
+              { value: "movie", label: t("manage.media_type_movie"), icon: "🎬" },
+              { value: "tv", label: t("manage.media_type_tv"), icon: "📺" },
+              { value: "all", label: t("manage.media_type_all"), icon: "" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                className={`pill ${searchMediaType === opt.value ? "active" : ""}`}
+                onClick={() => setSearchMediaType(opt.value)}
+              >
+                {opt.icon && <span className="mr-0.5">{opt.icon}</span>}
+                {opt.label}
+              </button>
+            ))}
+          </div>
 
           <div className="flex items-center gap-2">
             <div className="relative flex-1">

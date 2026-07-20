@@ -29,6 +29,7 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
   const [searchError, setSearchError] = useState("");
   const [searchDone, setSearchDone] = useState(false);
   const [addingSearchIds, setAddingSearchIds] = useState<Set<string>>(new Set());
+  const [searchMediaType, setSearchMediaType] = useState<string>("movie");
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
 
@@ -50,7 +51,11 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
     setSearchLoading(true);
     setSearchError("");
     try {
-      const data = await api.searchMedia(q.trim(), searchSourceRef.current, "movie");
+      const data = await api.searchMedia(
+        q.trim(),
+        searchSourceRef.current,
+        searchMediaType === "all" ? undefined : searchMediaType,
+      );
       if (seq !== searchSeqRef.current || !mountedRef.current) return;
       setSearchResults(data.results);
       setSearchDone(true);
@@ -98,13 +103,31 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
       onClose={onClose}
       title={t("watched.search_title")}
     >
-      <div className="space-y-3">
-        <SearchSourceSelector
-          selected={searchSource}
-          onSelect={changeSearchSource}
-        />
+      <div className="space-y-3">          <SearchSourceSelector
+            selected={searchSource}
+            onSelect={changeSearchSource}
+          />
 
-        <div className="flex items-center gap-2">
+          {/* Media type filter pills */}
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[11px] text-muted-foreground shrink-0">{t("manage.media_type")}</span>
+            {[
+              { value: "movie", label: t("manage.media_type_movie"), icon: "🎬" },
+              { value: "tv", label: t("manage.media_type_tv"), icon: "📺" },
+              { value: "all", label: t("manage.media_type_all"), icon: "" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                className={`pill ${searchMediaType === opt.value ? "active" : ""}`}
+                onClick={() => setSearchMediaType(opt.value)}
+              >
+                {opt.icon && <span className="mr-0.5">{opt.icon}</span>}
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <input type="text" placeholder={t("watched.search_placeholder_external")}
               value={externalQuery} onChange={(e) => setExternalQuery(e.target.value)}

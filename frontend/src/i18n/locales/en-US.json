@@ -125,6 +125,7 @@
     "import_to_wishlist": "Import to Wishlist",
     "json_placeholder": "[ \"Inception\", \"Interstellar\", \"The Matrix\" ]\nor\n[ { \"title\": \"Parasite\", \"year\": 2019 } ]",
     "filter_placeholder": "Search list...",
+    "load_failed": "Failed to load wishlist: {{message}}",
     "mark_as_watched": "Mark as watched",
     "no_items": "Your wishlist is empty",
     "no_items_hint": "Try searching for movies above, or add manually",

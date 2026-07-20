@@ -297,22 +297,24 @@ class MoviePilotConnector:
 
         POST /api/v1/download/add
 
-        The request body is a flat JSON object per MoviePilot's OpenAPI
-        schema.
+        The request body wraps fields in a ``torrent_in`` object per
+        MoviePilot's OpenAPI schema.
 
         Returns:
             {"success": true, "hash": "...", "message": "..."}
             or {"success": false, "message": "..."}
         """
-        # MoviePilot v2 expects a flat JSON body (no ``torrent_in`` wrapper)
-        # per its OpenAPI schema. ``title`` and ``url`` are the minimum
-        # required fields.
+        # Some MoviePilot v2 versions expect a ``torrent_in`` wrapper (per its
+        # OpenAPI schema), while others accept a flat body. Send the wrapped
+        # format which is compatible with both.
         payload: dict[str, Any] = {
-            "title": title,
-            "url": url,
+            "torrent_in": {
+                "title": title,
+                "url": url,
+            }
         }
         if save_path:
-            payload["save_path"] = save_path
+            payload["torrent_in"]["save_path"] = save_path
 
         data = await self._post("/api/v1/download/add", json_data=payload)
         if data is None:
