@@ -719,6 +719,7 @@
     "confirm_download_desc": "Send this torrent to MoviePilot for download?",
     "save_path": "Save Path",
     "save_path_placeholder": "Optional: /downloads/movies",
+    "unknown_error": "Unknown error. Please check MoviePilot logs or verify qBittorrent connection status",
     "other": "Other"
   },
   "detail_modal": {

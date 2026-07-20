@@ -218,7 +218,9 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
       if (res.success) {
         showToast(t("moviepilot.download_success"), "success");
       } else {
-        showToast(t("moviepilot.download_failed", { message: res.message }), "error");
+        // Show the actual MoviePilot error message so the user can diagnose
+        const detailMsg = res.message || t("moviepilot.unknown_error");
+        showToast(t("moviepilot.download_failed", { message: detailMsg }), "error");
       }
     } catch (err) {
       showToast(t("moviepilot.download_failed", { message: getErrMsg(err) }), "error");

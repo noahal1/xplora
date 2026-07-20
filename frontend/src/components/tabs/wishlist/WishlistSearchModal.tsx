@@ -166,16 +166,15 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] text-muted-foreground shrink-0">{t("manage.media_type")}</span>
             {[
-              { value: "movie", label: t("manage.media_type_movie"), icon: "🎬" },
-              { value: "tv", label: t("manage.media_type_tv"), icon: "📺" },
-              { value: "all", label: t("manage.media_type_all"), icon: "" },
+              { value: "movie", label: t("manage.media_type_movie") },
+              { value: "tv", label: t("manage.media_type_tv") },
+              { value: "all", label: t("manage.media_type_all") },
             ].map((opt) => (
               <button
                 key={opt.value}
                 className={`pill ${searchMediaType === opt.value ? "active" : ""}`}
                 onClick={() => setSearchMediaType(opt.value)}
               >
-                {opt.icon && <span className="mr-0.5">{opt.icon}</span>}
                 {opt.label}
               </button>
             ))}

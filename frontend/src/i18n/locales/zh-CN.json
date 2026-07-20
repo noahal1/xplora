@@ -753,6 +753,7 @@
     "confirm_download_desc": "将该种子发送到 MoviePilot 下载？",
     "save_path": "保存路径",
     "save_path_placeholder": "可选：/downloads/movies",
+    "unknown_error": "未知错误，请检查 MoviePilot 日志或 qBittorrent 连接状态",
     "other": "其他"
   },
   "detail_modal": {

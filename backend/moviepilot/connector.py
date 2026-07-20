@@ -63,6 +63,36 @@ def _parse_mp_speed(speed_str: str) -> int:
     multipliers = {"": 1, "B": 1, "K": 1024, "M": 1024**2, "G": 1024**3}
     return int(num * multipliers.get(unit, 1))
 
+# ── Helpers for parsing MoviePilot error responses ───────────────
+
+
+def _fmt_detail(detail: Any) -> str | None:
+    """Format a FastAPI Pydantic validation ``detail`` field into a readable string.
+
+    FastAPI returns ``detail`` as a **list** of error dicts when a request body
+    fails Pydantic validation (HTTP 422).  This helper joins them into a
+    single human-readable string for display to the user.
+    """
+    if not isinstance(detail, list):
+        return str(detail) if detail else None
+    parts: list[str] = []
+    for err in detail:
+        if not isinstance(err, dict):
+            parts.append(str(err))
+            continue
+        loc = ".".join(str(p) for p in err.get("loc", []))
+        msg = err.get("msg", "")
+        inp = err.get("input")
+        if loc and msg:
+            line = f"{loc}: {msg}"
+            if inp is not None:
+                line += f" (got {inp!r})"
+            parts.append(line)
+        else:
+            parts.append(str(err))
+    return "; ".join(parts) if parts else None
+
+
 # ── Shared HTTP client with connection pooling ─────────────────────
 # Reuse a single AsyncClient across all requests to keep TCP
 # connections alive (HTTP keep-alive).  The client is created lazily
@@ -162,16 +192,26 @@ class MoviePilotConnector:
             )
             # Try to parse the error message from MoviePilot's response body
             # so the user sees the real reason instead of a generic message.
+            # FastAPI validation errors (422) have ``detail`` as a **list** of
+            # per-field errors, so we handle both dict and list responses.
             try:
                 err_body = e.response.json()
                 if isinstance(err_body, dict):
                     msg = (
                         err_body.get("message")
-                        or err_body.get("detail")
+                        or _fmt_detail(err_body.get("detail"))
                         or err_body.get("error")
                         or e.response.text[:200]
                     )
                     return {"success": False, "message": str(msg)}
+                elif isinstance(err_body, list):
+                    # Some MoviePilot versions return a bare list of errors
+                    parts = [
+                        f"{'.'.join(str(p) for p in e_.get('loc', []))}: {e_.get('msg', '')}"
+                        for e_ in err_body
+                        if isinstance(e_, dict)
+                    ]
+                    return {"success": False, "message": "; ".join(parts) or str(err_body)}
             except Exception:
                 pass
             return {
@@ -297,41 +337,69 @@ class MoviePilotConnector:
 
         POST /api/v1/download/add
 
-        The request body wraps fields in a ``torrent_in`` object per
-        MoviePilot's OpenAPI schema.
+        MoviePilot v2's ``add`` endpoint uses ``torrent_in: TorrentInfo`` as a
+        FastAPI body parameter.  Some versions use ``Body(embed=True)`` which
+        means the JSON body **must** be wrapped in a ``torrent_in`` key::
+
+            {"torrent_in": {"title": "...", "enclosure": "..."}}
+
+        The ``TorrentInfo`` schema expects the download URL in the ``enclosure``
+        field (not ``url``).  The ``url`` parameter passed to this method is the
+        torrent's ``enclosure`` URL from the search results.
 
         Returns:
             {"success": true, "hash": "...", "message": "..."}
             or {"success": false, "message": "..."}
         """
-        # Some MoviePilot v2 versions expect a ``torrent_in`` wrapper (per its
-        # OpenAPI schema), while others accept a flat body. Send the wrapped
-        # format which is compatible with both.
         payload: dict[str, Any] = {
             "torrent_in": {
                 "title": title,
-                "url": url,
+                "enclosure": url,
             }
         }
         if save_path:
             payload["torrent_in"]["save_path"] = save_path
 
+        logger.info(
+            "MP download: sending to %s/download/add — title=%r, enclosure_len=%d",
+            self.base_url, title, len(url),
+        )
+
         data = await self._post("/api/v1/download/add", json_data=payload)
+
         if data is None:
+            logger.warning("MP download: connection failed (data is None)")
             return {
                 "success": False,
                 "hash": "",
                 "message": "无法连接 MoviePilot，请检查地址、端口和 API Token",
             }
 
-        # MoviePilot v2 returns {"success": true/false, "hash": "...", "message": "..."}
-        # but some versions may nest the result in a "data" key.
-        result = data.get("data", data)
+        logger.debug("MP download raw response: %s", data)
+
+        # MoviePilot /download/add returns a top-level envelope:
+        #   {"success": true/false, "data": {...}, "message": "..."}
+        # On success ``data`` is {"download_id": "..."};
+        # on failure ``data`` may be absent or null.
+        #
+        # We MUST read ``success`` from the **top-level** envelope, NOT
+        # from the inner ``data`` dict (which only contains download_id).
+        top_success = data.get("success", False)
+        top_msg = data.get("message") or ""
+
+        # Extract the download_id from the nested data payload
+        inner_data = data.get("data")
+        did = inner_data.get("download_id", "") if isinstance(inner_data, dict) else ""
+
+        if top_success:
+            logger.info("MP download succeeded: download_id=%s msg=%s", did, top_msg)
+        else:
+            logger.warning("MP download failed: %s (payload keys=%s)", top_msg or "添加失败", list(payload.keys()))
 
         return {
-            "success": result.get("success", False),
-            "hash": result.get("hash", ""),
-            "message": result.get("message", "添加成功" if result.get("success") else "添加失败"),
+            "success": top_success,
+            "hash": did,
+            "message": top_msg or ("添加成功" if top_success else "添加失败"),
         }
 
     async def get_torrents(self) -> list[dict]:
