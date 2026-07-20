@@ -35,7 +35,7 @@ export function MoviePilotConfig() {
 
   // ── Form state ──
   const [host, setHost] = useState("");
-  const [port, setPort] = useState(3000);
+  const [port, setPort] = useState<number | "">(3000);
   const [apiToken, setApiToken] = useState("");
   const [useSsl, setUseSsl] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -105,7 +105,7 @@ export function MoviePilotConfig() {
     }
     setVerifying(true);
     try {
-      const result = await testMPConnection({ host, port, api_token: apiToken, use_ssl: useSsl });
+      const result = await testMPConnection({ host, port: port === "" ? 3000 : port, api_token: apiToken, use_ssl: useSsl });
       if (result.online) {
         showToast(t("moviepilot.verify_success"), "success");
       } else {
@@ -127,7 +127,7 @@ export function MoviePilotConfig() {
     }
     setSaving(true);
     try {
-      await saveMPConfig({ host, port, api_token: apiToken, use_ssl: useSsl });
+      await saveMPConfig({ host, port: port === "" ? 3000 : port, api_token: apiToken, use_ssl: useSsl });
       showToast(t("moviepilot.saved"), "success");
       loadConfig();
       loadTorrents();
@@ -148,7 +148,7 @@ export function MoviePilotConfig() {
       setShowDeleteConfirm(false);
       setConfig(null);
       setHost("");
-      setPort(3000);
+      setPort("");
       setApiToken("");
       setUseSsl(false);
       setTorrents([]);
@@ -230,7 +230,8 @@ export function MoviePilotConfig() {
               <input
                 type="number"
                 value={port}
-                onChange={(e) => setPort(parseInt(e.target.value) || 3000)}
+                onChange={(e) => setPort(e.target.value === "" ? "" : parseInt(e.target.value) || 3000)}
+                placeholder={t("moviepilot.port_placeholder")}
                 className="input-field w-full h-9 text-sm no-spinner"
               />
             </div>

@@ -668,6 +668,7 @@
     "host": "Host",
     "host_placeholder": "e.g. 192.168.1.100",
     "port": "Port",
+    "port_placeholder": "3000 (optional)",
     "api_token": "API Token",
     "api_token_placeholder": "Enter MoviePilot API Token",
     "use_ssl": "Use HTTPS",
