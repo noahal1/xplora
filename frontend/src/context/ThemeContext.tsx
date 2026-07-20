@@ -20,23 +20,6 @@ const ThemeContext = createContext<ThemeContextValue>({
   toggleTheme: () => {},
 });
 
-// ── Static keyframe injected once into the document ────────────────
-let keyframesInjected = false;
-
-function ensureKeyframes() {
-  if (keyframesInjected) return;
-  keyframesInjected = true;
-  const style = document.createElement("style");
-  style.textContent = `
-    @keyframes themeIrisWipe {
-      0%   { clip-path: circle(0%   at var(--origin-x) var(--origin-y)); }
-      50%  { clip-path: circle(75%  at var(--origin-x) var(--origin-y)); }
-      100% { clip-path: circle(141% at var(--origin-x) var(--origin-y)); }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("xplora-theme");
@@ -46,11 +29,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return "dark";
   });
 
-  // ── Iris-wipe transition state ───────────────────────────────────
-  const [transitioning, setTransitioning] = useState(false);
-  const [origin, setOrigin] = useState({ x: 0.5, y: 0.5 });
-  const pendingTheme = useRef<Theme | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard + cleanup ref for the theme-transitioning timer
+  const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -64,87 +44,42 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("xplora-theme", theme);
   }, [theme]);
 
-  // Inject keyframes once on mount
-  useEffect(() => {
-    ensureKeyframes();
-  }, []);
-
-  const toggleTheme = useCallback(
-    (e?: React.MouseEvent) => {
-      // Guard against rapid double-clicks while transitioning
-      if (transitioning) return;
-
-      // Capture click position relative to viewport
-      let x = 0.5;
-      let y = 0.5;
-      if (e) {
-        x = e.clientX / window.innerWidth;
-        y = e.clientY / window.innerHeight;
-      }
-      setOrigin({ x, y });
-
-      const nextTheme = theme === "dark" ? "light" : "dark";
-      pendingTheme.current = nextTheme;
-      setTransitioning(true);
-
-      // Add transitioning class to html for smooth CSS transitions
-      document.documentElement.classList.add("theme-transitioning");
-
-      // Switch theme at ~40% of the animation (when the circle is large enough to cover)
-      setTimeout(() => {
-        setTheme(nextTheme);
-      }, 180);
-
-      // Clean up: remove overlay + transitioning class
-      const cleanupTimer = setTimeout(() => {
-        setTransitioning(false);
-        pendingTheme.current = null;
-        document.documentElement.classList.remove("theme-transitioning");
-        timerRef.current = null;
-      }, 450);
-      timerRef.current = cleanupTimer;
-    },
-    [theme, transitioning],
-  );
-
-  // Cleanup on unmount
+  // Clean up timer on unmount
   useEffect(() => {
     return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
+      if (transitionTimer.current !== null) {
+        clearTimeout(transitionTimer.current);
       }
     };
   }, []);
 
-  // The overlay's background is the opposite theme's bg color
-  const overlayBg =
-    pendingTheme.current === "light" ? "#fafafa" : "#08090a";
+  const toggleTheme = useCallback(
+    (_e?: React.MouseEvent) => {
+      // Guard against rapid clicks while the CSS transition is running
+      if (transitionTimer.current !== null) return;
+
+      const nextTheme = theme === "dark" ? "light" : "dark";
+
+      // Add transitioning class so CSS transitions in style.css animate
+      // all theme colours smoothly (background, border, text, etc.).
+      document.documentElement.classList.add("theme-transitioning");
+
+      // Switch theme immediately — colour interpolation is handled by CSS
+      setTheme(nextTheme);
+
+      // Remove the transition class after the animation completes.
+      // The 350 ms matches the transition duration in style.css.
+      transitionTimer.current = setTimeout(() => {
+        document.documentElement.classList.remove("theme-transitioning");
+        transitionTimer.current = null;
+      }, 350);
+    },
+    [theme],
+  );
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
-
-      {/* Iris-wipe overlay — uses CSS custom properties from style attr */}
-      {transitioning && (
-        <div
-          className="theme-transition-overlay"
-          style={
-            {
-              position: "fixed",
-              inset: 0,
-              zIndex: 9999,
-              pointerEvents: "none",
-              willChange: "clip-path",
-              background: `radial-gradient(circle at ${origin.x * 100}% ${origin.y * 100}%, ${overlayBg}, color-mix(in srgb, ${overlayBg} 85%, transparent))`,
-              backdropFilter: "blur(2px)",
-              WebkitBackdropFilter: "blur(2px)",
-              "--origin-x": `${origin.x * 100}%`,
-              "--origin-y": `${origin.y * 100}%`,
-              animation: "themeIrisWipe 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-            } as React.CSSProperties
-          }
-        />
-      )}
     </ThemeContext.Provider>
   );
 }

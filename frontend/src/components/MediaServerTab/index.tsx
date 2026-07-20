@@ -836,11 +836,11 @@ export function MediaServerTab() {
           )}
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
             <button
               onClick={handleVerify}
               disabled={verifying || !form.host || (form.server_type === "jellyfin" && !form.api_key) || (form.server_type === "feiniu" && (!form.username || !form.password))}
-              className="btn btn-ghost btn-sm flex-1 gap-1.5"
+              className="btn btn-ghost btn-sm sm:flex-1 gap-1.5"
             >
               {verifying ? (
                 <div className="w-3.5 h-3.5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
@@ -849,22 +849,24 @@ export function MediaServerTab() {
               )}
               {verifying ? t("media_server.verifying") : t("media_server.verify")}
             </button>
-            <button
-              onClick={() => { setShowForm(false); resetForm(); }}
-              className="btn btn-ghost btn-sm"
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !form.name || !form.host || (form.server_type === "jellyfin" && !form.api_key)}
-              className="btn btn-primary btn-sm gap-1.5"
-            >
-              {saving ? (
-                <div className="w-3.5 h-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-stream-spin" />
-              ) : null}
-              {saving ? t("media_server.saving") : t("media_server.save")}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setShowForm(false); resetForm(); }}
+                className="btn btn-ghost btn-sm flex-1 sm:flex-none"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !form.name || !form.host || (form.server_type === "jellyfin" && !form.api_key)}
+                className="btn btn-primary btn-sm flex-1 sm:flex-none gap-1.5"
+              >
+                {saving ? (
+                  <div className="w-3.5 h-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-stream-spin" />
+                ) : null}
+                {saving ? t("media_server.saving") : t("media_server.save")}
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
