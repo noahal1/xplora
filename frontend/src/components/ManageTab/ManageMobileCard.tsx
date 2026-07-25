@@ -174,7 +174,7 @@ function MobileActionBtn({ icon, label, onClick, disabled, className }: {
       title={label}
     >
       {icon}
-      <span>{label}</span>
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }

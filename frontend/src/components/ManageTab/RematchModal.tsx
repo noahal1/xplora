@@ -218,7 +218,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                   const isFocused = idx === rematchFocusedIdx;
                   return (
                     <div key={idx} role="option" aria-selected={isFocused}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-150 cursor-pointer ${
+                      className={`flex items-center gap-2 sm:gap-3 p-2.5 rounded-xl border transition-all duration-150 cursor-pointer overflow-hidden ${
                         isCurrentMatch ? "border-green/40 bg-gradient-to-r from-green/[0.04] to-transparent"
                           : isFocused ? "border-primary/50 bg-primary/[0.04] shadow-sm"
                           : "border-border/70 hover:border-primary/30 hover:bg-accent/20 hover:shadow-sm"
@@ -226,7 +226,7 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                       onClick={() => handleSelectRematch(result)}
                       onMouseEnter={() => setRematchFocusedIdx(idx)}
                     >
-                      <div className="w-11 h-[60px] rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm relative group border border-border-subtle">
+                      <div className="w-10 sm:w-11 h-[56px] sm:h-[60px] rounded-lg shrink-0 overflow-hidden bg-muted flex items-center justify-center shadow-sm relative group border border-border-subtle">
                         {result.poster_url ? (
                           <>
                             <img src={result.poster_url} alt={result.title} className="w-full h-full object-cover" loading="lazy"
@@ -242,19 +242,19 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                         ) : <Film size={16} className="text-muted-foreground/30" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className={`text-sm line-clamp-2 ${isCurrentMatch ? "font-semibold" : "font-medium"}`} title={result.title}>{result.title}</p>
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                          <p className={`text-sm line-clamp-2 break-words ${isCurrentMatch ? "font-semibold" : "font-medium"}`} title={result.title}>{result.title}</p>
                           {isCurrentMatch && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-green bg-green/10 px-1.5 py-0.5 rounded-full whitespace-nowrap border border-green/20">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-green bg-green/10 px-1.5 py-0.5 rounded-full whitespace-nowrap border border-green/20 shrink-0">
                               <Check size={10} />{t("manage.rematch_current")}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          {result.year && <span className="text-xs text-muted-foreground tabular-nums">{result.year}</span>}
-                          {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground truncate max-w-[120px]">{translateGenres(result.genre)}</span>}
+                        <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
+                          {result.year && <span className="text-[10px] sm:text-xs text-muted-foreground tabular-nums shrink-0">{result.year}</span>}
+                          {result.genre && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground truncate max-w-[80px] sm:max-w-[120px]">{translateGenres(result.genre)}</span>}
                           {result.season_number != null && (
-                            <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5">
+                            <Badge variant="outline" className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0">
                               {formatSeasonLabel(result.season_number, t("season_specials"))}
                               {result.episode_count != null && <span className="ml-0.5 opacity-70">· {result.episode_count}ep</span>}
                             </Badge>
@@ -262,23 +262,23 @@ export function RematchModal({ open, movie, onClose, onSuccess }: RematchModalPr
                           {result.overview && <span className="text-[10px] text-muted-foreground/50 truncate max-w-[200px] hidden sm:inline">{result.overview.slice(0, 80)}{result.overview.length > 80 ? "…" : ""}</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {result.media_type === "tv" && <Badge variant="outline" className="text-[10px] text-sky border-sky/30 bg-sky/5">TV</Badge>}
-                        <Badge variant="outline" className={`text-[9px] leading-none px-1.5 py-0.5 ${result.source === "tmdb" ? "text-emerald border-emerald/30 bg-emerald/5" : "text-amber border-amber/30 bg-amber/5"}`}>
+                      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                        {result.media_type === "tv" && <Badge variant="outline" className="text-[9px] sm:text-[10px] text-sky border-sky/30 bg-sky/5 leading-none px-1 sm:px-1.5 py-0.5 shrink-0">TV</Badge>}
+                        <Badge variant="outline" className={`text-[9px] leading-none px-1 sm:px-1.5 py-0.5 shrink-0 ${result.source === "tmdb" ? "text-emerald border-emerald/30 bg-emerald/5" : "text-amber border-amber/30 bg-amber/5"}`}>
                           {result.source.toUpperCase()}
                         </Badge>
                       </div>
-                      <button className={`btn btn-xs gap-1 shrink-0 transition-all duration-150 ${
+                      <button className={`btn btn-xs gap-0 sm:gap-1 shrink-0 transition-all duration-150 max-sm:px-1.5 ${
                         isCurrentMatch
                           ? "btn-ghost border border-amber/30 hover:border-amber/50 text-amber hover:text-amber bg-amber/[0.04]"
                           : isFocused ? "btn-primary" : "btn-ghost border border-border/50 hover:border-primary/30"
                       }`}
                         onClick={(e) => { e.stopPropagation(); handleSelectRematch(result); }}
-                        title={isCurrentMatch ? t("manage.rematch_overwrite") : ""}
+                        title={isCurrentMatch ? t("manage.rematch_overwrite") : t("manage.rematch_select")}
                       >
                         <RefreshCw size={10} className={isCurrentMatch ? "" : "hidden"} />
                         <Check size={11} className={isCurrentMatch ? "hidden" : ""} />
-                        {isCurrentMatch ? t("manage.rematch_overwrite") : t("manage.rematch_select")}
+                        <span className="hidden sm:inline">{isCurrentMatch ? t("manage.rematch_overwrite") : t("manage.rematch_select")}</span>
                       </button>
                     </div>
                   );

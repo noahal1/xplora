@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Award, Star, Film, Trophy,
-  Pencil, Check, Plus, X, Search, RefreshCw,
+  Pencil, Check, Plus, X, Search, RefreshCw, LayoutGrid, List,
 } from "lucide-react";
 import FadeContent from "./FadeContent";
 import { Modal } from "./Modal";
@@ -16,6 +16,7 @@ import { TopRatedCard } from "./tabs/top_rated/TopRatedCard";
 import { TopRatedMobileCard } from "./tabs/top_rated/TopRatedMobileCard";
 import { useToast } from "../context/ToastContext";
 import { getErrMsg } from "../lib/utils";
+import DomeGallery from "./DomeGallery";
 
 
 export function TopRatedTab() {
@@ -35,6 +36,9 @@ export function TopRatedTab() {
   const mobileListRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const touchDraggedItemRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Gallery / List view toggle ─────────────────────────
+  const [galleryMode, setGalleryMode] = useState(true);
 
   // ── Remove confirmation ─────────────────────────────────
   const [confirmRemove, setConfirmRemove] = useState<MediaDetail | null>(null);
@@ -284,6 +288,13 @@ export function TopRatedTab() {
       reorderTopRated(movies.map((m) => m.id)).finally(() => setSaving(false));
     }
     setEditMode(!editMode);
+    // Switch to list view when entering edit mode, back to gallery when exiting
+    if (!editMode) setGalleryMode(false);
+    else setGalleryMode(true);
+  };
+
+  const toggleGalleryMode = () => {
+    setGalleryMode((prev) => !prev);
   };
 
   // ── Render ──────────────────────────────────────────────
@@ -328,12 +339,23 @@ export function TopRatedTab() {
               <Trophy size={14} className="text-white" />
             </div>
             <h2 className="section-title">Top 排行榜</h2>
-            <span className="text-[10px] opacity-30 ml-1">{movies.length}/{MAX_ITEMS}</span>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             {saving && <span className="text-[10px] animate-pulse opacity-40">保存中...</span>}
             {editMode && (
               <span className="text-[10px] opacity-40 hidden sm:inline">拖拽或点击上下箭头排序</span>
+            )}
+
+            {/* Gallery/List toggle (desktop, non-edit) */}
+            {!editMode && movies.length > 0 && (
+              <button
+                className="btn btn-ghost btn-xs hidden sm:flex"
+                onClick={toggleGalleryMode}
+                title={galleryMode ? "列表视图" : "3D 画廊视图"}
+              >
+                {galleryMode ? <List size={13} /> : <LayoutGrid size={13} />}
+                <span className="hidden sm:inline ml-1">{galleryMode ? "列表" : "画廊"}</span>
+              </button>
             )}
 
             {/* Add button */}
@@ -509,8 +531,22 @@ export function TopRatedTab() {
         </FadeContent>
       )}
 
+      {/* ── Dome Gallery (desktop, gallery mode, non-edit) ── */}
+      {movies.length > 0 && galleryMode && !editMode && (
+        <div className="hidden sm:block">
+          <DomeGallery
+            movies={movies}
+            onMovieClick={(m) => setDetailMovie(m)}
+            height="520px"
+            fit={0.48}
+            minRadius={320}
+            segments={25}
+          />
+        </div>
+      )}
+
       {/* ── Movie List ─────────────────────────────── */}
-      {movies.length > 0 && (
+      {movies.length > 0 && (!galleryMode || editMode) && (
         <>
           {/* Mobile cards */}
           <div className="sm:hidden space-y-2.5" ref={mobileListRef}>

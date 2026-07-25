@@ -62,7 +62,7 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
               <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/80">
                 {movie.year && <span>{movie.year}</span>}
                 {movie.genre && <span className="truncate">{translateGenres(movie.genre)}</span>}
-                {movie.runtime && <span className="whitespace-nowrap">{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
+                {movie.runtime && <span className="sm:whitespace-nowrap">{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
               </div>
             </div>
             <ChevronRight size={14} className="shrink-0 mt-0.5 text-fg-dim" />
@@ -101,17 +101,19 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-sky hover:bg-sky/10"
           onClick={() => onOpenDetail(movie)}
+          title={t("manage.detail")}
         >
           <Info size={14} />
-          <span>{t("manage.detail")}</span>
+          <span className="hidden sm:inline">{t("manage.detail")}</span>
         </button>
         {/* Remove */}
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
           onClick={() => onRemove(movie.id)}
+          title={t("watched.remove")}
         >
           <X size={14} />
-          <span>{t("watched.remove")}</span>
+          <span className="hidden sm:inline">{t("watched.remove")}</span>
         </button>
       </div>
     </div>

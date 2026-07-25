@@ -59,10 +59,16 @@ export function FilterBar({ children, collapseLabel, expandLabel }: FilterBarPro
       <div
         className={`sm:block overflow-hidden transition-all duration-300 ${
           expanded
-            ? "max-sm:opacity-100 max-sm:max-h-[2000px]"
+            ? "max-sm:opacity-100 max-sm:max-h-[1000px]"
             : "max-sm:opacity-0 max-sm:max-h-0"
         }`}
-        style={{ transitionTimingFunction: "var(--ease-out-expo)" }}
+        style={{
+          transitionTimingFunction: "var(--ease-out-expo)",
+          // Use scale transform to avoid the "popping" feel of max-h on long content;
+          // combined with opacity this provides a smoother reveal.
+          transform: expanded ? "scaleY(1)" : "scaleY(0.95)",
+          transformOrigin: "top center",
+        }}
       >
         {children}
       </div>

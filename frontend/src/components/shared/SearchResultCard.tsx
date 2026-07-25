@@ -90,7 +90,7 @@ export const SearchResultCard = memo(function SearchResultCard({
 
   return (
     <div
-      className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl border transition-all card-lift ${
+      className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl border transition-all card-lift overflow-hidden ${
         selected !== undefined
           ? selected
             ? "border-primary/40 bg-primary/[0.04]"
@@ -115,15 +115,15 @@ export const SearchResultCard = memo(function SearchResultCard({
 
       {/* Info */}
       <div className="flex-1 min-w-0" onClick={onDetail ?? (() => {})}>
-        <p className="text-sm font-medium line-clamp-2" title={result.title}>{result.title}</p>
-        <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
+        <p className="text-sm font-medium line-clamp-2 break-words" title={result.title}>{result.title}</p>
+        <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5 flex-wrap">
           {result.year && (
-            <span className="text-[10px] sm:text-xs text-muted-foreground tabular-nums">
+            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
               {result.year}
             </span>
           )}
           {result.genre && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground truncate max-w-[100px] sm:max-w-[120px]">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground truncate max-w-[80px] sm:max-w-[120px]">
               {translateGenres(result.genre)}
             </span>
           )}
@@ -131,7 +131,7 @@ export const SearchResultCard = memo(function SearchResultCard({
           {result.season_number != null && (
             <Badge
               variant="outline"
-              className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5"
+              className="text-[10px] text-violet border-violet/30 bg-violet/5 leading-none px-1.5 py-0.5 shrink-0"
             >
               {formatSeasonLabel(result.season_number, t("season_specials"))}
               {result.episode_count != null && (
@@ -143,13 +143,13 @@ export const SearchResultCard = memo(function SearchResultCard({
           {result.media_type === "tv" && (
             <Badge
               variant="outline"
-              className="text-[10px] text-sky border-sky/30 bg-sky/5"
+              className="text-[10px] text-sky border-sky/30 bg-sky/5 shrink-0"
             >
               TV
             </Badge>
           )}
           {/* Source badge */}
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" className="text-[10px] shrink-0">
             {result.source.toUpperCase()}
           </Badge>
         </div>

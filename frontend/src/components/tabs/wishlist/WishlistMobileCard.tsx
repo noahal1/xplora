@@ -91,32 +91,36 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all text-green hover:bg-green/10 shrink-0"
           onClick={() => onMarkWatched(item)}
+          title={t("wishlist.mark_as_watched")}
         >
           <Check size={14} />
-          <span>{t("wishlist.mark_as_watched")}</span>
+          <span className="hidden sm:inline">{t("wishlist.mark_as_watched")}</span>
         </button>
         {onSearchPT && (
           <button
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-orange-500 hover:bg-orange-500/10"
             onClick={() => onSearchPT(item)}
+            title={t("moviepilot.search_pt")}
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /><path d="M11 8v6" /><path d="M8 11h6" /></svg>
-            <span>{t("moviepilot.search_pt")}</span>
+            <span className="hidden sm:inline">{t("moviepilot.search_pt")}</span>
           </button>
         )}
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-sky hover:bg-sky/10"
           onClick={() => onOpenDetail(item)}
+          title={t("manage.detail")}
         >
           <Info size={14} />
-          <span>{t("manage.detail")}</span>
+          <span className="hidden sm:inline">{t("manage.detail")}</span>
         </button>
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
           onClick={() => onDelete(item.id)}
+          title={t("watched.remove")}
         >
           <Trash2 size={14} />
-          <span>{t("watched.remove")}</span>
+          <span className="hidden sm:inline">{t("watched.remove")}</span>
         </button>
       </div>
     </div>

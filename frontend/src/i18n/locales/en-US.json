@@ -305,7 +305,7 @@
     "rematch_failed": "Match failed: {{message}}",
     "rematch_select": "Select",
     "rematch_overwrite": "Re-scrape",
-    "rematch_current": "✓ Current",
+    "rematch_current": "Current",
     "media_type": "Type:",
     "media_type_all": "All",
     "media_type_movie": "🎬 Movie",

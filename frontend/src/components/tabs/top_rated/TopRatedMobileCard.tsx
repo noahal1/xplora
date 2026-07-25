@@ -198,8 +198,8 @@ export const TopRatedMobileCard = memo(function TopRatedMobileCard({
       {/* Row 2: Edit mode controls (when editing) */}
       {editMode && (
         <div className="flex items-center gap-2 mt-2.5 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-          {/* Drag handle hint */}
-          <div className="flex items-center gap-1 px-2 py-1 text-[10px] opacity-40">
+          {/* Drag handle hint — hidden on mobile to save space */}
+          <div className="hidden sm:flex items-center gap-1 px-2 py-1 text-[10px] opacity-40">
             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
               <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
               <circle cx="9" cy="5" r="1" /><circle cx="15" cy="5" r="1" />
@@ -212,24 +212,27 @@ export const TopRatedMobileCard = memo(function TopRatedMobileCard({
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
               onClick={(e) => { e.stopPropagation(); onMoveUp(idx); }}
               disabled={idx === 0}
+              title="上移"
             >
               <ArrowUp size={13} />
-              <span>上移</span>
+              <span className="hidden sm:inline">上移</span>
             </button>
             <button
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
               onClick={(e) => { e.stopPropagation(); onMoveDown(idx); }}
               disabled={idx === total - 1}
+              title="下移"
             >
               <ArrowDown size={13} />
-              <span>下移</span>
+              <span className="hidden sm:inline">下移</span>
             </button>
             <button
               className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               onClick={(e) => { e.stopPropagation(); onRemove(movie); }}
+              title="移除"
             >
               <Trash2 size={13} />
-              <span>移除</span>
+              <span className="hidden sm:inline">移除</span>
             </button>
           </div>
         </div>

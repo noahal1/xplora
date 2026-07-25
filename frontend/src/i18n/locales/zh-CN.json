@@ -308,7 +308,7 @@
     "rematch_failed": "匹配失败：{{message}}",
     "rematch_select": "选择",
     "rematch_overwrite": "覆盖",
-    "rematch_current": "✓ 当前",
+    "rematch_current": "当前",
     "scrape_source": "刮削源：",
     "media_type": "类型：",
     "media_type_all": "全部",
@@ -466,7 +466,8 @@
     "label": "{{value}} 分"
   },
   "countries": {
-    "Agentina": "阿根廷",
+
+    "Argentina": "阿根廷",
     "Austria": "奥地利",
     "Australia": "澳大利亚",
     "Belgium": "比利时",
@@ -475,6 +476,7 @@
     "Czech Republic": "捷克",
     "Canada": "加拿大",
     "China": "中国",
+    "Czechoslovakia": "捷克斯洛伐克",
     "Denmark": "丹麦",
     "Egypt": "埃及",
     "Estonia": "爱沙尼亚",

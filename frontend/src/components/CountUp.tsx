@@ -112,6 +112,10 @@ export default function CountUp({
     if (range === 0) {
       el.textContent = formatNumber(to);
       onComplete?.();
+      // Reset flag so that when end changes from 0 to a real value,
+      // the animation effect can run again. Without this, the number
+      // stays frozen at 0 forever (common when mounting with async data).
+      hasAnimated.current = false;
       return;
     }
 
