@@ -346,15 +346,15 @@ export function TopRatedTab() {
               <span className="text-[10px] opacity-40 hidden sm:inline">拖拽或点击上下箭头排序</span>
             )}
 
-            {/* Gallery/List toggle (desktop, non-edit) */}
+            {/* Gallery/List toggle (non-edit) */}
             {!editMode && movies.length > 0 && (
               <button
-                className="btn btn-ghost btn-xs hidden sm:flex"
+                className="btn btn-ghost btn-xs"
                 onClick={toggleGalleryMode}
-                title={galleryMode ? "列表视图" : "3D 画廊视图"}
+                title={galleryMode ? "列表视图" : "画廊视图"}
               >
                 {galleryMode ? <List size={13} /> : <LayoutGrid size={13} />}
-                <span className="hidden sm:inline ml-1">{galleryMode ? "列表" : "画廊"}</span>
+                <span className="ml-1 text-[10px] sm:text-xs">{galleryMode ? "列表" : "画廊"}</span>
               </button>
             )}
 
@@ -531,16 +531,13 @@ export function TopRatedTab() {
         </FadeContent>
       )}
 
-      {/* ── Dome Gallery (desktop, gallery mode, non-edit) ── */}
+      {/* ── Dome Gallery (gallery mode, non-edit) ── */}
       {movies.length > 0 && galleryMode && !editMode && (
-        <div className="hidden sm:block">
+        <div className="animate-in fade-in duration-500">
           <DomeGallery
             movies={movies}
             onMovieClick={(m) => setDetailMovie(m)}
-            height="520px"
-            fit={0.48}
-            minRadius={320}
-            segments={25}
+            height="min(70vh, 620px)"
           />
         </div>
       )}
@@ -549,7 +546,7 @@ export function TopRatedTab() {
       {movies.length > 0 && (!galleryMode || editMode) && (
         <>
           {/* Mobile cards */}
-          <div className="sm:hidden space-y-2.5" ref={mobileListRef}>
+          <div className="sm:hidden space-y-2.5 animate-in fade-in duration-500" ref={mobileListRef}>
             {movies.map((movie, idx) => (
               <TopRatedMobileCard
                 key={movie.id}

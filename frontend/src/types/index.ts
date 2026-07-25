@@ -91,6 +91,7 @@ export interface WishlistItem {
   title: string;
   year?: number | null;
   genre?: string | null;
+  tmdb_id?: string | null;
 }
 
 export type MediaItemStatus = "watched" | "wish";

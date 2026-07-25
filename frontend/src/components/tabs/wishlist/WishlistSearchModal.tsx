@@ -104,7 +104,7 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
     if (addingIds.has(key)) return;
     setAddingIds((prev) => new Set(prev).add(key));
     try {
-      await api.addToWishlist({ title: result.title, year: result.year, genre: result.genre || null });
+      await api.addToWishlist({ title: result.title, year: result.year, genre: result.genre || null, tmdb_id: result.source === "tmdb" ? result.source_id : null });
       showToast(t("wishlist.added_to_wishlist", { title: result.title }), "success");
       startPolling();
       onAddSuccess();

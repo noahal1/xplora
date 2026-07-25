@@ -20,6 +20,7 @@ from crud import (
     save_wishlist_items,
     get_media as db_get_media,
     get_media_titles as db_get_media_titles,
+    get_media_by_title,
     get_media_for_user,
     get_enrich_progress as db_get_enrich_progress,
     get_unenriched_media_ids as db_get_unenriched_media_ids,
@@ -152,15 +153,58 @@ async def add_watched_media(
     enrichment runs asynchronously in the background, so the response
     returns immediately with the created record.
 
+    **Duplicate prevention:**
+    - If the title already exists in the wishlist → automatically
+      converts it to watched (no duplicate created).
+    - If the title already exists in watched → returns 409 Conflict.
+
     Unlike ``POST /media/replace`` this does **not** clear existing
     items — it appends to the watched list.
     """
     if not request.title or not request.title.strip():
         raise HTTPException(status_code=400, detail="标题不能为空")
 
+    title = request.title.strip()
+
+    # ── Duplicate check (TMDB ID priority, then title fallback) ──
+    existing = get_media_by_title(
+        title, current_user["id"],
+        tmdb_id=request.tmdb_id,
+        db=db,
+    )
+    if existing:
+        if existing.status == "wish":
+            # 已在想看 → 自动转为已看
+            converted = mark_media_as_watched(
+                media_id=existing.id,
+                user_id=current_user["id"],
+                rating=0.0,
+                db=db,
+            )
+            if not converted:
+                raise HTTPException(status_code=500, detail="转换失败")
+            log_operation(
+                current_user["id"], current_user["username"],
+                "add_watched", f"从想看转为已看: {converted.title}", db=db,
+            )
+            return {
+                "id": converted.id,
+                "title": converted.title,
+                "year": converted.year,
+                "genre": converted.genre,
+                "status": converted.status,
+                "converted_from_wishlist": True,
+            }
+        else:
+            # 已看中已存在 → 拒绝
+            raise HTTPException(
+                status_code=409,
+                detail=f"「{title}」已在已看列表中",
+            )
+
     records = save_media(
         [MediaRating(
-            title=request.title.strip(),
+            title=title,
             rating=0,
             year=request.year,
             genre=request.genre,
@@ -919,8 +963,27 @@ async def add_to_wishlist(
 ):
     """Add a single media item to the wishlist.
 
+    **Duplicate prevention:** if the title already exists in either
+    the watched or wishlist, returns 409 Conflict.
+
     Metadata enrichment runs asynchronously in the background.
     """
+    if not request.title or not request.title.strip():
+        raise HTTPException(status_code=400, detail="标题不能为空")
+
+    # ── Duplicate check (TMDB ID priority, then title fallback) ──
+    existing = get_media_by_title(
+        request.title.strip(), current_user["id"],
+        tmdb_id=request.tmdb_id,
+        db=db,
+    )
+    if existing:
+        status_label = "已看" if existing.status == "watched" else "想看"
+        raise HTTPException(
+            status_code=409,
+            detail=f"「{request.title}」已在{status_label}列表中",
+        )
+
     records = save_wishlist_items([request], current_user["id"], db=db)
     if not records:
         raise HTTPException(status_code=400, detail="Failed to add item")
@@ -948,6 +1011,9 @@ async def import_wishlist(
 ):
     """Append items to the wishlist (no clearing of existing items).
 
+    **Duplicate prevention:** items whose titles already exist in
+    either watched or wishlist are silently skipped.
+
     Unlike ``POST /wishlist/replace``, this endpoint does **not** delete
     existing wishlist items first — it only inserts the new ones. This
     is the correct endpoint for JSON import, merging import files with
@@ -956,18 +1022,29 @@ async def import_wishlist(
     Metadata enrichment runs asynchronously in the background.
     """
     items = []
+    skipped = 0
     for m in request.movies:
         if not m.title or not m.title.strip():
             continue
+        title = m.title.strip()
+        # Skip if already exists in either list (TMDB ID priority, then title fallback)
+        existing = get_media_by_title(
+            title, current_user["id"],
+            tmdb_id=m.tmdb_id,
+            db=db,
+        )
+        if existing:
+            skipped += 1
+            continue
         items.append(
             WishlistItem(
-                title=m.title.strip(),
+                title=title,
                 year=m.year,
                 genre=m.genre,
             )
         )
     if not items:
-        return {"status": "saved", "count": 0}
+        return {"status": "saved", "count": 0, "skipped": skipped}
 
     records = save_wishlist_items(items, current_user["id"], db=db)
 
@@ -975,8 +1052,8 @@ async def import_wishlist(
     if media_ids:
         background_tasks.add_task(async_background_enrich_movies, current_user["id"], media_ids)
 
-    log_operation(current_user["id"], current_user["username"], "import_wishlist", f"导入想看列表: {len(records)} 条", db=db)
-    return {"status": "saved", "count": len(records)}
+    log_operation(current_user["id"], current_user["username"], "import_wishlist", f"导入想看列表: {len(records)} 条（跳过 {skipped} 条重复）", db=db)
+    return {"status": "saved", "count": len(records), "skipped": skipped}
 
 
 @router.delete("/wishlist")

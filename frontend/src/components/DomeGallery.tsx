@@ -1,426 +1,187 @@
-import { useEffect, useMemo, useRef, useCallback } from "react";
-import { useGesture } from "@use-gesture/react";
-import type { MediaDetail } from "../types";
+import { useMemo, useState, useEffect } from "react";
+import TiltedCard from "./TiltedCard";
+import Masonry from "./Masonry";
+import type { MasonryItem } from "./Masonry";
+
+type MovieItem = { id: number; title: string; poster_url?: string; rating: number; year?: number | null };
 
 interface DomeGalleryProps {
-  movies: MediaDetail[];
-  onMovieClick: (movie: MediaDetail) => void;
+  movies: MovieItem[];
+  onMovieClick: (movie: MovieItem) => void;
   /** Height of the gallery container */
   height?: string;
-  /** Fit factor (0-1), controls how much of the container the sphere fills */
-  fit?: number;
-  /** Minimum sphere radius in px */
-  minRadius?: number;
-  /** Maximum vertical rotation in degrees */
-  maxVerticalRotationDeg?: number;
-  /** Drag sensitivity (lower = more sensitive) */
-  dragSensitivity?: number;
-  /** Number of segments for the grid */
-  segments?: number;
-  /** Drag inertia dampening (0-1) */
-  dragDampening?: number;
 }
 
-const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
-const normalizeAngle = (d: number) => ((d % 360) + 360) % 360;
-const wrapAngleSigned = (deg: number) => {
-  const a = (((deg + 180) % 360) + 360) % 360;
-  return a - 180;
+// ── Rank badge helpers
+const rankBadgeBg = (rank: number) => {
+  if (rank === 1) return "linear-gradient(135deg, #f59e0b, #eab308)";
+  if (rank === 2) return "linear-gradient(135deg, #94a3b8, #cbd5e1)";
+  if (rank === 3) return "linear-gradient(135deg, #b45309, #d97706)";
+  return "rgba(255,255,255,0.08)";
 };
 
-type ItemDef = {
-  src: string;
-  alt: string;
-  x: number;
-  y: number;
-  sizeX: number;
-  sizeY: number;
-  movieIdx: number;
-};
-
-function buildItems(
-  movies: MediaDetail[],
-  seg: number,
-): ItemDef[] {
-  const xCols = Array.from({ length: seg }, (_, i) => -37 + i * 2);
-  const evenYs = [-4, -2, 0, 2, 4];
-  const oddYs = [-3, -1, 1, 3, 5];
-  const coords = xCols.flatMap((x, c) => {
-    const ys = c % 2 === 0 ? evenYs : oddYs;
-    return ys.map(y => ({ x, y, sizeX: 2, sizeY: 2 }));
-  });
-
-  const totalSlots = coords.length;
-  if (movies.length === 0) {
-    return coords.map(c => ({ ...c, src: "", alt: "", movieIdx: -1 }));
-  }
-
-  // Map movies to slots, repeating if fewer movies than slots
-  return coords.map((c, i) => {
-    const idx = i % movies.length;
-    const movie = movies[idx];
-    return {
-      ...c,
-      src: movie.poster_url || "",
-      alt: movie.title,
-      movieIdx: idx,
-    };
-  });
-}
+const rankBadgeText = (rank: number) => (rank <= 3 ? "#fff" : "var(--fg-secondary)");
 
 export default function DomeGallery({
   movies,
   onMovieClick,
-  height = "560px",
-  fit = 0.5,
-  minRadius = 360,
-  maxVerticalRotationDeg = 5,
-  dragSensitivity = 20,
-  segments = 35,
-  dragDampening = 2,
+  height = "520px",
 }: DomeGalleryProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const mainRef = useRef<HTMLDivElement>(null);
-  const sphereRef = useRef<HTMLDivElement>(null);
-  const rotationRef = useRef({ x: 0, y: 0 });
-  const startRotRef = useRef({ x: 0, y: 0 });
-  const startPosRef = useRef<{ x: number; y: number } | null>(null);
-  const draggingRef = useRef(false);
-  const movedRef = useRef(false);
-  const inertiaRAF = useRef<number | null>(null);
-  const tapTargetRef = useRef<HTMLElement | null>(null);
-  const tapMovieIdxRef = useRef(-1);
+  const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  const items = useMemo(() => buildItems(movies, segments), [movies, segments]);
+  // Detect mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
-  const applyTransform = (xDeg: number, yDeg: number) => {
-    const el = sphereRef.current;
-    if (el) {
-      el.style.transform = `translateZ(calc(var(--radius) * -1)) rotateX(${xDeg}deg) rotateY(${yDeg}deg)`;
-    }
+  // Trigger mount after render so GSAP can animate
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+
+  // Build masonry items with height multipliers (relative to column width × aspect ratio).
+  // Masonry uses aspectRatio to compute actual pixel heights, with `height` as a multiplier
+  // where 100 = base (1.0x), 150 = hero (1.5x), 85 = compact (0.85x), etc.
+  const masonryItems = useMemo<MasonryItem[]>(() => {
+    return movies.map((m, i) => {
+      const rank = i + 1;
+      const factor = rank === 1 ? 1.5 : rank % 3 === 0 ? 1.15 : rank % 3 === 1 ? 1.0 : 0.85;
+      return {
+        id: `m-${rank}`,
+        height: Math.round(factor * 100),
+        data: { ...m, rank },
+      };
+    });
+  }, [movies]);
+
+  // Custom render for each masonry item
+  const renderItem = (item: MasonryItem) => {
+    const movie = (item.data || {}) as MovieItem & { rank: number };
+    const rank = (item.data as any)?.rank ?? 0;
+    const isHero = rank === 1;
+    const glowColor =
+      rank === 1 ? "rgba(245,158,11,0.18)" : rank === 2 ? "rgba(148,163,184,0.14)" : rank === 3 ? "rgba(180,83,9,0.14)" : "";
+
+    return (
+      <div className="relative w-full h-full rounded-[14px] overflow-hidden cursor-pointer" style={{ touchAction: "manipulation" }}>
+        {/* Glow border for top 3 */}
+        {rank <= 3 && (
+          <div
+            className="absolute inset-0 rounded-[14px] pointer-events-none z-[1]"
+            style={{
+              background: glowColor,
+              boxShadow: `inset 0 0 0 1px ${glowColor.replace("0.18", "0.10").replace("0.14", "0.08")}`,
+            }}
+          />
+        )}
+
+        {/* Rank badge */}
+        <div
+          className="absolute top-[8px] left-[8px] z-10 pointer-events-none flex items-center justify-center
+                     shadow-[0_2px_8px_rgba(0,0,0,0.4)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+          style={{
+            width: isHero ? 30 : 26,
+            height: isHero ? 30 : 26,
+            borderRadius: isHero ? 10 : 9,
+            fontSize: isHero ? 13 : 11,
+            fontWeight: 800,
+            color: rankBadgeText(rank),
+            background: rankBadgeBg(rank),
+          }}
+        >
+          {rank}
+        </div>
+
+        {/* Poster with 3D tilt (tilt only on desktop) */}
+        {movie.poster_url ? (
+          <TiltedCard
+            imageSrc={movie.poster_url}
+            altText={movie.title}
+            containerHeight="100%"
+            containerWidth="100%"
+            imageHeight="100%"
+            imageWidth="100%"
+            scaleOnHover={isMobile ? 1 : 1.04}
+            rotateAmplitude={isMobile ? 0 : 6}
+            overlayContent={
+              <div
+                className={`absolute inset-0 bg-gradient-to-t from-black/88 via-black/30 to-transparent
+                  flex flex-col justify-end ${isMobile ? "p-2" : "p-3"}
+                  transition-opacity duration-300
+                  ${isMobile ? "opacity-100" : "opacity-0 hover:opacity-100"}`}
+              >
+                <span
+                  className="text-white font-semibold leading-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]
+                             line-clamp-2"
+                  style={{ fontSize: isHero ? (isMobile ? 13 : 15) : (isMobile ? 10 : 11) }}
+                >
+                  {movie.title}
+                </span>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span
+                    className="text-[#fbbf24] font-bold"
+                    style={{ fontSize: isHero ? (isMobile ? 11 : 12) : (isMobile ? 9 : 10) }}
+                  >
+                    ★ {movie.rating.toFixed(1)}
+                  </span>
+                  {movie.year && (
+                    <span className="text-white/50" style={{ fontSize: isHero ? (isMobile ? 10 : 11) : (isMobile ? 8 : 10) }}>
+                      {movie.year}
+                    </span>
+                  )}
+                </div>
+              </div>
+            }
+            displayOverlayContent={true}
+            onClick={() => onMovieClick(movie)}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center
+                        bg-gradient-to-br from-white/[0.04] to-white/[0.01]">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
+                 className="opacity-15" width={isHero ? 40 : 28} height={isHero ? 40 : 28}>
+              <rect x="2" y="2" width="20" height="20" rx="3" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          </div>
+        )}
+      </div>
+    );
   };
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const ro = new ResizeObserver(entries => {
-      const cr = entries[0].contentRect;
-      const w = Math.max(1, cr.width), h = Math.max(1, cr.height);
-      const minDim = Math.min(w, h);
-      let radius = minDim * fist;
-      radius = clamp(radius, minRadius, Infinity);
-      root.style.setProperty("--radius", `${Math.round(radius)}px`);
-      root.style.setProperty("--segments-x", String(segments));
-      root.style.setProperty("--segments-y", String(segments));
-      applyTransform(rotationRef.current.x, rotationRef.current.y);
-    });
-    ro.observe(root);
-    return () => ro.disconnect();
-  }, [fit, minRadius, segments]);
-
-  useEffect(() => {
-    applyTransform(rotationRef.current.x, rotationRef.current.y);
-  }, []);
-
-  const stopInertia = useCallback(() => {
-    if (inertiaRAF.current) {
-      cancelAnimationFrame(inertiaRAF.current);
-      inertiaRAF.current = null;
-    }
-  }, []);
-
-  const startInertia = useCallback(
-    (vx: number, vy: number) => {
-      let vX = clamp(vx, -1.4, 1.4) * 80;
-      let vY = clamp(vy, -1.4, 1.4) * 80;
-      let frames = 0;
-      const d = clamp(dragDampening, 0, 1);
-      const frictionMul = 0.94 + 0.055 * d;
-      const stopThreshold = 0.015 - 0.01 * d;
-      const maxFrames = Math.round(90 + 270 * d);
-      const step = () => {
-        vX *= frictionMul;
-        vY *= frictionMul;
-        if (Math.abs(vX) < stopThreshold && Math.abs(vY) < stopThreshold) {
-          inertiaRAF.current = null;
-          return;
-        }
-        if (++frames > maxFrames) {
-          inertiaRAF.current = null;
-          return;
-        }
-        const nextX = clamp(
-          rotationRef.current.x - vY / 200,
-          -maxVerticalRotationDeg,
-          maxVerticalRotationDeg,
-        );
-        const nextY = wrapAngleSigned(rotationRef.current.y + vX / 200);
-        rotationRef.current = { x: nextX, y: nextY };
-        applyTransform(nextX, nextY);
-        inertiaRAF.current = requestAnimationFrame(step);
-      };
-      stopInertia();
-      inertiaRAF.current = requestAnimationFrame(step);
-    },
-    [dragDampening, maxVerticalRotationDeg, stopInertia],
-  );
-
-  useGesture(
-    {
-      onDragStart: ({ event }) => {
-        stopInertia();
-        const evt = event as PointerEvent;
-        if ((evt.pointerType as string) === "touch") evt.preventDefault();
-        draggingRef.current = true;
-        movedRef.current = false;
-        startRotRef.current = { ...rotationRef.current };
-        startPosRef.current = { x: evt.clientX, y: evt.clientY };
-        // Track which movie was tapped
-        const el = (evt.target as Element).closest?.("[data-movie-idx]") as HTMLElement | null;
-        tapTargetRef.current = el;
-        tapMovieIdxRef.current = el ? parseInt(el.dataset.movieIdx || "-1", 10) : -1;
-      },
-      onDrag: ({ event, last, velocity: velArr = [0, 0], direction: dirArr = [0, 0], movement }) => {
-        if (!draggingRef.current || !startPosRef.current) return;
-        const evt = event as PointerEvent;
-        if ((evt.pointerType as string) === "touch") evt.preventDefault();
-
-        const dxTotal = evt.clientX - startPosRef.current.x;
-        const dyTotal = evt.clientY - startPosRef.current.y;
-        if (!movedRef.current) {
-          const dist2 = dxTotal * dxTotal + dyTotal * dyTotal;
-          if (dist2 > 16) movedRef.current = true;
-        }
-
-        const nextX = clamp(
-          startRotRef.current.x - dyTotal / dragSensitivity,
-          -maxVerticalRotationDeg,
-          maxVerticalRotationDeg,
-        );
-        const nextY = startRotRef.current.y + dxTotal / dragSensitivity;
-        const cur = rotationRef.current;
-        if (cur.x !== nextX || cur.y !== nextY) {
-          rotationRef.current = { x: nextX, y: nextY };
-          applyTransform(nextX, nextY);
-        }
-
-        if (last) {
-          draggingRef.current = false;
-          let isTap = false;
-          if (startPosRef.current) {
-            const dx = evt.clientX - startPosRef.current.x;
-            const dy = evt.clientY - startPosRef.current.y;
-            const dist2 = dx * dx + dy * dy;
-            const TAP_THRESH_PX = (evt.pointerType as string) === "touch" ? 10 : 6;
-            if (dist2 <= TAP_THRESH_PX * TAP_THRESH_PX) isTap = true;
-          }
-
-          let [vMagX, vMagY] = velArr;
-          const [dirX, dirY] = dirArr;
-          let vx = vMagX * dirX;
-          let vy = vMagY * dirY;
-
-          if (!isTap && Math.abs(vx) < 0.001 && Math.abs(vy) < 0.001 && Array.isArray(movement)) {
-            const [mx, my] = movement;
-            vx = (mx / dragSensitivity) * 0.02;
-            vy = (my / dragSensitivity) * 0.02;
-          }
-
-          if (!isTap && (Math.abs(vx) > 0.005 || Math.abs(vy) > 0.005)) {
-            startInertia(vx, vy);
-          }
-
-          startPosRef.current = null;
-
-          // Handle tap → open movie detail
-          if (isTap && tapMovieIdxRef.current >= 0 && tapMovieIdxRef.current < movies.length) {
-            onMovieClick(movies[tapMovieIdxRef.current]);
-          }
-          tapTargetRef.current = null;
-          tapMovieIdxRef.current = -1;
-          movedRef.current = false;
-        }
-      },
-    },
-    { target: mainRef, eventOptions: { passive: false } },
-  );
-
-  const cssStyles = `
-    .dg-root {
-      --radius: 520px;
-      --circ: calc(var(--radius) * 3.1416);
-      --rot-y: calc(360deg / var(--segments-x) / 2);
-      --rot-x: calc(360deg / var(--segments-y) / 2);
-      --item-width: calc(var(--circ) / var(--segments-x));
-      --item-height: calc(var(--circ) / var(--segments-y));
-    }
-    .dg-root * { box-sizing: border-box; }
-    .dg-sphere, .dg-item, .dg-item__image { transform-style: preserve-3d; }
-    .dg-stage {
-      perspective: calc(var(--radius) * 2.2);
-      perspective-origin: 50% 50%;
-    }
-    .dg-sphere {
-      transform: translateZ(calc(var(--radius) * -1));
-      will-change: transform;
-    }
-    .dg-item {
-      width: calc(var(--item-width) * var(--item-size-x));
-      height: calc(var(--item-height) * var(--item-size-y));
-      position: absolute;
-      top: -999px; bottom: -999px; left: -999px; right: -999px;
-      margin: auto;
-      transform-origin: 50% 50%;
-      backface-visibility: hidden;
-      transform: rotateY(calc(var(--rot-y) * (var(--offset-x) + ((var(--item-size-x) - 1) / 2)) + var(--rot-y-delta, 0deg)))
-                 rotateX(calc(var(--rot-x) * (var(--offset-y) - ((var(--item-size-y) - 1) / 2)) + var(--rot-x-delta, 0deg)))
-                 translateZ(var(--radius));
-    }
-    .dg-item__image {
-      position: absolute;
-      inset: 8px;
-      border-radius: 12px;
-      overflow: hidden;
-      cursor: pointer;
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-      transition: transform 200ms ease, box-shadow 200ms ease;
-      pointer-events: auto;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
-    }
-    .dg-item__image:hover {
-      transform: translateZ(0) scale(1.08);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
-    .dg-item__overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 50%);
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      padding: 10px;
-      opacity: 0;
-      transition: opacity 250ms ease;
-      border-radius: inherit;
-    }
-    .dg-item__image:hover .dg-item__overlay,
-    .dg-item__overlay--visible {
-      opacity: 1;
-    }
-    .dg-rank {
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      width: 24px;
-      height: 24px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 800;
-      color: #fff;
-      z-index: 2;
-      pointer-events: none;
-    }
-    .dg-rank.top1 { background: linear-gradient(135deg, #f59e0b, #eab308); }
-    .dg-rank.top2 { background: linear-gradient(135deg, #94a3b8, #cbd5e1); }
-    .dg-rank.top3 { background: linear-gradient(135deg, #b45309, #d97706); }
-    .dg-rank.default { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.6); }
-  `;
+  if (masonryItems.length === 0) return null;
 
   return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: cssStyles }} />
-      <div
-        ref={rootRef}
-        className="dg-root relative w-full select-none"
-        style={{ height, touchAction: "none" }}
-      >
-        <main
-          ref={mainRef}
-          className="absolute inset-0 grid place-items-center overflow-hidden bg-transparent"
-          style={{ touchAction: "none", WebkitUserSelect: "none" }}
-        >
-
-          {/* Stage container */}
-          <div className="dg-stage absolute inset-0 grid place-items-center">
-            <div ref={sphereRef} className="dg-sphere">
-              {items.map((it, i) => {
-                const movie = movies[it.movieIdx];
-                const rank = movie ? it.movieIdx + 1 : 0;
-                const rankClass = rank === 1 ? "top1" : rank === 2 ? "top2" : rank === 3 ? "top3" : "default";
-
-                return (
-                  <div
-                    key={`${it.x},${it.y},${i}`}
-                    className="dg-item"
-                    data-movie-idx={it.movieIdx}
-                    data-offset-x={it.x}
-                    data-offset-y={it.y}
-                    data-size-x={it.sizeX}
-                    data-size-y={it.sizeY}
-                    style={{
-                      "--offset-x": it.x,
-                      "--offset-y": it.y,
-                      "--item-size-x": it.sizeX,
-                      "--item-size-y": it.sizeY,
-                      top: "-999px",
-                      bottom: "-999px",
-                      left: "-999px",
-                      right: "-999px",
-                    } as React.CSSProperties}
-                  >
-                    <div className="dg-item__image relative">
-                      {/* Rank badge */}
-                      <div className={`dg-rank ${rankClass}`}>
-                        {rank}
-                      </div>
-
-                      {/* Poster image */}
-                      {it.src ? (
-                        <img
-                          src={it.src}
-                          alt={it.alt}
-                          draggable={false}
-                          className="w-full h-full object-cover pointer-events-none"
-                          style={{ backfaceVisibility: "hidden" }}
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-muted/30" />
-                      )}
-
-                      {/* Hover overlay with movie info */}
-                      <div className="dg-item__overlay">
-                        {movie && (
-                          <>
-                            <p className="text-white text-[10px] font-semibold leading-tight line-clamp-2 drop-shadow-sm">
-                              {movie.title}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[9px] text-amber font-bold tabular-nums">
-                                ★ {movie.rating.toFixed(1)}
-                              </span>
-                              {movie.year && (
-                                <span className="text-[9px] text-white/60 tabular-nums">
-                                  {movie.year}
-                                </span>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </main>
-      </div>
-    </>
+    <div
+      style={{
+        height,
+        width: "100%",
+        opacity: mounted ? 1 : 0,
+        transition: "opacity 0.3s ease",
+        touchAction: "manipulation",
+      }}
+    >
+      <Masonry
+        items={masonryItems}
+        renderItem={renderItem}
+        onItemClick={(item) => {
+          const movie = (item.data || {}) as MovieItem;
+          onMovieClick(movie);
+        }}
+        aspectRatio={2 / 3}
+        animateFrom={isMobile ? "bottom" : "bottom"}
+        stagger={0.08}
+        ease="power3.out"
+        blurToFocus={!isMobile}
+        scaleOnHover={false}
+        colorShiftOnHover={false}
+      />
+    </div>
   );
 }

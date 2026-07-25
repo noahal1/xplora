@@ -59,6 +59,7 @@ class WishlistItem(SQLModel):
     title: str = Field(description="Media title")
     year: Optional[int] = Field(None, description="Release year")
     genre: Optional[str] = Field(None, description="Genre(s)")
+    tmdb_id: Optional[str] = Field(None, description="TMDB ID for dedup matching")
 
 
 class WishlistData(SQLModel):

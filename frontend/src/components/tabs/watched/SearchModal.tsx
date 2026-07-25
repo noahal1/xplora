@@ -79,7 +79,7 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
     if (addingSearchIds.has(key)) return;
     setAddingSearchIds((prev) => new Set(prev).add(key));
     try {
-      await api.addWatchedMedia({ title: result.title, year: result.year, genre: result.genre || null });
+      await api.addWatchedMedia({ title: result.title, year: result.year, genre: result.genre || null, tmdb_id: result.source === "tmdb" ? result.source_id : null });
       showToast(t("watched.added", { title: result.title }), "success");
       startPolling();
       onAddSuccess();

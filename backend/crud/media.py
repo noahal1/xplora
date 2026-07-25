@@ -298,6 +298,43 @@ def get_media_titles(user_id: int, db: Optional[Session] = None) -> list[str]:
             session.close()
 
 
+def get_media_by_title(
+    title: str,
+    user_id: int,
+    tmdb_id: Optional[str] = None,
+    db: Optional[Session] = None,
+) -> Optional[MediaItemRecord]:
+    """Find a media item for a user, prioritizing TMDB ID match over title match.
+
+    1. If ``tmdb_id`` is provided and a record with that ``tmdb_id`` exists,
+       returns that record (exact match, regardless of title).
+    2. Falls back to case-insensitive title match.
+    """
+    session, close_db = _resolve_db(db)
+    try:
+        # 1. Try TMDB ID first (most reliable)
+        if tmdb_id:
+            record = session.exec(
+                select(MediaItemRecord).where(
+                    MediaItemRecord.user_id == user_id,
+                    MediaItemRecord.tmdb_id == tmdb_id,
+                )
+            ).first()
+            if record:
+                return record
+
+        # 2. Fall back to exact title match (case-insensitive)
+        return session.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.title.ilike(title),
+            )
+        ).first()
+    finally:
+        if close_db:
+            session.close()
+
+
 def get_media_for_user(media_id: int, user_id: int, db: Optional[Session] = None) -> Optional[MediaItemRecord]:
     """Get a media item by ID, ensuring it belongs to the user."""
     session, close_db = _resolve_db(db)

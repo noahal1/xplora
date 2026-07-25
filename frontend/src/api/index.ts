@@ -37,7 +37,7 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 /** Add a single watched media item */
 export async function addWatchedMedia(
-  item: { title: string; year?: number | null; genre?: string | null }
+  item: { title: string; year?: number | null; genre?: string | null; tmdb_id?: string | null }
 ): Promise<MediaDetail> {
   return fetchJSON(`${API_BASE}/media`, {
     method: "POST",
