@@ -332,6 +332,7 @@ def mark_media_as_watched(
             return None
         record.status = "watched"
         record.rating = max(0.0, min(10.0, rating))
+        record.created_at = datetime.now(timezone.utc)
         session.commit()
         # Explicit refresh is intentionally omitted. After commit() the
         # instance is expired but remains in the session identity map.

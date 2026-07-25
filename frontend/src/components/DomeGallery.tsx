@@ -71,12 +71,12 @@ function buildItems(
 export default function DomeGallery({
   movies,
   onMovieClick,
-  height = "520px",
+  height = "560px",
   fit = 0.5,
   minRadius = 360,
   maxVerticalRotationDeg = 5,
   dragSensitivity = 20,
-  segments = 25,
+  segments = 35,
   dragDampening = 2,
 }: DomeGalleryProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -107,7 +107,7 @@ export default function DomeGallery({
       const cr = entries[0].contentRect;
       const w = Math.max(1, cr.width), h = Math.max(1, cr.height);
       const minDim = Math.min(w, h);
-      let radius = minDim * fit;
+      let radius = minDim * fist;
       radius = clamp(radius, minRadius, Infinity);
       root.style.setProperty("--radius", `${Math.round(radius)}px`);
       root.style.setProperty("--segments-x", String(segments));
@@ -344,13 +344,6 @@ export default function DomeGallery({
           className="absolute inset-0 grid place-items-center overflow-hidden bg-transparent"
           style={{ touchAction: "none", WebkitUserSelect: "none" }}
         >
-          {/* Backdrop vignette */}
-          <div
-            className="absolute inset-0 pointer-events-none z-[2]"
-            style={{
-              background: "radial-gradient(circle at center, transparent 50%, rgba(0,0,0,0.5) 100%)",
-            }}
-          />
 
           {/* Stage container */}
           <div className="dg-stage absolute inset-0 grid place-items-center">
@@ -426,20 +419,6 @@ export default function DomeGallery({
               })}
             </div>
           </div>
-
-          {/* Edge gradient fades */}
-          <div
-            className="absolute left-0 right-0 top-0 h-[100px] z-[5] pointer-events-none"
-            style={{
-              background: "linear-gradient(to bottom, var(--bg-body, #0f0f13), transparent)",
-            }}
-          />
-          <div
-            className="absolute left-0 right-0 bottom-0 h-[100px] z-[5] pointer-events-none"
-            style={{
-              background: "linear-gradient(to top, var(--bg-body, #0f0f13), transparent)",
-            }}
-          />
         </main>
       </div>
     </>
