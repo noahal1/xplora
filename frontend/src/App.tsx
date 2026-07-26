@@ -127,7 +127,7 @@ function MainApp() {
         </div>
 
         {/* Full-width Footer */}
-        <div className="w-full mt-8 sm:mt-10 border-t border-border-subtle">
+        <div className="w-full mt-4 sm:mt-6 border-t border-border-subtle">
           <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
             <Footer />
           </div>

@@ -329,143 +329,149 @@ export function TopRatedTab() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* ── Header ─────────────────────────────────── */}
-      <FadeContent className="section-card" style={{ position: "relative", zIndex: 1 }}>
-        <div className="section-header">
-          <div className="flex items-center gap-2">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #f59e0b, #eab308)" }}
-            >
-              <Trophy size={14} className="text-white" />
-            </div>
-            <h2 className="section-title">Top 排行榜</h2>
+      <div
+        className="flex items-center justify-between gap-3 mb-3 sm:mb-5 animate-slide-down"
+        style={{ position: "relative", zIndex: 1 }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: "linear-gradient(135deg, #f59e0b, #eab308)" }}
+          >
+            <Trophy size={15} className="text-white" />
           </div>
-          <div className="flex items-center gap-1 sm:gap-2">
-            {saving && <span className="text-[10px] animate-pulse opacity-40">保存中...</span>}
-            {editMode && (
-              <span className="text-[10px] opacity-40 hidden sm:inline">拖拽或点击上下箭头排序</span>
-            )}
-
-            {/* Gallery/List toggle (non-edit) */}
-            {!editMode && movies.length > 0 && (
-              <button
-                className="btn btn-ghost btn-xs"
-                onClick={toggleGalleryMode}
-                title={galleryMode ? "列表视图" : "画廊视图"}
-              >
-                {galleryMode ? <List size={13} /> : <LayoutGrid size={13} />}
-                <span className="ml-1 text-[10px] sm:text-xs">{galleryMode ? "列表" : "画廊"}</span>
-              </button>
-            )}
-
-            {/* Add button */}
-            <div className="relative" ref={searchRef}>
-              <button
-                className="btn btn-ghost btn-xs"
-                onClick={() => { setShowAddModal(!showAddModal); setSearchQuery(""); }}
-                title="搜索添加"
-              >
-                <Plus size={13} />
-                <span className="hidden sm:inline ml-0.5">添加</span>
-              </button>
-
-              {/* Search dropdown */}
-              {showAddModal && (
-                <div
-                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-xl shadow-xl z-50 overflow-hidden bg-popover border border-border transition-none"
-                >
-                  <div className="p-2 border-b" style={{ borderColor: "var(--border-default)" }}>
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-bg-input">
-                      <Search size={13} className="opacity-40 shrink-0" />
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="搜索已看的电影/剧集..."
-                        className="flex-1 bg-transparent outline-none text-xs"
-                        autoFocus
-                      />
-                      {searchQuery && (
-                        <button onClick={() => setSearchQuery("")} className="opacity-30 hover:opacity-60">
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {searching && (
-                      <div className="flex items-center justify-center py-6">
-                        <RefreshCw size={14} className="animate-spin opacity-30" />
-                      </div>
-                    )}
-                    {!searching && searchQuery && searchResults.length === 0 && (
-                      <div className="text-center py-6 text-[11px] opacity-30">
-                        没有找到可添加的条目
-                      </div>
-                    )}
-                    {!searching && !searchQuery && (
-                      <div className="text-center py-6 text-[11px] opacity-30">
-                        输入关键词搜索已看的媒体
-                      </div>
-                    )}
-                    {searchResults.map((item) => (
-                      <button
-                        key={item.id}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-accent/20 transition-colors text-left"
-                        onClick={() => handleAdd(item.id, item.title)}
-                        disabled={adding === item.id}
-                      >
-                        {item.poster_url ? (
-                          <img
-                            src={item.poster_url}
-                            alt=""
-                            className="w-6 h-8 rounded object-cover shrink-0"
-                          />
-                        ) : (
-                          <div className="w-6 h-8 rounded flex items-center justify-center shrink-0 bg-bg-input">
-                            <Film size={10} className="opacity-20" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium truncate">{item.title}</div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            {item.rating > 0 && (
-                              <span className="flex items-center gap-0.5 text-[10px] opacity-50">
-                                <Star size={8} fill="currentColor" /> {item.rating.toFixed(1)}
-                              </span>
-                            )}
-                            {item.year && <span className="text-[10px] opacity-30">{item.year}</span>}
-                          </div>
-                        </div>
-                        <span className="text-[10px] opacity-30 shrink-0">
-                          {adding === item.id ? "添加中..." : "+ 添加"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              className={`btn btn-xs ${editMode ? "btn-primary" : "btn-ghost"}`}
-              onClick={toggleEditMode}
-              title={editMode ? "完成排序" : "编辑排序"}
-            >
-              {editMode ? (
-                <><Check size={12} /><span className="hidden sm:inline ml-1">完成</span></>
-              ) : (
-                <><Pencil size={12} /><span className="hidden sm:inline ml-1">排序</span></>
-              )}
-            </button>
-            <button className="btn btn-ghost btn-xs" onClick={loadData} title="刷新">
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                <path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-              </svg>
-            </button>
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold leading-tight">Top 排行榜</h2>
+            <p className="text-[11px] text-muted-foreground/60 leading-none mt-0.5 hidden sm:block">
+              你的个人电影榜单
+            </p>
           </div>
         </div>
-      </FadeContent>
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {saving && <span className="text-[10px] animate-pulse opacity-40">保存中...</span>}
+          {editMode && (
+            <span className="text-[10px] opacity-40 hidden sm:inline">拖拽或点击上下箭头排序</span>
+          )}
+
+          {/* Gallery/List toggle (non-edit) */}
+          {!editMode && movies.length > 0 && (
+            <button
+              className="btn btn-ghost btn-xs"
+              onClick={toggleGalleryMode}
+              title={galleryMode ? "列表视图" : "画廊视图"}
+            >
+              {galleryMode ? <List size={13} /> : <LayoutGrid size={13} />}
+              <span className="ml-1 text-[10px] sm:text-xs">{galleryMode ? "列表" : "画廊"}</span>
+            </button>
+          )}
+
+          {/* Add button */}
+          <div className="relative" ref={searchRef}>
+            <button
+              className="btn btn-ghost btn-xs"
+              onClick={() => { setShowAddModal(!showAddModal); setSearchQuery(""); }}
+              title="搜索添加"
+            >
+              <Plus size={13} />
+              <span className="hidden sm:inline ml-0.5">添加</span>
+            </button>
+
+            {/* Search dropdown */}
+            {showAddModal && (
+              <div
+                className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-xl shadow-xl z-50 overflow-hidden bg-popover border border-border transition-none"
+              >
+                <div className="p-2 border-b" style={{ borderColor: "var(--border-default)" }}>
+                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-bg-input">
+                    <Search size={13} className="opacity-40 shrink-0" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="搜索已看的电影/剧集..."
+                      className="flex-1 bg-transparent outline-none text-xs"
+                      autoFocus
+                    />
+                    {searchQuery && (
+                      <button onClick={() => setSearchQuery("")} className="opacity-30 hover:opacity-60">
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {searching && (
+                    <div className="flex items-center justify-center py-6">
+                      <RefreshCw size={14} className="animate-spin opacity-30" />
+                    </div>
+                  )}
+                  {!searching && searchQuery && searchResults.length === 0 && (
+                    <div className="text-center py-6 text-[11px] opacity-30">
+                      没有找到可添加的条目
+                    </div>
+                  )}
+                  {!searching && !searchQuery && (
+                    <div className="text-center py-6 text-[11px] opacity-30">
+                      输入关键词搜索已看的媒体
+                    </div>
+                  )}
+                  {searchResults.map((item) => (
+                    <button
+                      key={item.id}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-accent/20 transition-colors text-left"
+                      onClick={() => handleAdd(item.id, item.title)}
+                      disabled={adding === item.id}
+                    >
+                      {item.poster_url ? (
+                        <img
+                          src={item.poster_url}
+                          alt=""
+                          className="w-6 h-8 rounded object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-6 h-8 rounded flex items-center justify-center shrink-0 bg-bg-input">
+                          <Film size={10} className="opacity-20" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">{item.title}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {item.rating > 0 && (
+                            <span className="flex items-center gap-0.5 text-[10px] opacity-50">
+                              <Star size={8} fill="currentColor" /> {item.rating.toFixed(1)}
+                            </span>
+                          )}
+                          {item.year && <span className="text-[10px] opacity-30">{item.year}</span>}
+                        </div>
+                      </div>
+                      <span className="text-[10px] opacity-30 shrink-0">
+                        {adding === item.id ? "添加中..." : "+ 添加"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            className={`btn btn-xs ${editMode ? "btn-primary" : "btn-ghost"}`}
+            onClick={toggleEditMode}
+            title={editMode ? "完成排序" : "编辑排序"}
+          >
+            {editMode ? (
+              <><Check size={12} /><span className="hidden sm:inline ml-1">完成</span></>
+            ) : (
+              <><Pencil size={12} /><span className="hidden sm:inline ml-1">排序</span></>
+            )}
+          </button>
+          <button className="btn btn-ghost btn-xs" onClick={loadData} title="刷新">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+              <path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {/* ── Empty State ─────────────────────────────── */}
       {movies.length === 0 && (
@@ -537,7 +543,6 @@ export function TopRatedTab() {
           <DomeGallery
             movies={movies}
             onMovieClick={(m) => setDetailMovie(m)}
-            height="min(70vh, 620px)"
           />
         </div>
       )}

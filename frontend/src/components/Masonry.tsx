@@ -163,7 +163,7 @@ export default function Masonry({
   const grid = useMemo<GridItem[]>(() => {
     if (!width) return [];
     const colHeights = new Array(columns).fill(0);
-    const gap = 16;
+    const gap = 8;
     const totalGaps = (columns - 1) * gap;
     const columnWidth = (width - totalGaps) / columns;
 
@@ -187,6 +187,14 @@ export default function Masonry({
       return { ...child, x, y, w: columnWidth, h };
     });
   }, [columns, items, width, aspectRatio]);
+
+  // Auto-height: compute the total content height from grid positions so the
+  // container grows to show all items without needing scroll.
+  const totalHeight = useMemo(() => {
+    if (grid.length === 0) return 0;
+    const maxBottom = Math.max(...grid.map((item) => item.y + item.h));
+    return maxBottom + 8; // 8px bottom padding
+  }, [grid]);
 
   const hasMounted = useRef(false);
 
@@ -280,7 +288,7 @@ export default function Masonry({
     );
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-y-auto">
+    <div ref={containerRef} className="relative w-full" style={{ height: totalHeight || 'auto' }}>
       {grid.map((item, idx) => (
         <div
           key={item.id}

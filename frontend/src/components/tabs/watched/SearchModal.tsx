@@ -109,7 +109,7 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
           />
 
           {/* Media type filter pills */}
-          <div className="flex items-center gap-1.5 mb-1">
+          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <span className="text-[11px] text-muted-foreground shrink-0">{t("manage.media_type")}</span>
             {[
               { value: "movie", label: t("manage.media_type_movie") },
@@ -141,9 +141,9 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
           </div>
           <button className="btn btn-primary btn-sm shrink-0 gap-1.5" onClick={() => { if (!searchingRef.current) handleSearch(); }} disabled={searchLoading || !externalQuery.trim()}>
             {searchLoading ? (
-              <><Loader2 size={13} className="animate-spin" />{t("manage.searching")}</>
+              <><Loader2 size={13} className="animate-spin" /><span className="hidden sm:inline">{t("manage.searching")}</span></>
             ) : (
-              <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>{t("common.search")}</>
+              <><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg><span className="hidden sm:inline">{t("common.search")}</span></>
             )}
           </button>
         </div>

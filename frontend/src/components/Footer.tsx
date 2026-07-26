@@ -5,7 +5,7 @@ export function Footer() {
   const { t } = useTranslation();
   return (
     <footer
-      className="py-6 sm:py-8 text-center space-y-3"
+      className="py-4 sm:py-5 text-center space-y-2"
     >
       <div className="text-fg-dim">
         <BlurText

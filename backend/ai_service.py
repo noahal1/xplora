@@ -18,7 +18,7 @@ from movie_search import search_movies as search_external_movies
 MODEL_CONFIGS = {
     "deepseek": {
         "api_base": "https://api.deepseek.com",
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "env_key": "DEEPSEEK_API_KEY",
     },
     "openai": {

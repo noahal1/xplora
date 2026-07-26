@@ -8,8 +8,6 @@ type MovieItem = { id: number; title: string; poster_url?: string; rating: numbe
 interface DomeGalleryProps {
   movies: MovieItem[];
   onMovieClick: (movie: MovieItem) => void;
-  /** Height of the gallery container */
-  height?: string;
 }
 
 // ── Rank badge helpers
@@ -25,7 +23,6 @@ const rankBadgeText = (rank: number) => (rank <= 3 ? "#fff" : "var(--fg-secondar
 export default function DomeGallery({
   movies,
   onMovieClick,
-  height = "520px",
 }: DomeGalleryProps) {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -46,11 +43,11 @@ export default function DomeGallery({
 
   // Build masonry items with height multipliers (relative to column width × aspect ratio).
   // Masonry uses aspectRatio to compute actual pixel heights, with `height` as a multiplier
-  // where 100 = base (1.0x), 150 = hero (1.5x), 85 = compact (0.85x), etc.
+  // where 100 = base (1.0x), 100 = hero (1.0x), 60 = compact (0.6x), etc.
   const masonryItems = useMemo<MasonryItem[]>(() => {
     return movies.map((m, i) => {
       const rank = i + 1;
-      const factor = rank === 1 ? 1.5 : rank % 3 === 0 ? 1.15 : rank % 3 === 1 ? 1.0 : 0.85;
+      const factor = rank === 1 ? 1.0 : rank % 3 === 0 ? 0.8 : rank % 3 === 1 ? 0.7 : 0.6;
       return {
         id: `m-${rank}`,
         height: Math.round(factor * 100),
@@ -112,8 +109,7 @@ export default function DomeGallery({
               <div
                 className={`absolute inset-0 bg-gradient-to-t from-black/88 via-black/30 to-transparent
                   flex flex-col justify-end ${isMobile ? "p-2" : "p-3"}
-                  transition-opacity duration-300
-                  ${isMobile ? "opacity-100" : "opacity-0 hover:opacity-100"}`}
+                  transition-opacity duration-300 opacity-100`}
               >
                 <span
                   className="text-white font-semibold leading-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]
@@ -160,7 +156,6 @@ export default function DomeGallery({
   return (
     <div
       style={{
-        height,
         width: "100%",
         opacity: mounted ? 1 : 0,
         transition: "opacity 0.3s ease",
