@@ -10,10 +10,8 @@ import { RatingSlider } from "../../shared/RatingSlider";
 import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized grid card — cinematic poster with overlay ─────── */
-export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
+export const MovieGridCard = memo(function MovieGridCard({ movie, onRemove, onSaveRating, onOpenDetail }: {
   movie: MediaDetail;
-  isSelected: boolean;
-  onToggle: (id: number) => void;
   onRemove: (id: number) => void;
   onSaveRating: (id: number, rating: number) => Promise<void>;
   onOpenDetail: (movie: MediaDetail) => void;
@@ -29,11 +27,7 @@ export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, on
   });
 
   return (
-    <div className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 bg-bg-card border border-border ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
-      {/* Checkbox — always visible on mobile, hover on desktop */}
-      <input type="checkbox"
-        className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer opacity-0 group-hover:opacity-100 max-sm:opacity-100 transition-opacity duration-200"
-        checked={isSelected} onChange={() => onToggle(movie.id)} />
+    <div className="group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 bg-bg-card border border-border">
       {/* Delete button — always visible on mobile, hover on desktop */}
       <button
         className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 sm:w-6 sm:h-6 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 max-sm:opacity-100 hover:bg-red-500/80 hover:text-white transition-all duration-200 backdrop-blur-sm"
@@ -60,15 +54,15 @@ export const MovieGridCard = memo(function MovieGridCard({ movie, isSelected, on
               <div className="relative w-full h-full">
                 {/* Gradient overlay for text readability */}
                 <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
-                {/* Year badge top-left (offset right to avoid checkbox overlap) */}
+                {/* Year badge top-left */}
                 {movie.year && (
-                  <div className="absolute top-2 left-8 z-10">
+                  <div className="absolute top-2 left-2 z-10">
                     <span className="text-[10px] font-semibold text-white bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md">{movie.year}</span>
                   </div>
                 )}
                 {/* TV badge */}
                 {movie.media_type === "tv" && (
-                  <div className="absolute top-2 left-8 z-10" style={{ marginTop: movie.year ? '18px' : '0' }}>
+                  <div className="absolute top-2 left-2 z-10" style={{ marginTop: movie.year ? '18px' : '0' }}>
                     <Badge className="text-[9px] text-sky-200 border-sky-400/40 bg-sky-500/20 backdrop-blur-sm">TV</Badge>
                   </div>
                 )}

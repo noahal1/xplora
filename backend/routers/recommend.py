@@ -36,65 +36,160 @@ def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
     return [m.title for m in movies if m.title]
 
 
-def _get_all_excluded_tmdb_ids(db: Session, user_id: int) -> set[str]:
-    """Query all watched + wishlist TMDB IDs from DB in a single query.
+def _load_user_library(db: Session, user_id: int) -> dict:
+    """Load all watched + wishlist items in a single DB query.
 
-    Returns a set of TMDB IDs that the user already has in their
-    library.  Used for exact ID matching in the TMDB ID filtering
-    pass (``_filter_by_tmdb_id``).
+    Replaces the previous three separate queries:
+    ``_get_all_excluded_and_wishlist``,
+    ``_get_all_excluded_tmdb_ids``, and
+    ``_select_source_movies_by_genre``.
 
-    Items without a ``tmdb_id`` are skipped — they will fall back
-    to title-based fuzzy matching.
-    """
-    rows = db.exec(
-        select(MediaItemRecord.tmdb_id).where(
-            MediaItemRecord.status.in_(["watched", "wish"]),
-            MediaItemRecord.user_id == user_id,
-            MediaItemRecord.tmdb_id.isnot(None),
-        )
-    ).all()
-    return {str(r) for r in rows if r}
-
-
-def _get_all_excluded_and_wishlist(db: Session, user_id: int) -> tuple[list[str], set[str]]:
-    """Query ALL watched + wishlist titles from the DB in a single query.
-
-    Returns a tuple:
-        (excluded_titles, wishlist_titles)
-
-    - excluded_titles: deduplicated list of all watched + wishlist movie titles
-      that the AI should exclude from recommendations.
-    - wishlist_titles: set of JUST wishlist titles for feedback analysis.
-
-    Unlike ``_extract_watched_titles`` which only returns titles from the
-    request payload (may be filtered by genre/media_type), this queries
-    every item so the exclusion list is complete.
-
-    NOTE: This query is intentionally genre-agnostic — it excludes ALL
-    watched/wishlisted movies regardless of the recommendation strategy.
-    The genre/media_type filter on the frontend only affects the taste
-    analysis (which movies the AI sees as examples), NOT the exclusion.
+    Returns a dict with:
+      - excluded_titles: list[str] — deduplicated titles for AI exclusion
+      - wishlist_titles: set[str] — just wishlist titles for feedback
+      - excluded_tmdb_ids: set[str] — all TMDB IDs for exact-match filtering
+      - watched_with_tmdb: list — watched records with tmdb_id, sorted by
+        rating desc, for genre-balanced source movie selection
     """
     rows = db.exec(
         select(MediaItemRecord).where(
             MediaItemRecord.status.in_(["watched", "wish"]),
             MediaItemRecord.user_id == user_id,
-        )
+        ).order_by(MediaItemRecord.rating.desc())
     ).all()
-    # Deduplicate by title (user could theoretically have same title in both lists)
-    seen: set[str] = set()
-    excluded: list[str] = []
-    wishlist: set[str] = set()
+
+    excluded_titles: list[str] = []
+    wishlist_titles: set[str] = set()
+    excluded_tmdb_ids: set[str] = set()
+    watched_with_tmdb: list = []
+
+    seen_titles: set[str] = set()
+
     for item in rows:
-        if item.title and item.title not in seen:
-            seen.add(item.title)
-            excluded.append(item.title)
+        # Titles for exclusion (dedup by title across both lists)
+        if item.title and item.title not in seen_titles:
+            seen_titles.add(item.title)
+            excluded_titles.append(item.title)
             if item.status == "wish":
-                wishlist.add(item.title)
-    return excluded, wishlist
+                wishlist_titles.add(item.title)
+
+        # TMDB IDs for exact-match filtering (from both watched and wishlist)
+        if item.tmdb_id:
+            excluded_tmdb_ids.add(str(item.tmdb_id))
+
+        # Watched + tmdb_id records for genre-balanced source movie selection
+        if item.status == "watched" and item.tmdb_id:
+            watched_with_tmdb.append(item)
+
+    return {
+        "excluded_titles": excluded_titles,
+        "wishlist_titles": wishlist_titles,
+        "excluded_tmdb_ids": excluded_tmdb_ids,
+        "watched_with_tmdb": watched_with_tmdb,
+    }
 
 
-def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str] | None = None) -> dict:
+def _select_source_movies_by_genre(
+    watched_with_tmdb: list,
+    max_total: int = 15,
+) -> list[str]:
+    """Select source movies for TMDB candidate pool using balanced genre grouping.
+
+    Takes an already-queried list of watched MediaItemRecords (with tmdb_id)
+    and distributes the ``max_total`` slots as evenly as possible across all
+    genres.  Each genre gets ``floor(max_total / num_genres)`` or ``ceil`` for
+    the first few genres.  If a genre has fewer movies than its allocation,
+    the slack is redistributed to other genres.
+
+    The input list should be pre-sorted by rating descending (done by
+    ``_load_user_library``).
+
+    Returns a list of TMDB ID strings.
+    """
+    from collections import defaultdict
+    genre_groups: dict[str, list] = defaultdict(list)
+    no_genre: list = []
+
+    for m in watched_with_tmdb:
+        if m.genre:
+            primary = m.genre.split(" / ")[0].strip()
+            genre_groups[primary].append(m)
+        else:
+            no_genre.append(m)
+
+    selected: list[str] = []
+    seen_ids: set[str] = set()
+
+    genres = sorted(genre_groups.keys())
+    if not genres:
+        # No genre data — just take top max_total
+        for m in watched_with_tmdb[:max_total]:
+            tid = str(m.tmdb_id)
+            if tid not in seen_ids:
+                seen_ids.add(tid)
+                selected.append(tid)
+        return selected
+
+    # ── Distribute slots evenly across genres ────────────────────────
+    num_genres = len(genres)
+    base = max_total // num_genres          # floor per genre
+    remainder = max_total - base * num_genres  # extra 1-topping genres
+
+    # First pass: take each genre's fair share
+    for idx, g in enumerate(genres):
+        allocation = base + (1 if idx < remainder else 0)
+        taken = 0
+        for m in genre_groups[g]:
+            if taken >= allocation:
+                break
+            tid = str(m.tmdb_id)
+            if tid not in seen_ids:
+                seen_ids.add(tid)
+                selected.append(tid)
+                taken += 1
+
+    # Second pass: redistribute leftover slots from genres that had
+    # fewer movies than their allocation
+    if len(selected) < max_total:
+        for g in genres:
+            if len(selected) >= max_total:
+                break
+            for m in genre_groups[g]:
+                if len(selected) >= max_total:
+                    break
+                tid = str(m.tmdb_id)
+                if tid not in seen_ids:
+                    seen_ids.add(tid)
+                    selected.append(tid)
+
+    # Fill remaining slots with movies that have no genre
+    if len(selected) < max_total:
+        for m in no_genre:
+            tid = str(m.tmdb_id)
+            if tid not in seen_ids:
+                seen_ids.add(tid)
+                selected.append(tid)
+                if len(selected) >= max_total:
+                    break
+
+    # Still not enough? Take any remaining high-rated movies
+    if len(selected) < max_total:
+        for m in watched_with_tmdb:
+            tid = str(m.tmdb_id)
+            if tid not in seen_ids:
+                seen_ids.add(tid)
+                selected.append(tid)
+                if len(selected) >= max_total:
+                    break
+
+    return selected
+
+
+def _build_previous_feedback(
+    db: Session, user_id: int,
+    wishlist_titles: set[str] | None = None,
+    excluded_titles: Optional[list[str]] = None,
+) -> dict:
     """Build feedback from past recommendation sessions.
 
     Cross-references past AI recommendations with the user's current
@@ -104,9 +199,15 @@ def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str
     When ``wishlist_titles`` is provided, reuses the already-queried set
     instead of making a separate DB query.
 
+    When ``excluded_titles`` is provided, ``hard_ignore_titles`` are
+    further filtered to remove any titles already on the exclusion list
+    (watched or wishlisted).
+
     Returns a dict with:
         liked_titles: list[str] — recommendations the user appreciated
         ignored_titles: list[str] — recommendations the user didn't act on
+        hard_ignore_titles: list[str] — titles to HARD-exclude from future
+          recommendations (not in excluded_titles, not in wishlist)
     """
     if wishlist_titles is None:
         rows = db.exec(
@@ -120,13 +221,26 @@ def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str
     # Get last 5 sessions (most recent first)
     past_sessions, _ = db_get_sessions(user_id, page=0, page_size=5, db=db)
     if not past_sessions:
-        return {"liked_titles": [], "ignored_titles": []}
+        return {
+            "liked_titles": [],
+            "ignored_titles": [],
+            "hard_ignore_titles": [],
+        }
 
     from scraper.match import normalize, title_similarity
 
     liked: list[str] = []
     ignored: list[str] = []
+    hard_ignore: list[str] = []
     seen: set[str] = set()
+    excluded_set = {normalize(t) for t in (excluded_titles or []) if t}
+
+    def _is_already_excluded(title: str) -> bool:
+        """Check if a recommendation title is already in the user's watched/wishlist."""
+        if not excluded_set:
+            return False
+        from scraper.match import title_similarity
+        return any(title_similarity(title, ex) >= 0.70 for ex in excluded_set)
 
     for session in past_sessions:
         for rec in session.recommendations:
@@ -138,7 +252,6 @@ def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str
             seen.add(norm)
 
             # Check if this recommended title is now in the user's wishlist
-            # (fuzzy match against wishlist titles using proper title_similarity)
             is_in_wishlist = any(
                 title_similarity(rec.title, wt) >= 0.70
                 for wt in wishlist_titles
@@ -147,10 +260,14 @@ def _build_previous_feedback(db: Session, user_id: int, wishlist_titles: set[str
                 liked.append(rec.title)
             else:
                 ignored.append(rec.title)
+                # Also add to hard_exclude if not already watched/wishlisted
+                if not _is_already_excluded(rec.title):
+                    hard_ignore.append(rec.title)
 
     return {
         "liked_titles": liked,
         "ignored_titles": ignored,
+        "hard_ignore_titles": hard_ignore,
     }
 
 
@@ -303,22 +420,23 @@ async def recommend(
     api_key = get_api_key(request.model)
     try:
         service = AIService(api_key=api_key, model_type=request.model)
-        # Single DB query for all watched + wishlist titles + wishlist titles for feedback + TMDB IDs
-        all_excluded, wishlist_titles = _get_all_excluded_and_wishlist(db, current_user["id"])
-        excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
-        previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
+        # Single DB query: titles + TMDB IDs + source movies — all in one
+        library = _load_user_library(db, current_user["id"])
+        previous_feedback = _build_previous_feedback(
+            db, current_user["id"],
+            library["wishlist_titles"],
+            excluded_titles=library["excluded_titles"],
+        )
         taste_analysis = service._analyze_user_taste(movies)
 
-        # ── Query user's top-rated TMDB IDs for candidate pool ──
+        # ── Merge hard-ignored titles into exclusion list ────────────
+        # Titles from past sessions that the user ignored (didn't add to
+        # wishlist) get HARD-excluded so the AI won't re-recommend them.
+        excluded_titles = library["excluded_titles"] + previous_feedback["hard_ignore_titles"]
+
+        # ── Select source TMDB IDs (genre-diverse) for candidate pool ──
         strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
-        top_movies = db.exec(
-            select(MediaItemRecord).where(
-                MediaItemRecord.status == "watched",
-                MediaItemRecord.user_id == current_user["id"],
-                MediaItemRecord.tmdb_id.isnot(None),
-            ).order_by(MediaItemRecord.rating.desc()).limit(10)
-        ).all()
-        user_tmdb_ids = [str(m.tmdb_id) for m in top_movies if m.tmdb_id]
+        user_tmdb_ids = _select_source_movies_by_genre(library["watched_with_tmdb"])
         if user_tmdb_ids:
             if strategy_params_dict is None:
                 strategy_params_dict = {}
@@ -327,10 +445,10 @@ async def recommend(
         recommendations = service.get_recommendations(
             movies, request.count, request.strategy,
             strategy_params_dict,
-            watched_titles=all_excluded,
+            watched_titles=excluded_titles,
             taste_analysis=taste_analysis,
             previous_feedback=previous_feedback,
-            excluded_tmdb_ids=excluded_tmdb_ids,
+            excluded_tmdb_ids=library["excluded_tmdb_ids"],
         )
         # Auto-save recommendations to DB (same as the streaming endpoint does)
         if recommendations:
@@ -365,21 +483,20 @@ async def recommend_stream(
     """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
-    # Single DB query for all watched + wishlist titles + wishlist titles for feedback + TMDB IDs
-    all_excluded, wishlist_titles = _get_all_excluded_and_wishlist(db, current_user["id"])
-    excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
-    previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
+    # Single DB query: titles + TMDB IDs + source movies — all in one
+    library = _load_user_library(db, current_user["id"])
+    previous_feedback = _build_previous_feedback(
+        db, current_user["id"],
+        library["wishlist_titles"],
+        excluded_titles=library["excluded_titles"],
+    )
 
-    # ── Query user's top-rated TMDB IDs for candidate pool ──
+    # ── Merge hard-ignored titles into exclusion list ────────────────
+    excluded_titles = library["excluded_titles"] + previous_feedback["hard_ignore_titles"]
+
+    # ── Select source TMDB IDs (genre-diverse) for candidate pool ──
     strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
-    top_movies = db.exec(
-        select(MediaItemRecord).where(
-            MediaItemRecord.status == "watched",
-            MediaItemRecord.user_id == current_user["id"],
-            MediaItemRecord.tmdb_id.isnot(None),
-        ).order_by(MediaItemRecord.rating.desc()).limit(10)
-    ).all()
-    user_tmdb_ids = [str(m.tmdb_id) for m in top_movies if m.tmdb_id]
+    user_tmdb_ids = _select_source_movies_by_genre(library["watched_with_tmdb"])
     if user_tmdb_ids:
         if strategy_params_dict is None:
             strategy_params_dict = {}
@@ -390,9 +507,9 @@ async def recommend_stream(
             movies, request.count, request.model, api_key, current_user["id"],
             strategy=request.strategy,
             strategy_params=strategy_params_dict,
-            watched_titles=all_excluded,
+            watched_titles=excluded_titles,
             previous_feedback=previous_feedback,
-            excluded_tmdb_ids=excluded_tmdb_ids,
+            excluded_tmdb_ids=library["excluded_tmdb_ids"],
         ),
         media_type="text/event-stream",
         headers={
@@ -412,9 +529,8 @@ async def followup_stream(
     """SSE streaming endpoint for follow-up conversation. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
-    # Single DB query for all watched + wishlist titles + TMDB IDs
-    all_excluded, _ = _get_all_excluded_and_wishlist(db, current_user["id"])
-    excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
+    # Single DB query: titles + TMDB IDs — all in one
+    library = _load_user_library(db, current_user["id"])
     return StreamingResponse(
         _followup_stream_with_persistence(
             movies=movies,
@@ -422,8 +538,8 @@ async def followup_stream(
             model=request.model,
             api_key=api_key,
             user_id=current_user["id"],
-            watched_titles=all_excluded,
-            excluded_tmdb_ids=excluded_tmdb_ids,
+            watched_titles=library["excluded_titles"],
+            excluded_tmdb_ids=library["excluded_tmdb_ids"],
             previous_recommendations=request.previous_recommendations,
             conversation=request.conversation,
             question=request.question,

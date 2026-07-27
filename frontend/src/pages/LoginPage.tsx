@@ -17,6 +17,8 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [isExiting, setIsExiting] = useState(false);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
@@ -27,7 +29,9 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login(username.trim(), password);
-      navigate("/");
+      // Trigger exit animation before navigating
+      setIsExiting(true);
+      setTimeout(() => navigate("/"), 400);
     } catch (err) {
       setError(getErrMsg(err));
     } finally {
@@ -39,9 +43,9 @@ export function LoginPage() {
   const isLight = theme === "light";
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-page relative overflow-hidden">
-      {/* LineWaves background — amber waves (dark) / monochrome lines (light) */}
-      <div className={`absolute inset-0 z-0 ${isLight ? "opacity-20" : "opacity-45 max-sm:opacity-60"}`}>
+    <div className={`min-h-screen flex items-center justify-center px-4 bg-page relative overflow-hidden ${isExiting ? "animate-login-exit" : ""}`}>
+      {/* LineWaves background — fade out separately for smooth WebGL compositing */}
+      <div className={`absolute inset-0 z-0 transition-opacity duration-[350ms] ease-in ${isLight ? "opacity-20" : "opacity-45 max-sm:opacity-60"} ${isExiting ? "opacity-0" : ""}`}>
         <LineWaves
           speed={0.3}
           brightness={isLight ? 0.4 : 0.5}

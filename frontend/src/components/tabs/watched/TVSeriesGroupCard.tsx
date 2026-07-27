@@ -9,15 +9,11 @@ import { Badge } from "../../ui/badge";
 
 interface TVSeriesGroupCardProps {
   group: TVSeriesGroup;
-  isSelected: boolean;
-  onToggleGroup: (tvSeriesId: string) => void;
   onOpenDetail: (movie: MediaDetail) => void;
 }
 
 export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
   group,
-  isSelected,
-  onToggleGroup,
   onOpenDetail,
 }: TVSeriesGroupCardProps) {
   const { t } = useTranslation();
@@ -31,20 +27,7 @@ export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
       : formatSeasonLabel(group.seasons[0].season_number, t("season_specials"));
 
   return (
-    <div
-      className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 ${
-        isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-      }`}
-      className="bg-bg-card border border-border"
-    >
-      {/* Checkbox */}
-      <input
-        type="checkbox"
-        className="absolute top-2 left-2 z-20 w-4 h-4 accent-primary cursor-pointer opacity-0 group-hover:opacity-100 max-sm:opacity-100 transition-opacity duration-200"
-        checked={isSelected}
-        onChange={() => onToggleGroup(group.tvSeriesId)}
-      />
-
+    <div className="group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 bg-bg-card border border-border">
       {/* Poster with tilt */}
       <div
         className="aspect-[2/3] relative cursor-pointer overflow-hidden rounded-xl"
@@ -70,7 +53,7 @@ export const TVSeriesGroupCard = memo(function TVSeriesGroupCard({
                 <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none" />
 
                 {/* TV badge + season range */}
-                <div className="absolute top-2 left-8 z-10">
+                <div className="absolute top-2 left-2 z-10">
                   <Badge className="text-[9px] text-sky-200 border-sky-400/40 bg-sky-500/20 backdrop-blur-sm">
                     TV · {seasonRange}
                   </Badge>

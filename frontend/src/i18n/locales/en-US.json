@@ -483,7 +483,12 @@
     "Turkey": "Turkey",
     "United Kingdom": "United Kingdom",
     "United States": "United States",
-    "Vietnam": "Vietnam"
+    "United States of America": "United States",
+    "Vietnam": "Vietnam",
+    "Colombia": "Colombia",
+    "Cuba": "Cuba",
+    "Soviet Union": "Soviet Union",
+    "Yugoslavia": "Yugoslavia"
   },
   "genre_input": {
     "placeholder": "Select or type genre...",

@@ -98,8 +98,10 @@ const COUNTRY_TO_ISO: Record<string, string> = {
   "Ethiopia": "ET", "埃塞俄比亚": "ET",
   "Ghana": "GH", "加纳": "GH",
   "Tanzania": "TZ", "坦桑尼亚": "TZ",
-  "West Germany": "DE", "Soviet Union": "RU",
-  "Czechoslovakia": "CZ", "Yugoslavia": "RS", "East Germany": "DE",
+  "West Germany": "DE", "西德": "DE", "East Germany": "DE", "东德": "DE",
+  "Soviet Union": "RU", "苏联": "RU",
+  "Czechoslovakia": "CZ", "捷克斯洛伐克": "CZ",
+  "Yugoslavia": "RS", "南斯拉夫": "RS",
 };
 
 /* ── Build ISO → Chinese name reverse map ────────────────────

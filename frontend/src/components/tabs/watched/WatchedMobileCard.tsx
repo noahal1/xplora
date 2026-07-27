@@ -9,10 +9,8 @@ import { RatingSlider } from "../../shared/RatingSlider";
 import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized mobile card — compact card layout for small screens ── */
-export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
+export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, onRemove, onSaveRating, onOpenDetail }: {
   movie: MediaDetail;
-  isSelected: boolean;
-  onToggle: (id: number) => void;
   onRemove: (id: number) => void;
   onSaveRating: (id: number, rating: number) => Promise<void>;
   onOpenDetail: (movie: MediaDetail) => void;
@@ -28,15 +26,9 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
   });
 
   return (
-    <div
-      className={`p-3 rounded-xl transition-all duration-200 bg-bg-card border border-border ${isSelected ? "ring-1 ring-primary/40" : ""}`}
-    >
-      {/* Row 1: Checkbox + Poster + Title/Meta */}
+    <div className="p-3 rounded-xl transition-all duration-200 bg-bg-card border border-border">
+      {/* Row 1: Poster + Title/Meta */}
       <div className="flex items-start gap-2.5">
-        <input type="checkbox"
-          className="shrink-0 w-5 h-5 accent-primary cursor-pointer mt-1"
-          checked={isSelected} onChange={() => onToggle(movie.id)} />
-
         {/* Poster */}
         <div
           className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer border border-border-subtle"
@@ -129,6 +121,5 @@ export const WatchedMobileCard = memo(function WatchedMobileCard({ movie, isSele
   if (prev.movie.season_number !== next.movie.season_number) return false;
   if (prev.movie.episode_count !== next.movie.episode_count) return false;
   if (prev.movie.runtime !== next.movie.runtime) return false;
-  if (prev.isSelected !== next.isSelected) return false;
   return true;
 });

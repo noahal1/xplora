@@ -45,6 +45,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function MainApp() {
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
+  const isInitialMount = useRef(true);
 
   // Tab order for directional animation
   const tabOrder = ["/watched", "/wishlist", "/recommend", "/stats", "/manage"];
@@ -60,6 +61,17 @@ function MainApp() {
   const pageAnimClass = goingForward
     ? "animate-page-slide-in-right"
     : "animate-page-slide-in-left";
+
+  // On initial mount (coming from login), use a grander entrance animation.
+  // After mount, `useEffect` marks `isInitialMount` as false so subsequent
+  // tab switches use the regular directional animations instead.
+  useEffect(() => {
+    isInitialMount.current = false;
+  }, []);
+
+  const containerAnimClass = isInitialMount.current
+    ? "animate-main-entrance"
+    : pageAnimClass;
 
   // Update previous path AFTER render
   useEffect(() => {
@@ -99,7 +111,7 @@ function MainApp() {
           <TabNav />
           <div className="flex flex-col gap-4 sm:gap-8 py-3 sm:py-6">
             {/* Re-key on pathname to re-trigger entrance animation on every tab switch */}
-            <div key={location.pathname} className={pageAnimClass}>
+            <div key={location.pathname} className={containerAnimClass}>
               <Suspense fallback={
                 <div className="flex items-center justify-center py-16">
                   <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />

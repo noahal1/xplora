@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import time
 from collections import Counter, defaultdict
 from typing import Optional
 
@@ -51,6 +52,46 @@ TMDB_SKIP_STRATEGIES = {
     "explore",  # TMDB finds SIMILAR movies; explore needs DIFFERENT genres
     "era",      # TMDB candidates are limited to the user's movie eras
 }
+
+# ── TMDB candidate cache ───────────────────────────────────────────
+# Caches the result of _build_tmdb_candidates() keyed by
+# (sorted user_tmdb_ids, sorted excluded_tmdb_ids).  Avoids
+# redundant TMDB API calls when the user requests recommendations
+# multiple times within a short window (e.g. trying different
+# strategies/strategies).
+#
+# Cache is invalidated whenever the user adds/rates new movies
+# (because user_tmdb_ids or excluded_tmdb_ids change).
+
+_tmdb_candidate_cache: dict[str, tuple[float, list[dict]]] = {}
+TMDB_CACHE_TTL = 3600  # 1 hour
+
+
+def _tmdb_cache_key(user_tmdb_ids: list[str], excluded_tmdb_ids: set[str] | None) -> str:
+    """Build a deterministic cache key from source TMDB IDs."""
+    ids_part = tuple(sorted(user_tmdb_ids))
+    excluded_part = tuple(sorted(excluded_tmdb_ids)) if excluded_tmdb_ids else ()
+    return str(hash((ids_part, excluded_part)))
+
+
+# ── Taste analysis cache ───────────────────────────────────────────
+# Caches the result of _analyze_user_taste() keyed by a hash of the
+# movies list.  Avoids redundant CPU work when the same user re-runs
+# recommendations with the same movie data (e.g. trying different
+# strategies in quick succession).
+
+_taste_cache: dict[str, tuple[float, dict]] = {}
+TASTE_CACHE_TTL = 3600  # 1 hour
+
+
+def _taste_cache_key(movies: list["MediaRating"]) -> str:
+    """Build a deterministic cache key from a list of MediaRating objects."""
+    items = []
+    for m in movies:
+        items.append((m.title or "", m.rating or 0, m.year, m.genre or ""))
+    items.sort(key=lambda x: (x[0], x[1]))
+    return str(hash(tuple(items)))
+
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +142,10 @@ class AIService:
     def _analyze_user_taste(self, movies: list[MediaRating]) -> dict:
         """Analyze user's watched movies and extract taste patterns.
 
+        Results are cached keyed by movie content hash.  When the same
+        movie list is passed again within the TTL, returns the cached
+        result without recomputing.
+
         Returns a structured dict with:
           - top_genres: genres sorted by avg rating (desc)
           - decade_distribution: count per decade
@@ -110,6 +155,14 @@ class AIService:
         """
         if not movies:
             return {"top_genres": [], "decade_distribution": {}, "avg_rating": 0, "rating_distribution": {}, "total": 0}
+
+        # ── Check cache ───────────────────────────────────────────────
+        cache_key = _taste_cache_key(movies)
+        now = time.time()
+        cached = _taste_cache.get(cache_key)
+        if cached and (now - cached[0]) < TASTE_CACHE_TTL:
+            logger.info("Taste analysis cache HIT for %d movies", len(movies))
+            return cached[1]
 
         # Genre analysis — group by genre and compute avg rating
         genre_ratings: dict[str, list[float]] = defaultdict(list)
@@ -149,13 +202,19 @@ class AIService:
         # Top decades
         top_decades = dict(decade_count.most_common(3))
 
-        return {
+        result = {
             "top_genres": top_genres,
             "decade_distribution": top_decades,
             "avg_rating": round(avg_rating, 1),
             "rating_distribution": rating_dist,
             "total": total,
         }
+
+        # ── Store in cache ────────────────────────────────────────────
+        _taste_cache[cache_key] = (now, result)
+        logger.info("Taste analysis cache STORED for %d movies", len(movies))
+
+        return result
 
     def _build_taste_summary(self, taste: dict) -> str:
         """Build a human-readable taste summary from analysis results."""
@@ -194,20 +253,84 @@ class AIService:
         retry_attempt: int = 0,
         previous_feedback: Optional[dict] = None,
         filtered_titles_info: Optional[list[tuple[str, str]]] = None,
+        candidates: Optional[list[dict]] = None,
     ) -> str:
-        """Build an optimized prompt for the AI model with taste analysis and exclude list.
+        """Build an optimized prompt for the AI model.
 
-        Instead of listing ALL watched movies (which wastes tokens), this uses:
-        - A compact sample of top movies (up to 15 highest-rated) as concrete examples
-        - A structured taste analysis summary (the real signal — tells the AI the patterns)
-        - An ``exclude_titles`` list that explicitly tells the AI which titles to avoid
-        - A ``retry_attempt`` hint when the previous attempt's suggestions were
-          already watched by the user
-        - ``previous_feedback`` — which past recommendations the user liked/ignored
-        - ``filtered_titles_info`` — specific titles from the AI's previous attempt
-          that were filtered and why, used to improve retry accuracy
+        Two modes:
+
+        **Pure AI mode** (default, ``candidates=None``):
+        - Uses a compact sample of top-15 movies as concrete examples
+        - Includes exclusion list, retry hints, and previous feedback
+          for dynamic retry loop
+        - Automatically detects CJK / English for title language
+
+        **Hybrid mode** (``candidates`` provided):
+        - TMDB candidate list replaces the sample movies
+        - Exclusion list / retry / feedback sections are skipped
+          (candidates are already pre-filtered)
+        - Titles are always in Chinese
         """
+        # ── Shared: taste analysis + strategy instruction ────────────
+        taste_summary = ""
+        if taste_analysis:
+            taste_summary = self._build_taste_summary(taste_analysis)
 
+        strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
+        total_count = len(movies)
+
+        # ── Branch: hybrid mode (TMDB candidates) vs pure AI ────────
+        is_hybrid = candidates is not None
+
+        if is_hybrid:
+            # ── Hybrid mode: candidate-based prompt ──────────────────
+            candidates_sample = candidates[:30]
+            candidates_list = "\n".join(
+                f"{i+1}. \"{c['title']}\""
+                + (f" ({c['year']})" if c.get("year") else "")
+                + (f" [{c['genre']}]" if c.get("genre") else "")
+                + (f" TMDB评分: {c.get('vote_average', 'N/A')}" if c.get('vote_average') else "")
+                + f" — 来自{int(round(c['score']))}部电影推荐"
+                for i, c in enumerate(candidates_sample)
+            )
+
+            return f"""You are a professional movie recommendation expert. Below is a list of candidate movies that TMDB's algorithm identified as similar to what the user has watched and enjoyed. Your task is to select the BEST movies from this list and write personalized recommendations for each.
+
+## User's Taste Profile
+Total watched movies: {total_count}.
+
+## Taste Analysis
+{taste_summary or "No taste analysis available."}
+
+## Candidate Movies (from TMDB collaborative filtering)
+These are movies that fans of the user's favorite films also enjoy:
+{candidates_list}
+
+## Strategy Instruction
+{strategy_instruction}
+
+## Additional Requirements
+1. ONLY select from the candidate list above — do NOT recommend movies outside this list
+2. Each recommendation MUST include a personalized reason referencing the user's specific taste
+3. Confidence score (0-1) should reflect how well the movie matches the user's taste
+4. Ensure diversity in genre, era, and style
+5. The reason MUST be in Chinese
+6. Use Chinese/localized titles where available
+
+Respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
+{{
+    "recommendations": [
+        {{
+            "title": "Movie Title (use Chinese title if available)",
+            "year": 2024,
+            "genre": "Sci-Fi / Action",
+            "reason": "Recommendation reason in Chinese, referencing user's taste",
+            "confidence": 0.85
+        }}
+    ]
+}}"""
+
+        # ── Pure AI mode (default) ────────────────────────────────────
         # Compact sample: top 15 highest-rated movies as concrete examples
         movies_sorted = sorted(movies, key=lambda m: m.rating or 0, reverse=True)
         sample = movies_sorted[:15]
@@ -217,14 +340,6 @@ class AIService:
             f" — Rating: {m.rating}/10"
             for m in sample
         )
-        total_count = len(movies)
-
-        # Taste analysis summary
-        taste_summary = ""
-        if taste_analysis:
-            taste_summary = self._build_taste_summary(taste_analysis)
-
-        strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
 
         # Retry hint — tells the AI which of its previous suggestions were filtered and why
         retry_hint = ""
@@ -261,8 +376,7 @@ class AIService:
 
 ## Strict Exclusion List — DO NOT recommend ANY of these titles
 You MUST NOT recommend any of the following movies, even if they seem like a good fit:
-{exclude_list}
-"""
+{exclude_list}"""
 
         # Previous recommendation feedback (P2: 反馈闭环)
         feedback_section = ""
@@ -287,10 +401,7 @@ You MUST NOT recommend any of the following movies, even if they seem like a goo
             if feedback_parts:
                 feedback_section = "\n\n## Previous Recommendation Feedback\n" + "\n\n".join(feedback_parts)
 
-        # Language-adaptive title instruction: detect the dominant language
-        # of the user's library and tell the AI to output in that same language.
-        # This avoids cross-language title mismatches (e.g. AI outputting
-        # "Inception" in English while user's library has "盗梦空间" in Chinese).
+        # Language-adaptive title instruction
         cjk_in_sample = sum(1 for m in sample if has_cjk(m.title))
         use_cjk_titles = cjk_in_sample > len(sample) / 2
 
@@ -342,9 +453,81 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             "confidence": 0.85
         }}
     ]
-}}
-"""
+}}"""
 
+
+    def _retry_loop(
+        self,
+        movies: list[MediaRating],
+        count: int,
+        strategy: str,
+        strategy_params: Optional[dict],
+        all_excluded: list[str],
+        taste_analysis: Optional[dict],
+        previous_feedback: Optional[dict],
+        call_ai,
+    ) -> tuple[list, int]:
+        """Shared retry loop for the pure-AI recommendation path.
+
+        ``call_ai(prompt, attempt)`` receives the prompt string and attempt
+        number, and returns either a list of parsed recommendations (dicts
+        or ``MediaRecommendation`` objects) or ``None`` to break the loop.
+        The callback must handle its own exceptions.  Returning ``None``
+        silently breaks the loop without raising.
+
+        Returns ``(all_recs, total_filtered)``.
+        """
+        max_retries = min(max(3, count), MAX_API_RETRIES)
+        all_recs = []
+        total_filtered = 0
+        filtered_titles_info = None
+
+        for attempt in range(max_retries):
+            remaining = count - len(all_recs)
+            if remaining <= 0:
+                break
+
+            request_count = min(remaining * 2, 10) if attempt > 0 else remaining
+
+            prompt = self._build_prompt(
+                movies, request_count, strategy, strategy_params,
+                watched_titles=all_excluded, taste_analysis=taste_analysis,
+                exclude_titles=all_excluded,
+                retry_attempt=attempt,
+                previous_feedback=previous_feedback,
+                filtered_titles_info=filtered_titles_info,
+            )
+
+            new_recs = call_ai(prompt, attempt)
+            if new_recs is None:
+                break
+
+            before = list(new_recs)
+            new_recs = self._filter_watched(new_recs, all_excluded)
+            filtered_out = _get_filtered_out(before, new_recs)
+            total_filtered += len(filtered_out)
+
+            filtered_titles_info = None
+            if filtered_out:
+                filtered_titles_info = [
+                    (_get_title(r), "已在用户的已看/想看列表中")
+                    for r in filtered_out
+                ]
+
+            if not new_recs:
+                continue
+
+            all_recs.extend(new_recs)
+            for r in new_recs:
+                t = _get_title(r)
+                if t and t not in all_excluded:
+                    all_excluded.append(t)
+
+        if total_filtered > 0:
+            print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
+                  f"({len(all_recs[:count])}/{count} final)")
+
+        return all_recs, total_filtered
 
     def _get_strategy_instruction(self, strategy: str, params: Optional[dict] = None, count: int = 5) -> str:
         """Get strategy-specific instructions for the AI prompt."""
@@ -417,10 +600,14 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         if not tmdb_key or not user_tmdb_ids:
             return []
 
-        # TMDB ID → title mapping for source attribution
-        id_to_title: dict[str, str] = {}
-        for m in movies:
-            id_to_title[m.title.lower()] = m.title
+        # ── Check cache ───────────────────────────────────────────────
+        cache_key = _tmdb_cache_key(user_tmdb_ids, excluded_tmdb_ids)
+        now = time.time()
+        cached = _tmdb_candidate_cache.get(cache_key)
+        if cached and (now - cached[0]) < TMDB_CACHE_TTL:
+            logger.info("TMDB candidate cache HIT for %d source IDs", len(user_tmdb_ids))
+            return cached[1]
+        logger.info("TMDB candidate cache MISS for %d source IDs", len(user_tmdb_ids))
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -478,8 +665,8 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 pass
             return results
 
-        # Fetch in parallel (max 10 source movies to avoid too many API calls)
-        source_ids = user_tmdb_ids[:10]
+        # Fetch in parallel (max 15 source movies, genre-diverse selection)
+        source_ids = user_tmdb_ids[:15]
         with ThreadPoolExecutor(max_workers=5) as pool:
             futures = {pool.submit(fetch_for_tmdb_id, sid): sid for sid in source_ids}
             for future in as_completed(futures):
@@ -490,7 +677,8 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                     pass
 
         # Aggregate by tmdb_id: sum scores, collect sources, keep max vote
-        current_year = 2026  # Used for recency scoring
+        import datetime as _dt
+        current_year = _dt.datetime.now().year  # Used for recency scoring
         agg: dict[str, dict] = {}
         for c in all_candidates:
             tid = c["tmdb_id"]
@@ -530,7 +718,13 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
         # Sort by combined score descending
         ranked = sorted(agg.values(), key=lambda x: -x["_combined_score"])
-        return ranked[:top_n]
+        result = ranked[:top_n]
+
+        # ── Store in cache ────────────────────────────────────────────
+        _tmdb_candidate_cache[cache_key] = (now, result)
+        logger.info("TMDB candidate cache STORED (%d candidates)", len(result))
+
+        return result
 
     def _get_tmdb_hybrid_recommendations(
         self,
@@ -570,59 +764,12 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 else "未能从 TMDB 获取到候选推荐，请尝试其他推荐策略"
             )
 
-        # Build a concise prompt with the candidate pool + strategy instruction
-        strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
-
-        candidates_sample = tmdb_candidates[:30]
-        candidates_list = "\n".join(
-            f"{i+1}. \"{c['title']}\""
-            + (f" ({c['year']})" if c.get("year") else "")
-            + (f" [{c['genre']}]" if c.get("genre") else "")
-            + (f" TMDB评分: {c.get('vote_average', 'N/A')}" if c.get('vote_average') else "")
-            + f" — 来自{int(round(c['score']))}部电影推荐"
-            for i, c in enumerate(candidates_sample)
+        # Use the unified _build_prompt with candidates for hybrid mode
+        prompt = self._build_prompt(
+            movies, count, strategy, strategy_params,
+            taste_analysis=taste_analysis,
+            candidates=tmdb_candidates,
         )
-
-        # Taste analysis
-        taste_summary = ""
-        if taste_analysis:
-            taste_summary = self._build_taste_summary(taste_analysis)
-
-        prompt = f"""You are a professional movie recommendation expert. Below is a list of candidate movies that TMDB's algorithm identified as similar to what the user has watched and enjoyed. Your task is to select the BEST movies from this list and write personalized recommendations for each.
-
-## User's Taste Profile
-Total watched movies: {len(movies)}.
-
-## Taste Analysis
-{taste_summary or "No taste analysis available."}
-
-## Candidate Movies (from TMDB collaborative filtering)
-These are movies that fans of the user's favorite films also enjoy:
-{candidates_list}
-
-## Strategy Instruction
-{strategy_instruction}
-
-## Additional Requirements
-1. ONLY select from the candidate list above — do NOT recommend movies outside this list
-2. Each recommendation MUST include a personalized reason referencing the user's specific taste
-3. Confidence score (0-1) should reflect how well the movie matches the user's taste
-4. Ensure diversity in genre, era, and style
-5. The reason MUST be in Chinese
-6. Use Chinese/localized titles where available
-
-Respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
-{{
-    "recommendations": [
-        {{
-            "title": "Movie Title (use Chinese title if available)",
-            "year": 2024,
-            "genre": "Sci-Fi / Action",
-            "reason": "Recommendation reason in Chinese, referencing user's taste",
-            "confidence": 0.85
-        }}
-    ]
-}}"""
 
         try:
             response = self.client.chat.completions.create(
@@ -757,6 +904,16 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             year = rec.get("year") if is_dict else getattr(rec, "year", None)
             if not title:
                 return
+
+            # ── Skip if already has TMDB metadata ─────────────────────
+            # TMDB hybrid path already attaches tmdb_id + poster_url;
+            # pure AI path may also have some recs with existing metadata
+            # from earlier retries or from future code paths.
+            existing_tmdb_id = rec.get("tmdb_id", "") if is_dict else getattr(rec, "tmdb_id", "")
+            existing_poster = rec.get("poster_url", "") if is_dict else getattr(rec, "poster_url", "")
+            if existing_tmdb_id and existing_poster:
+                return
+
             try:
                 # Step 1: Search movies only (covers vast majority of AI recommendations)
                 results = search_external_movies(title, "tmdb", media_type="movie")
@@ -954,19 +1111,12 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
     ) -> list[MediaRecommendation]:
         """Generate movie recommendations (non-streaming) with dynamic retry.
 
-        If the fuzzy dedup filter removes some recommendations (because they
-        are already watched/wishlisted), this retries with dynamic retry count
-        based on the requested amount — each time asking the AI to recommend
-        different movies and requesting extra to compensate for filtering losses
-        — until the requested ``count`` is met.
-
-        After metadata resolution, also filters by ``excluded_tmdb_ids``
-        (exact TMDB ID matching) to catch cross-language duplicates.
+        Delegates the retry loop to ``_retry_loop()`` for a shared
+        implementation with ``get_recommendations_stream``.
 
         When ``user_tmdb_ids`` are available in ``strategy_params``,
         all strategies (except those in ``TMDB_SKIP_STRATEGIES``)
-        use the hybrid approach:
-        TMDB similar/recommendations → candidate pool → AI curation.
+        use the hybrid approach first.
         """
         # ── Try TMDB hybrid (skip for strategies where it doesn't make sense) ──
         user_tmdb_ids = (strategy_params or {}).get("user_tmdb_ids", [])
@@ -988,31 +1138,12 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 )
                 # Fall through to standard AI-only path
 
-        # ── Standard AI-only path (fallback) ────────────────────
-        max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
+        # ── Standard AI-only path (fallback) ─────────────────────────────
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
         all_excluded = list(watched_titles or [])
-        all_recs: list[MediaRecommendation] = []
-        total_filtered = 0
-        filtered_titles_info: list[tuple[str, str]] | None = None
 
-        for attempt in range(max_retries):
-            remaining = count - len(all_recs)
-            if remaining <= 0:
-                break
-
-            # Scale up request on retry to compensate for filtering losses
-            request_count = min(remaining * 2, 10) if attempt > 0 else remaining
-
-            prompt = self._build_prompt(
-                movies, request_count, strategy, strategy_params,
-                watched_titles=all_excluded, taste_analysis=taste_analysis,
-                exclude_titles=all_excluded,
-                retry_attempt=attempt,
-                previous_feedback=previous_feedback,
-                filtered_titles_info=filtered_titles_info,
-            )
-
+        def _sync_call_ai(prompt: str, attempt: int):
+            """Blocking (non-streaming) AI call used by _retry_loop."""
             try:
                 response = self.client.chat.completions.create(
                     model=self.model_name,
@@ -1043,41 +1174,20 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             if not content:
                 if attempt == 0:
                     raise ValueError("Empty response from AI model")
-                break
+                return None
 
             try:
-                new_recs = self._parse_response(content)
+                return self._parse_response(content)
             except ValueError:
                 if attempt == 0:
                     raise
-                break
+                return None  # Break retry loop, keep partial results
 
-            before = list(new_recs)
-            new_recs = self._filter_watched(new_recs, all_excluded)
-            filtered_out = _get_filtered_out(before, new_recs)
-            total_filtered += len(filtered_out)
-
-            # Build filtered_titles_info for next retry
-            if filtered_out:
-                filtered_titles_info = []
-                for r in filtered_out:
-                    title = _get_title(r)
-                    filtered_titles_info.append((title, "已在用户的已看/想看列表中"))
-
-            if not new_recs:
-                # Don't break — retry with retry_hint might help the AI avoid
-                # watched movies on the next attempt
-                continue
-
-            all_recs.extend(new_recs)
-            for r in new_recs:
-                t = _get_title(r)
-                if t and t not in all_excluded:
-                    all_excluded.append(t)
-
-        if total_filtered > 0:
-            print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
-                  f"({len(all_recs[:count])}/{count} final)")
+        all_recs, _ = self._retry_loop(
+            movies, count, strategy, strategy_params,
+            all_excluded, taste_analysis, previous_feedback,
+            _sync_call_ai,
+        )
 
         all_recs = self._resolve_metadata(all_recs)
         all_recs = self._filter_by_tmdb_id(all_recs, excluded_tmdb_ids)
@@ -1138,8 +1248,7 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
 ## Strict Exclusion List — DO NOT recommend ANY of these titles
 You MUST NOT recommend any of the following movies, even if they seem like a good fit:
-{exclude_list}
-"""
+{exclude_list}"""
 
         return f"""You are a professional movie recommendation expert in a conversation with a user.
 
@@ -1504,65 +1613,3 @@ Format 2 - For explanation or other questions:
             # Re-check against all_excluded (which now includes previous retry AI suggestions)
             before = list(new_recs)
             new_recs = self._filter_watched(new_recs, all_excluded)
-            filtered_out = _get_filtered_out(before, new_recs)
-            total_filtered += len(filtered_out)
-
-            # Build filtered_titles_info for next retry
-            if filtered_out:
-                filtered_titles_info = []
-                for r in filtered_out:
-                    title = _get_title(r)
-                    filtered_titles_info.append((title, "已在用户的已看/想看列表中"))
-
-            if not new_recs:
-                # Don't break — retry with retry_hint might help
-                continue
-
-            all_recs.extend(new_recs)
-            titles_seen = set()
-            for r in new_recs:
-                t = r.get("title", "") if isinstance(r, dict) else getattr(r, "title", "")
-                if t and t not in titles_seen:
-                    titles_seen.add(t)
-                    all_excluded.append(t)
-
-        if total_filtered > 0:
-            print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
-                  f"({len(all_recs[:count])}/{count} final)")
-
-        # Resolve poster URLs + TMDB IDs from TMDB before yielding
-        all_recs = self._resolve_metadata(all_recs)
-        all_recs = self._filter_by_tmdb_id(all_recs, excluded_tmdb_ids)
-
-        # Yield all recommendations after all retries complete
-        for rec in all_recs[:count]:
-            title = rec.get("title", "Unknown") if isinstance(rec, dict) else getattr(rec, "title", "Unknown")
-            year = rec.get("year") if isinstance(rec, dict) else getattr(rec, "year", None)
-            genre = rec.get("genre") if isinstance(rec, dict) else getattr(rec, "genre", None)
-            reason = rec.get("reason", "") if isinstance(rec, dict) else getattr(rec, "reason", "")
-            confidence_raw = rec.get("confidence", 0.5) if isinstance(rec, dict) else getattr(rec, "confidence", 0.5)
-            poster_url = rec.get("poster_url") if isinstance(rec, dict) else getattr(rec, "poster_url", None)
-            tmdb_id = rec.get("tmdb_id") if isinstance(rec, dict) else getattr(rec, "tmdb_id", None)
-
-            media_type = rec.get("media_type") if isinstance(rec, dict) else getattr(rec, "media_type", None)
-
-            rec_data = json.dumps({
-                "title": title,
-                "year": year,
-                "genre": genre,
-                "reason": reason,
-                "confidence": min(max(float(confidence_raw), 0.0), 1.0),
-                "poster_url": poster_url,
-                "tmdb_id": tmdb_id,
-                "media_type": media_type,
-            })
-            yield f"event: recommendation\ndata: {rec_data}\n\n"
-
-        # Yield done event — include filtered_count for frontend display
-        done_data = json.dumps({
-            "model_used": self.model_type,
-            "source_count": len(movies),
-            "total": len(all_recs[:count]),
-            "filtered_count": total_filtered,
-        })
-        yield f"event: done\ndata: {done_data}\n\n"

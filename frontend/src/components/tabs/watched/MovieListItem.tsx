@@ -11,10 +11,8 @@ import { RatingSlider } from "../../shared/RatingSlider";
 import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized list item — rich layout with poster & metadata ── */
-export const MovieListItem = memo(function MovieListItem({ movie, isSelected, onToggle, onRemove, onSaveRating, onOpenDetail }: {
+export const MovieListItem = memo(function MovieListItem({ movie, onRemove, onSaveRating, onOpenDetail }: {
   movie: MediaDetail;
-  isSelected: boolean;
-  onToggle: (id: number) => void;
   onRemove: (id: number) => void;
   onSaveRating: (id: number, rating: number) => Promise<void>;
   onOpenDetail: (movie: MediaDetail) => void;
@@ -31,9 +29,7 @@ export const MovieListItem = memo(function MovieListItem({ movie, isSelected, on
 
   return (
     <div
-      className={`group flex items-center gap-3.5 p-3 rounded-xl transition-all duration-200 hover:-translate-y-0.5 bg-bg-card border border-border animate-stream ${isSelected ? "ring-1 ring-primary/30" : ""}`}>
-      <input type="checkbox" className="shrink-0 w-4 h-4 accent-primary cursor-pointer"
-        checked={isSelected} onChange={() => onToggle(movie.id)} />
+      className="group flex items-center gap-3.5 p-3 rounded-xl transition-all duration-200 hover:-translate-y-0.5 bg-bg-card border border-border animate-stream">
       {/* Poster */}
       <div
         className="w-12 h-[72px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-sm transition-transform duration-200 group-hover:scale-[1.04] border border-border-subtle"

@@ -30,7 +30,6 @@ import { TVSeriesGroupItem } from "./tabs/watched/TVSeriesGroupItem";
 import { TVSeriesGroupCard } from "./tabs/watched/TVSeriesGroupCard";
 import { ImportModal } from "./tabs/watched/ImportModal";
 import { SearchModal } from "./tabs/watched/SearchModal";
-import { BatchRatingModal } from "./tabs/watched/BatchRatingModal";
 
 const PAGE_SIZE = 16;
 
@@ -38,7 +37,6 @@ export function WatchedTab() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { startPolling } = useEnrich();
-  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const [media, setMedia] = useState<MediaDetail[]>([]);
   const [total, setTotal] = useState(0);
@@ -61,7 +59,7 @@ export function WatchedTab() {
   const search = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSortToggle } = useSort("created_at", "desc");
   const { page: currentPage, setPage: setCurrentPage, totalPages } = usePagination(total, PAGE_SIZE);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
   const [loading, setLoading] = useState(false);
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
@@ -80,7 +78,6 @@ export function WatchedTab() {
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
-  const [batchRatingOpen, setBatchRatingOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">(
     () => (localStorage.getItem("xplora-watched-view") as "list" | "grid") || "list"
   );
@@ -132,13 +129,6 @@ export function WatchedTab() {
   // Auto-refresh when background enrichment completes
   useEnrichReload(() => setReloadTrigger((n) => n + 1));
 
-  useEffect(() => {
-    if (selectAllRef.current) {
-      selectAllRef.current.indeterminate =
-        selectedIds.size > 0 && !media.every((m) => selectedIds.has(m.id));
-    }
-  }, [selectedIds, media]);
-
   // ── Import helpers ──
 
   const saveAndReload = useCallback(
@@ -151,7 +141,6 @@ export function WatchedTab() {
         setCurrentPage(0);
         search.clear();
         setRatingFilter("all");
-        setSelectedIds(new Set());
         setReloadTrigger((n) => n + 1);
         return true;
       } catch (err) {
@@ -182,73 +171,6 @@ export function WatchedTab() {
     setReloadTrigger((n) => n + 1);
   }, []);
 
-  const toggleSelection = useCallback((id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleSelectAll = useCallback(() => {
-    const allMedia = [...standaloneMedia, ...tvGroups.flatMap((g) => g.seasons)];
-    const allSelected = allMedia.every((m) => selectedIds.has(m.id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allSelected) allMedia.forEach((m) => next.delete(m.id));
-      else allMedia.forEach((m) => next.add(m.id));
-      return next;
-    });
-  }, [standaloneMedia, tvGroups, selectedIds]);
-
-  const toggleGroup = useCallback((tvSeriesId: string) => {
-    const group = tvGroups.find((g) => g.tvSeriesId === tvSeriesId);
-    if (!group) return;
-    const seasonIds = group.seasons.map((s) => s.id);
-    const allSelected = seasonIds.every((id) => selectedIds.has(id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allSelected) seasonIds.forEach((id) => next.delete(id));
-      else seasonIds.forEach((id) => next.add(id));
-      return next;
-    });
-  }, [tvGroups, selectedIds]);
-
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-
-  const openBatchRating = useCallback(() => {
-    if (selectedIds.size === 0) return;
-    setBatchRatingOpen(true);
-  }, [selectedIds]);
-
-  const confirmBatchRating = useCallback(async (rating: number) => {
-    const rounded = Math.round(rating * 10) / 10;
-    const targets = media.filter((m) => selectedIds.has(m.id));
-    // Update local state immediately
-    setMedia((prev) => prev.map((m) => selectedIds.has(m.id) ? { ...m, rating: rounded } : m));
-    const results = await Promise.allSettled(
-      targets.map((movie) =>
-        api.updateMedia(movie.id, {
-          title: movie.title,
-          rating: rounded,
-          year: movie.year,
-          genre: movie.genre,
-        })
-      )
-    );
-    const succeeded = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.length - succeeded;
-    if (succeeded > 0) {
-      showToast(t("watched.update_count", { count: succeeded }), "success");
-    }
-    if (failed > 0) {
-      showToast(t("watched.batch_update_failed", { count: failed }), "error");
-    }
-    setBatchRatingOpen(false);
-    setSelectedIds(new Set());
-  }, [selectedIds, media, showToast, t]);
-
   const removeMovie = useCallback(
     async (id: number) => {
       try {
@@ -272,11 +194,6 @@ export function WatchedTab() {
       try {
         await api.batchDeleteMedia(seasonIds);
         showToast(t("watched.deleted_count", { count: seasonIds.length }), "success");
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          seasonIds.forEach((id) => next.delete(id));
-          return next;
-        });
         reloadCurrentPage();
       } catch (err) {
         showToast(t("watched.delete_failed", { message: getErrMsg(err) }), "error");
@@ -472,39 +389,6 @@ export function WatchedTab() {
             </div>
           ) : (
             <>
-              {/* Batch Toolbar */}
-              {selectedIds.size > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 mb-3 bg-accent rounded-lg animate-slide-down">
-                  <span className="text-sm font-medium text-accent-foreground shrink-0">
-                    {t("watched.selected_count", { count: selectedIds.size })}
-                  </span>
-                  <div className="flex items-center gap-1 ml-auto">
-                    <button className="btn btn-ghost btn-xs" onClick={openBatchRating} title={t("watched.batch_edit_rating")}>
-                      <span className="hidden sm:inline">{t("watched.batch_edit_rating")}</span>
-                      <span className="sm:hidden">{t("watched.batch_edit_rating")}</span>
-                    </button>
-                    <button className="btn-subtle btn-xs" onClick={clearSelection} title={t("watched.clear_selection")}>
-                      <span className="hidden sm:inline">{t("watched.clear_selection")}</span>
-                      <span className="sm:hidden">{t("watched.clear")}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Select all */}
-              {media.length > 0 && (
-                <label className="flex items-center gap-2 mb-2 px-1 w-fit cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    ref={selectAllRef}
-                    className="w-4 h-4 accent-primary cursor-pointer"
-                    checked={media.length > 0 && media.every((m) => selectedIds.has(m.id))}
-                    onChange={toggleSelectAll}
-                  />
-                  <span className="text-xs text-muted-foreground">{t("watched.select_all")}</span>
-                </label>
-              )}
-
               {/* Movie List / Grid */}
               {standaloneMedia.length === 0 && tvGroups.length === 0 ? (
                 <EmptyState
@@ -526,8 +410,6 @@ export function WatchedTab() {
                     <MovieGridCard
                       key={m.id}
                       movie={m}
-                      isSelected={selectedIds.has(m.id)}
-                      onToggle={toggleSelection}
                       onRemove={removeMovie}
                       onSaveRating={handleSaveRating}
                       onOpenDetail={setDetailMovie}
@@ -537,8 +419,6 @@ export function WatchedTab() {
                     <TVSeriesGroupCard
                       key={g.tvSeriesId}
                       group={g}
-                      isSelected={g.seasons.every((s) => selectedIds.has(s.id))}
-                      onToggleGroup={toggleGroup}
                       onOpenDetail={setDetailMovie}
                     />
                   ))}
@@ -551,8 +431,6 @@ export function WatchedTab() {
                       <WatchedMobileCard
                         key={m.id}
                         movie={m}
-                        isSelected={selectedIds.has(m.id)}
-                        onToggle={toggleSelection}
                         onRemove={removeMovie}
                         onSaveRating={handleSaveRating}
                         onOpenDetail={setDetailMovie}
@@ -562,8 +440,6 @@ export function WatchedTab() {
                       <TVSeriesGroupItem
                         key={g.tvSeriesId}
                         group={g}
-                        isSelected={g.seasons.every((s) => selectedIds.has(s.id))}
-                        onToggleGroup={toggleGroup}
                         onRemoveSeason={removeMovie}
                         onRemoveGroup={removeGroup}
                         onOpenDetail={setDetailMovie}
@@ -576,8 +452,6 @@ export function WatchedTab() {
                       <MovieListItem
                         key={m.id}
                         movie={m}
-                        isSelected={selectedIds.has(m.id)}
-                        onToggle={toggleSelection}
                         onRemove={removeMovie}
                         onSaveRating={handleSaveRating}
                         onOpenDetail={setDetailMovie}
@@ -587,8 +461,6 @@ export function WatchedTab() {
                       <TVSeriesGroupItem
                         key={g.tvSeriesId}
                         group={g}
-                        isSelected={g.seasons.every((s) => selectedIds.has(s.id))}
-                        onToggleGroup={toggleGroup}
                         onRemoveSeason={removeMovie}
                         onRemoveGroup={removeGroup}
                         onOpenDetail={setDetailMovie}
@@ -655,15 +527,6 @@ export function WatchedTab() {
         open={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
         onAddSuccess={() => setReloadTrigger((n) => n + 1)}
-        t={t}
-      />
-
-      {/* === Batch Rating Modal === */}
-      <BatchRatingModal
-        open={batchRatingOpen}
-        onClose={() => setBatchRatingOpen(false)}
-        selectedCount={selectedIds.size}
-        onConfirm={confirmBatchRating}
         t={t}
       />
 

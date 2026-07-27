@@ -10,8 +10,6 @@ import { translateGenres } from "../../../utils/genre";
 
 interface TVSeriesGroupItemProps {
   group: TVSeriesGroup;
-  isSelected: boolean;
-  onToggleGroup: (tvSeriesId: string) => void;
   onRemoveSeason: (id: number) => void;
   onRemoveGroup: (seasonIds: number[]) => void;
   onOpenDetail: (movie: MediaDetail) => void;
@@ -19,8 +17,6 @@ interface TVSeriesGroupItemProps {
 
 export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
   group,
-  isSelected,
-  onToggleGroup,
   onRemoveSeason,
   onRemoveGroup,
   onOpenDetail,
@@ -32,22 +28,11 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
     group.seasons.reduce((sum, s) => sum + s.rating, 0) / group.seasons.length;
 
   return (
-    <div
-      className={`group rounded-xl transition-all duration-200 bg-bg-card border ${
-        isSelected ? "border-primary/40 ring-1 ring-primary/30" : "border-border"
-      }`}
-    >
+    <div className="group rounded-xl transition-all duration-200 bg-bg-card border border-border">
       {/* ── Mobile layout (stacked) ──────────── */}
       <div className="sm:hidden p-3 space-y-2.5">
-        {/* Row 1: checkbox + poster + title + avg rating + chevron */}
+        {/* Row 1: poster + title + avg rating + chevron */}
         <div className="flex items-start gap-2.5">
-          <input
-            type="checkbox"
-            className="shrink-0 w-4 h-4 accent-primary cursor-pointer mt-1"
-            checked={isSelected}
-            onChange={() => onToggleGroup(group.tvSeriesId)}
-          />
-
           {/* Poster */}
           <div
             className="w-10 h-[60px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-xs border border-border-subtle"
@@ -165,15 +150,8 @@ export const TVSeriesGroupItem = memo(function TVSeriesGroupItem({
 
       {/* ── Desktop layout (horizontal) ──────────── */}
       <div className="max-sm:hidden p-3">
-        {/* Header row: checkbox + poster + title + meta */}
+        {/* Header row: poster + title + meta */}
         <div className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            className="shrink-0 w-4 h-4 accent-primary cursor-pointer mt-1"
-            checked={isSelected}
-            onChange={() => onToggleGroup(group.tvSeriesId)}
-          />
-
           {/* Poster */}
           <div
             className="w-12 h-[72px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer shadow-sm transition-transform duration-200 hover:scale-[1.04] border border-border-subtle"

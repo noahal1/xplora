@@ -466,17 +466,19 @@
     "label": "{{value}} 分"
   },
   "countries": {
-
+    "Afghanistan": "阿富汗",
     "Argentina": "阿根廷",
     "Austria": "奥地利",
     "Australia": "澳大利亚",
     "Belgium": "比利时",
     "Brazil": "巴西",
     "Bulgaria": "保加利亚",
-    "Czech Republic": "捷克",
     "Canada": "加拿大",
     "China": "中国",
+    "Colombia": "哥伦比亚",
+    "Cuba": "古巴",
     "Czechoslovakia": "捷克斯洛伐克",
+    "Czech Republic": "捷克",
     "Denmark": "丹麦",
     "Egypt": "埃及",
     "Estonia": "爱沙尼亚",
@@ -509,6 +511,7 @@
     "Singapore": "新加坡",
     "South Africa": "南非",
     "South Korea": "韩国",
+    "Soviet Union": "苏联",
     "Spain": "西班牙",
     "Sweden": "瑞典",
     "Switzerland": "瑞士",
@@ -519,7 +522,8 @@
     "United Kingdom": "英国",
     "United States": "美国",
     "United States of America": "美国",
-    "Vietnam": "越南"
+    "Vietnam": "越南",
+    "Yugoslavia": "南斯拉夫"
   },
   "genre_input": {
     "placeholder": "选择或输入类型...",
