@@ -6,12 +6,13 @@ import re
 from collections import Counter, defaultdict
 from typing import Optional
 
-from openai import OpenAI, APIError, APITimeoutError, RateLimitError, AuthenticationError
+from openai import OpenAI, APIError, APIConnectionError, APITimeoutError, RateLimitError, AuthenticationError
 
 from models import MediaRating, MediaRecommendation
 from scraper.match import normalize, normalize_unicode, remove_special_chars, title_words, has_cjk
 from config_manager import get_api_key as get_config_api_key
 from movie_search import search_movies as search_external_movies
+from movie_search import get_tmdb_movie_similar, get_tmdb_movie_recommendations, get_tmdb_tv_similar, get_tmdb_tv_recommendations
 
 
 # Model configuration
@@ -42,6 +43,14 @@ STRATEGY_TEMPERATURES = {
 DEFAULT_TEMPERATURE = 0.7
 MAX_TOKENS = 3000  # Increased from 2000 for Chinese responses
 MAX_API_RETRIES = 10  # Hard cap on total retries per request to prevent excessive API calls
+
+# Strategies where TMDB candidate pool should NOT be used
+# These strategies have fundamentally different goals from TMDB's
+# "similar/recommendations" algorithm and would produce poor results.
+TMDB_SKIP_STRATEGIES = {
+    "explore",  # TMDB finds SIMILAR movies; explore needs DIFFERENT genres
+    "era",      # TMDB candidates are limited to the user's movie eras
+}
 
 logger = logging.getLogger(__name__)
 
@@ -382,6 +391,291 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
         return strategy_prompts.get(strategy, strategy_prompts["taste"])
 
+    def _build_tmdb_candidates(
+        self,
+        movies: list[MediaRating],
+        user_tmdb_ids: list[str],
+        excluded_tmdb_ids: set[str] | None,
+        top_n: int = 50,
+    ) -> list[dict]:
+        """Build a candidate pool from TMDB similar/recommendations.
+
+        For each of the user's top-rated movies (with known TMDB IDs),
+        fetches similar movies and recommendations from TMDB, aggregates
+        by frequency, and returns the top ``top_n`` candidates that are
+        not in ``excluded_tmdb_ids``.
+
+        Each candidate dict has:
+            title, year, genre, poster_url, tmdb_id, media_type,
+            score (how many source movies recommended it),
+            source_titles (which movies led to it)
+
+        If TMDB is not configured or no TMDB IDs are available,
+        returns an empty list (falls through to pure AI mode).
+        """
+        tmdb_key = get_config_api_key("tmdb")
+        if not tmdb_key or not user_tmdb_ids:
+            return []
+
+        # TMDB ID → title mapping for source attribution
+        id_to_title: dict[str, str] = {}
+        for m in movies:
+            id_to_title[m.title.lower()] = m.title
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        all_candidates: list[dict] = []
+
+        def fetch_for_tmdb_id(tmdb_id: str) -> list[dict]:
+            """Fetch similar + recommendations for one movie.
+
+            Each thread collects its results independently (no shared
+            state), then dedup happens in the aggregation step below.
+            Includes vote_average and vote_count from TMDB for
+            multi-dimensional scoring.
+            """
+            results: list[dict] = []
+            seen_local: set[str] = set()
+            try:
+                similar = get_tmdb_movie_similar(tmdb_id, tmdb_key)
+                for r in similar:
+                    sid = r.source_id
+                    if sid not in seen_local and (not excluded_tmdb_ids or sid not in excluded_tmdb_ids):
+                        seen_local.add(sid)
+                        results.append({
+                            "title": r.title,
+                            "year": r.year,
+                            "genre": r.genre,
+                            "poster_url": r.poster_url,
+                            "tmdb_id": sid,
+                            "media_type": r.media_type,
+                            "vote_average": r.vote_average,
+                            "vote_count": r.vote_count,
+                            "score": 1.0,
+                            "source_titles": [tmdb_id],
+                        })
+            except Exception:
+                pass
+            try:
+                recs = get_tmdb_movie_recommendations(tmdb_id, tmdb_key)
+                for r in recs:
+                    sid = r.source_id
+                    if sid not in seen_local and (not excluded_tmdb_ids or sid not in excluded_tmdb_ids):
+                        seen_local.add(sid)
+                        results.append({
+                            "title": r.title,
+                            "year": r.year,
+                            "genre": r.genre,
+                            "poster_url": r.poster_url,
+                            "tmdb_id": sid,
+                            "media_type": r.media_type,
+                            "vote_average": r.vote_average,
+                            "vote_count": r.vote_count,
+                            "score": 0.8,  # recommendations weighed slightly less than similar
+                            "source_titles": [tmdb_id],
+                        })
+            except Exception:
+                pass
+            return results
+
+        # Fetch in parallel (max 10 source movies to avoid too many API calls)
+        source_ids = user_tmdb_ids[:10]
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(fetch_for_tmdb_id, sid): sid for sid in source_ids}
+            for future in as_completed(futures):
+                try:
+                    batch = future.result()
+                    all_candidates.extend(batch)
+                except Exception:
+                    pass
+
+        # Aggregate by tmdb_id: sum scores, collect sources, keep max vote
+        current_year = 2026  # Used for recency scoring
+        agg: dict[str, dict] = {}
+        for c in all_candidates:
+            tid = c["tmdb_id"]
+            if tid in agg:
+                agg[tid]["score"] += c["score"]
+                agg[tid]["source_titles"].extend(c["source_titles"])
+                # Keep the highest vote_average and vote_count across sources
+                if c.get("vote_average") and (not agg[tid].get("vote_average") or c["vote_average"] > agg[tid]["vote_average"]):
+                    agg[tid]["vote_average"] = c["vote_average"]
+                    agg[tid]["vote_count"] = c.get("vote_count") or agg[tid].get("vote_count")
+            else:
+                agg[tid] = dict(c)
+
+        # Multi-dimensional scoring: combine co-occurrence, TMDB rating, and recency
+        # Normalize each signal to 0-1, then weighted combination
+        max_co_score = max((c["score"] for c in agg.values()), default=1)
+        for c in agg.values():
+            co_score = c["score"] / max_co_score  # normalized co-occurrence (0-1)
+
+            vote_avg = c.get("vote_average") or 0
+            rating_score = min(vote_avg / 10.0, 1.0)  # TMDB rating (0-1)
+
+            year = c.get("year")
+            if year and current_year:
+                age = current_year - year
+                # Gentle decay: 0yr=1.0, 10yr=0.8, 30yr=0.6, 50yr=0.4
+                recency_score = max(0.0, 1.0 - (age / 50) ** 0.6)
+            else:
+                recency_score = 0.5
+
+            # Weights: co-occurrence is the strongest signal
+            c["_combined_score"] = (
+                0.50 * co_score
+                + 0.30 * rating_score
+                + 0.20 * recency_score
+            )
+
+        # Sort by combined score descending
+        ranked = sorted(agg.values(), key=lambda x: -x["_combined_score"])
+        return ranked[:top_n]
+
+    def _get_tmdb_hybrid_recommendations(
+        self,
+        movies: list[MediaRating],
+        count: int = 5,
+        strategy: str = "taste",
+        strategy_params: Optional[dict] = None,
+        taste_analysis: Optional[dict] = None,
+        user_tmdb_ids: Optional[list[str]] = None,
+        excluded_tmdb_ids: Optional[set[str]] = None,
+    ) -> list[MediaRecommendation]:
+        """Hybrid recommendation: TMDB candidate pool + AI curation.
+
+        Works for ALL strategies — builds a candidate pool from TMDB
+        similar/recommendations, then asks the AI to select from it
+        using the appropriate strategy instruction.
+
+        1. Build candidate pool from TMDB similar/recommendations
+        2. If no candidates, raise ValueError (caller falls back to pure AI)
+        3. Present top candidates + strategy instruction to AI
+        4. Final results already have tmdb_id attached, no need for _resolve_metadata
+
+        This approach:
+        - Eliminates AI hallucinations (movies come from real TMDB data)
+        - No retry loop needed (candidates are pre-filtered)
+        - No large exclusion list needed in prompt (already filtered)
+        - TMDB IDs are known upfront, cross-language dedup works
+        """
+        tmdb_candidates = self._build_tmdb_candidates(
+            movies, user_tmdb_ids or [], excluded_tmdb_ids,
+        )
+
+        if not tmdb_candidates:
+            raise ValueError(
+                "TMDB 推荐暂不可用"
+                if not get_config_api_key("tmdb")
+                else "未能从 TMDB 获取到候选推荐，请尝试其他推荐策略"
+            )
+
+        # Build a concise prompt with the candidate pool + strategy instruction
+        strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
+
+        candidates_sample = tmdb_candidates[:30]
+        candidates_list = "\n".join(
+            f"{i+1}. \"{c['title']}\""
+            + (f" ({c['year']})" if c.get("year") else "")
+            + (f" [{c['genre']}]" if c.get("genre") else "")
+            + (f" TMDB评分: {c.get('vote_average', 'N/A')}" if c.get('vote_average') else "")
+            + f" — 来自{int(round(c['score']))}部电影推荐"
+            for i, c in enumerate(candidates_sample)
+        )
+
+        # Taste analysis
+        taste_summary = ""
+        if taste_analysis:
+            taste_summary = self._build_taste_summary(taste_analysis)
+
+        prompt = f"""You are a professional movie recommendation expert. Below is a list of candidate movies that TMDB's algorithm identified as similar to what the user has watched and enjoyed. Your task is to select the BEST movies from this list and write personalized recommendations for each.
+
+## User's Taste Profile
+Total watched movies: {len(movies)}.
+
+## Taste Analysis
+{taste_summary or "No taste analysis available."}
+
+## Candidate Movies (from TMDB collaborative filtering)
+These are movies that fans of the user's favorite films also enjoy:
+{candidates_list}
+
+## Strategy Instruction
+{strategy_instruction}
+
+## Additional Requirements
+1. ONLY select from the candidate list above — do NOT recommend movies outside this list
+2. Each recommendation MUST include a personalized reason referencing the user's specific taste
+3. Confidence score (0-1) should reflect how well the movie matches the user's taste
+4. Ensure diversity in genre, era, and style
+5. The reason MUST be in Chinese
+6. Use Chinese/localized titles where available
+
+Respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
+{{
+    "recommendations": [
+        {{
+            "title": "Movie Title (use Chinese title if available)",
+            "year": 2024,
+            "genre": "Sci-Fi / Action",
+            "reason": "Recommendation reason in Chinese, referencing user's taste",
+            "confidence": 0.85
+        }}
+    ]
+}}"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional movie recommendation expert. Select from the provided candidate list only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.5,
+                max_tokens=MAX_TOKENS,
+                timeout=60,
+            )
+        except Exception as e:
+            raise ValueError(f"AI service error: {e}")
+
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Empty response from AI model")
+
+        recs = self._parse_response(content)
+
+        # Attach tmdb_id, poster_url, media_type from candidates
+        candidate_map = {c["tmdb_id"]: c for c in tmdb_candidates}
+        for rec in recs:
+            matched = None
+            for c in tmdb_candidates:
+                if c["title"].lower() == rec.title.lower() or (
+                    c.get("year") and rec.year and c["year"] == rec.year
+                    and c["title"].lower() == rec.title.lower()
+                ):
+                    matched = c
+                    break
+            if not matched and rec.tmdb_id and rec.tmdb_id in candidate_map:
+                matched = candidate_map[rec.tmdb_id]
+
+            if matched:
+                rec.tmdb_id = matched.get("tmdb_id", rec.tmdb_id)
+                rec.poster_url = matched.get("poster_url", rec.poster_url)
+                rec.media_type = matched.get("media_type", rec.media_type)
+                if not rec.year and matched.get("year"):
+                    rec.year = matched["year"]
+                if not rec.genre and matched.get("genre"):
+                    rec.genre = matched["genre"]
+
+        # Final safety filter: remove any recs that are in excluded_tmdb_ids
+        if excluded_tmdb_ids:
+            recs = [r for r in recs if not (r.tmdb_id and r.tmdb_id in excluded_tmdb_ids)]
+
+        return recs[:count]
+
     def _extract_json(self, content: str) -> str:
         """Extract JSON from AI response, handling markdown code blocks and extraneous text."""
         # Try to extract content from markdown code blocks first
@@ -668,7 +962,33 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
 
         After metadata resolution, also filters by ``excluded_tmdb_ids``
         (exact TMDB ID matching) to catch cross-language duplicates.
+
+        When ``user_tmdb_ids`` are available in ``strategy_params``,
+        all strategies (except those in ``TMDB_SKIP_STRATEGIES``)
+        use the hybrid approach:
+        TMDB similar/recommendations → candidate pool → AI curation.
         """
+        # ── Try TMDB hybrid (skip for strategies where it doesn't make sense) ──
+        user_tmdb_ids = (strategy_params or {}).get("user_tmdb_ids", [])
+        if user_tmdb_ids and strategy not in TMDB_SKIP_STRATEGIES:
+            try:
+                return self._get_tmdb_hybrid_recommendations(
+                    movies=movies,
+                    count=count,
+                    strategy=strategy,
+                    strategy_params=strategy_params,
+                    taste_analysis=taste_analysis,
+                    user_tmdb_ids=user_tmdb_ids,
+                    excluded_tmdb_ids=excluded_tmdb_ids,
+                )
+            except Exception as e:
+                logger.warning(
+                    "TMDB hybrid failed for strategy '%s': %s — falling back to pure AI",
+                    strategy, e,
+                )
+                # Fall through to standard AI-only path
+
+        # ── Standard AI-only path (fallback) ────────────────────
         max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
         all_excluded = list(watched_titles or [])
@@ -713,8 +1033,11 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
                 raise ValueError(f"Rate limit exceeded for {self.model_type}. Please try again later.")
             except APITimeoutError:
                 raise ValueError(f"Request to {self.model_type} timed out. Please try again.")
+            except APIConnectionError:
+                raise ValueError(f"无法连接到 {self.model_type} API，请检查网络连接和 API 地址配置")
             except APIError as e:
-                raise ValueError(f"{self.model_type} API error ({e.status_code}): {e.message}")
+                code = getattr(e, "status_code", "unknown")
+                raise ValueError(f"{self.model_type} API error ({code}): {e.message}")
 
             content = response.choices[0].message.content
             if not content:
@@ -931,8 +1254,12 @@ Format 2 - For explanation or other questions:
             except APITimeoutError:
                 yield f"event: error\ndata: {json.dumps({'message': f'Request to {self.model_type} timed out. Please try again.'})}\n\n"
                 return
+            except APIConnectionError:
+                yield f"event: error\ndata: {json.dumps({'message': f'无法连接到 {self.model_type} API，请检查网络连接和 API 地址配置'})}\n\n"
+                return
             except APIError as e:
-                yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({e.status_code}): {e.message}'})}\n\n"
+                code = getattr(e, "status_code", "unknown")
+                yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({code}): {e.message}'})}\n\n"
                 return
 
             accumulated = ""
@@ -1021,7 +1348,73 @@ Format 2 - For explanation or other questions:
 
         After metadata resolution, also filters by ``excluded_tmdb_ids``
         (exact TMDB ID matching) to catch cross-language duplicates.
+
+        When ``user_tmdb_ids`` are available in ``strategy_params``,
+        all strategies (except those in ``TMDB_SKIP_STRATEGIES``)
+        use the hybrid approach via
+        ``_get_tmdb_hybrid_recommendations`` and yields results as SSE events.
         """
+        # ── Try TMDB hybrid (skip for strategies where it doesn't make sense) ──
+        user_tmdb_ids = (strategy_params or {}).get("user_tmdb_ids", [])
+        if user_tmdb_ids and strategy not in TMDB_SKIP_STRATEGIES:
+            try:
+                recs = self._get_tmdb_hybrid_recommendations(
+                    movies=movies,
+                    count=count,
+                    strategy=strategy,
+                    strategy_params=strategy_params,
+                    taste_analysis=taste_analysis,
+                    user_tmdb_ids=user_tmdb_ids,
+                    excluded_tmdb_ids=excluded_tmdb_ids,
+                )
+                # Yield start event
+                start_data = json.dumps({"model": self.model_type, "source_count": len(movies)})
+                yield f"event: start\ndata: {start_data}\n\n"
+
+                # Yield each recommendation as SSE event
+                for rec in recs:
+                    rec_data = json.dumps({
+                        "title": rec.title,
+                        "year": rec.year,
+                        "genre": rec.genre,
+                        "reason": rec.reason,
+                        "confidence": rec.confidence,
+                        "poster_url": rec.poster_url,
+                        "tmdb_id": rec.tmdb_id,
+                        "media_type": rec.media_type,
+                    })
+                    yield f"event: recommendation\ndata: {rec_data}\n\n"
+
+                # Yield done event
+                done_data = json.dumps({
+                    "model_used": self.model_type,
+                    "source_count": len(movies),
+                    "total": len(recs),
+                    "filtered_count": 0,
+                })
+                yield f"event: done\ndata: {done_data}\n\n"
+                return
+
+            except Exception as e:
+                logger.warning(
+                    "TMDB hybrid streaming failed for strategy '%s': %s — falling back to pure AI",
+                    strategy, e,
+                )
+                # Clear user_tmdb_ids to prevent infinite recursion
+                fallback_params = dict(strategy_params or {})
+                fallback_params.pop("user_tmdb_ids", None)
+                # yield from is required here — in a generator, return <value>
+                # does NOT delegate to the recursive generator
+                yield from self.get_recommendations_stream(
+                    movies, count, strategy, fallback_params if fallback_params else None,
+                    watched_titles=watched_titles,
+                    taste_analysis=taste_analysis,
+                    previous_feedback=previous_feedback,
+                    excluded_tmdb_ids=excluded_tmdb_ids,
+                )
+                return
+
+        # ── Standard AI-only path (fallback) ────────────────────────
         max_retries = min(max(3, count), MAX_API_RETRIES)  # Dynamic but capped
         temperature = STRATEGY_TEMPERATURES.get(strategy, DEFAULT_TEMPERATURE)
         all_excluded = list(watched_titles or [])
@@ -1075,8 +1468,12 @@ Format 2 - For explanation or other questions:
             except APITimeoutError:
                 yield f"event: error\ndata: {json.dumps({'message': f'Request to {self.model_type} timed out. Please try again.'})}\n\n"
                 return
+            except APIConnectionError:
+                yield f"event: error\ndata: {json.dumps({'message': f'无法连接到 {self.model_type} API，请检查网络连接和 API 地址配置'})}\n\n"
+                return
             except APIError as e:
-                yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({e.status_code}): {e.message}'})}\n\n"
+                code = getattr(e, "status_code", "unknown")
+                yield f"event: error\ndata: {json.dumps({'message': f'{self.model_type} API error ({code}): {e.message}'})}\n\n"
                 return
 
             accumulated = ""

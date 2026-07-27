@@ -87,7 +87,7 @@ export function HistoryTab() {
     if (addingToWishlist[idx]) return;
     setAddingToWishlist((prev) => ({ ...prev, [idx]: true }));
     try {
-      await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null });
+      await api.addToWishlist({ title: rec.title, year: rec.year, genre: rec.genre || null, tmdb_id: rec.tmdb_id || null });
       showToast(t("wishlist.added_to_wishlist", { title: rec.title }), "success");
     } catch (err) {
       showToast(t("wishlist.add_failed", { message: getErrMsg(err) }), "error");

@@ -64,6 +64,8 @@ class MovieSearchResult:
         season_poster_url: Optional[str] = None,
         episode_count: Optional[int] = None,
         series_poster_url: Optional[str] = None,
+        vote_average: Optional[float] = None,
+        vote_count: Optional[int] = None,
     ):
         self.title = title
         self.year = year
@@ -78,6 +80,8 @@ class MovieSearchResult:
         self.season_poster_url = season_poster_url
         self.episode_count = episode_count
         self.series_poster_url = series_poster_url
+        self.vote_average = vote_average
+        self.vote_count = vote_count
 
     def to_dict(self) -> dict:
         d = {
@@ -850,6 +854,102 @@ def _get_tvmaze_detail(show_id: str, season_number: Optional[int] = None) -> dic
         result["season_number"] = season_number
 
     return result
+
+
+# ============================================
+# TMDB Similar / Recommendations API
+# ============================================
+
+
+def _fetch_tmdb_similar_or_recs(
+    url: str, api_key: str, language: str = "zh-CN"
+) -> list[MovieSearchResult]:
+    """Generic fetcher for TMDB /similar and /recommendations endpoints.
+
+    Both endpoints return the same format (paginated results with
+    id, title, poster_path, genre_ids, release_date, etc.) so they
+    share this parser.
+    """
+    params = {"api_key": api_key, "language": language, "page": 1}
+    try:
+        client = get_shared_client()
+        resp = client.get(url, params=params, timeout=Timeout(5.0, connect=15.0))
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        raise RuntimeError(f"TMDB similar/recommendations fetch failed: {e}")
+
+    results: list[MovieSearchResult] = []
+    for item in data.get("results", []):
+        title = item.get("title") or item.get("name") or ""
+        if not title:
+            continue
+        release = item.get("release_date", "") or item.get("first_air_date", "")
+        year = int(release[:4]) if release and len(release) >= 4 else None
+        poster = item.get("poster_path")
+        poster_url = f"{TMDB_IMAGE_BASE}{poster}" if poster else None
+        genre_ids = item.get("genre_ids", [])
+        # TV results use a different genre map
+        media_type_hint = item.get("media_type", "")
+        if media_type_hint == "tv":
+            genre_names = _map_tmdb_tv_genres(genre_ids)
+        else:
+            genre_names = _map_tmdb_genres(genre_ids)
+        original = item.get("original_title") or item.get("original_name") or ""
+        vote_avg = item.get("vote_average")
+        vote_cnt = item.get("vote_count")
+        results.append(MovieSearchResult(
+            title=title,
+            year=year,
+            genre=genre_names,
+            poster_url=poster_url,
+            source_id=str(item.get("id", "")),
+            source="tmdb",
+            original_title=original,
+            media_type="tv" if media_type_hint == "tv" else "movie",
+            tv_series_id=str(item.get("id", "")) if media_type_hint == "tv" else None,
+            vote_average=vote_avg,
+            vote_count=vote_cnt,
+        ))
+    return results
+
+
+def get_tmdb_movie_similar(movie_id: str, api_key: str) -> list[MovieSearchResult]:
+    """Fetch similar movies from TMDB by movie ID.
+
+    ``GET /movie/{movie_id}/similar``
+    Returns movies that TMDB's algorithm considers similar.
+    """
+    url = f"{TMDB_BASE}/movie/{movie_id}/similar"
+    return _fetch_tmdb_similar_or_recs(url, api_key)
+
+
+def get_tmdb_movie_recommendations(movie_id: str, api_key: str) -> list[MovieSearchResult]:
+    """Fetch movie recommendations from TMDB by movie ID.
+
+    ``GET /movie/{movie_id}/recommendations``
+    Returns personalized recommendations based on user viewing patterns.
+    """
+    url = f"{TMDB_BASE}/movie/{movie_id}/recommendations"
+    return _fetch_tmdb_similar_or_recs(url, api_key)
+
+
+def get_tmdb_tv_similar(tv_id: str, api_key: str) -> list[MovieSearchResult]:
+    """Fetch similar TV shows from TMDB by TV ID.
+
+    ``GET /tv/{tv_id}/similar``
+    """
+    url = f"{TMDB_BASE}/tv/{tv_id}/similar"
+    return _fetch_tmdb_similar_or_recs(url, api_key)
+
+
+def get_tmdb_tv_recommendations(tv_id: str, api_key: str) -> list[MovieSearchResult]:
+    """Fetch TV show recommendations from TMDB by TV ID.
+
+    ``GET /tv/{tv_id}/recommendations``
+    """
+    url = f"{TMDB_BASE}/tv/{tv_id}/recommendations"
+    return _fetch_tmdb_similar_or_recs(url, api_key)
 
 
 # ============================================

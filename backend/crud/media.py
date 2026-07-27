@@ -139,6 +139,7 @@ def save_wishlist_items(
                 status="wish",
                 user_id=user_id,
                 created_at=now,
+                tmdb_id=m.tmdb_id,
             )
             session.add(record)
             records.append(record)

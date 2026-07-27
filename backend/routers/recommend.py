@@ -166,6 +166,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
     service = AIService(api_key=api_key, model_type=model)
     taste_analysis = service._analyze_user_taste(movies)
     watched = watched_titles or _extract_watched_titles(movies)
+    # Pass strategy_params so the streaming generator can extract user_tmdb_ids
     raw_generator = service.get_recommendations_stream(
         movies, count, strategy, strategy_params,
         watched_titles=watched,
@@ -307,9 +308,25 @@ async def recommend(
         excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
         previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
         taste_analysis = service._analyze_user_taste(movies)
+
+        # ── Query user's top-rated TMDB IDs for candidate pool ──
+        strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
+        top_movies = db.exec(
+            select(MediaItemRecord).where(
+                MediaItemRecord.status == "watched",
+                MediaItemRecord.user_id == current_user["id"],
+                MediaItemRecord.tmdb_id.isnot(None),
+            ).order_by(MediaItemRecord.rating.desc()).limit(10)
+        ).all()
+        user_tmdb_ids = [str(m.tmdb_id) for m in top_movies if m.tmdb_id]
+        if user_tmdb_ids:
+            if strategy_params_dict is None:
+                strategy_params_dict = {}
+            strategy_params_dict["user_tmdb_ids"] = user_tmdb_ids
+
         recommendations = service.get_recommendations(
             movies, request.count, request.strategy,
-            request.strategy_params.model_dump() if request.strategy_params else None,
+            strategy_params_dict,
             watched_titles=all_excluded,
             taste_analysis=taste_analysis,
             previous_feedback=previous_feedback,
@@ -352,11 +369,27 @@ async def recommend_stream(
     all_excluded, wishlist_titles = _get_all_excluded_and_wishlist(db, current_user["id"])
     excluded_tmdb_ids = _get_all_excluded_tmdb_ids(db, current_user["id"])
     previous_feedback = _build_previous_feedback(db, current_user["id"], wishlist_titles)
+
+    # ── Query user's top-rated TMDB IDs for candidate pool ──
+    strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
+    top_movies = db.exec(
+        select(MediaItemRecord).where(
+            MediaItemRecord.status == "watched",
+            MediaItemRecord.user_id == current_user["id"],
+            MediaItemRecord.tmdb_id.isnot(None),
+        ).order_by(MediaItemRecord.rating.desc()).limit(10)
+    ).all()
+    user_tmdb_ids = [str(m.tmdb_id) for m in top_movies if m.tmdb_id]
+    if user_tmdb_ids:
+        if strategy_params_dict is None:
+            strategy_params_dict = {}
+        strategy_params_dict["user_tmdb_ids"] = user_tmdb_ids
+
     return StreamingResponse(
         _stream_with_persistence(
             movies, request.count, request.model, api_key, current_user["id"],
             strategy=request.strategy,
-            strategy_params=request.strategy_params.model_dump() if request.strategy_params else None,
+            strategy_params=strategy_params_dict,
             watched_titles=all_excluded,
             previous_feedback=previous_feedback,
             excluded_tmdb_ids=excluded_tmdb_ids,
