@@ -14,7 +14,6 @@ import { MediaTypeFilter } from "../MediaTypeFilter";
 import { SortControls } from "../SortControls";
 import { StatusFilter } from "../StatusFilter";
 import { SearchInput } from "../SearchInput";
-import { ScrapeSourceFilter } from "../ScrapeSourceFilter";
 import FadeContent from "../FadeContent";
 import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server, BrainCircuit } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
@@ -107,9 +106,6 @@ export function ManageTab() {
 
   /* ── Manual search & match modal ─────────────────────────────── */
   const [rematchMovie, setRematchMovie] = useState<MediaDetail | null>(null);
-
-  /* ── Enrich source selector ──────────────────────────────────── */
-  const [enrichSource, setEnrichSource] = useState<string>("tmdb");
 
   /* ── Enriching IDs ───────────────────────────────────────────── */
   const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
@@ -336,7 +332,6 @@ export function ManageTab() {
     title?: string;
     rating?: number;
     year?: number | null;
-    episode_count?: number | null;
     created_at?: string;
   }
 
@@ -359,12 +354,7 @@ export function ManageTab() {
         updatedFields.year = val;
         break;
       }
-      case "episode_count": {
-        const val = value ? parseInt(value) : null;
-        if (value && (isNaN(val) || val < 0)) return;
-        updatedFields.episode_count = val;
-        break;
-      }
+
       case "created_at": updatedFields.created_at = value || undefined; break;
     }
     const currentVal = movie[field as keyof MediaDetail];
@@ -375,7 +365,7 @@ export function ManageTab() {
         title: updatedFields.title ?? movie.title,
         rating: updatedFields.rating ?? movie.rating,
         year: updatedFields.year !== undefined ? updatedFields.year : movie.year,
-        episode_count: updatedFields.episode_count !== undefined ? updatedFields.episode_count : movie.episode_count,
+        episode_count: movie.episode_count,
         genre: movie.genre || "",
         created_at: updatedFields.created_at !== undefined ? updatedFields.created_at : movie.created_at,
       });
@@ -393,14 +383,14 @@ export function ManageTab() {
   const handleEnrich = useCallback(async (movieId: number) => {
     setEnrichingIds(prev => new Set(prev).add(movieId));
     try {
-      const updated = await api.enrichMedia(movieId, enrichSource);
+      const updated = await api.enrichMedia(movieId, "tmdb");
       // Update poster/metadata immediately
       setMediaList(prev => prev.map(m => m.id === movieId ? { ...m, ...updated } : m));
       showToast(t("manage.enrich_success"), "success");
       fetchData(undefined, true);
     } catch (err) { showToast(t("manage.enrich_failed", { message: getErrMsg(err) }), "error"); }
     finally { setEnrichingIds(prev => { const next = new Set(prev); next.delete(movieId); return next; }); }
-  }, [fetchData, showToast, t, enrichSource]);
+  }, [fetchData, showToast, t]);
 
   /* ── Batch enrich + cache ───────────────────────────────────── */
   const [batchLoading, setBatchLoading] = useState(false);
@@ -565,16 +555,11 @@ export function ManageTab() {
             </div>
           </div>
 
-          {/* Row 2: Sort + ScrapeSource */}
           <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
             <SortControls
               field={sortField}
               dir={sortDir}
               onSort={(f) => { handleSort(f); setPage(0); setSelected(new Set()); }}
-            />
-            <ScrapeSourceFilter
-              selected={enrichSource}
-              onSelect={setEnrichSource}
             />
           </div>
 
@@ -678,9 +663,7 @@ export function ManageTab() {
                     onClick={() => handleSort("rating")}>
                     <span className="inline-flex items-center gap-1">{t("manage.col_rating")}<SortArrow field="rating" /></span>
                   </th>
-                  <th className="w-14 px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none">
-                    <span className="inline-flex items-center gap-1">集数</span>
-                  </th>
+
                   <th className="w-20 px-3 py-3 text-left font-medium text-[11px] text-muted-foreground/70 bg-bg-canvas border-b border-border/60 select-none cursor-pointer hover:text-foreground/80 transition-colors"
                     onClick={() => handleSort("year")}>
                     <span className="inline-flex items-center gap-1">{t("manage.col_year")}<SortArrow field="year" /></span>

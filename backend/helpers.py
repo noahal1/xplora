@@ -50,6 +50,19 @@ NORMALIZE_GENRE: dict[str, str] = {
 # Maps Chinese country names to canonical English ISO names.
 
 NORMALIZE_COUNTRY: dict[str, str] = {
+    # English name variants → canonical
+    "United States of America": "United States",
+    "USA": "United States",
+    "United Kingdom": "United Kingdom",
+    "UK": "United Kingdom",
+    "Great Britain": "United Kingdom",
+    "Korea, Republic of": "South Korea",
+    "Russian Federation": "Russia",
+    "Iran, Islamic Republic of": "Iran",
+    "Taiwan, Province of China": "Taiwan",
+    "Czechia": "Czech Republic",
+    "UAE": "United Arab Emirates",
+    # Chinese → English
     "美国": "United States",
     "中国": "China",
     "中国大陆": "China",

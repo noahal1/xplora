@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDate, formatDateTime } from "../utils/date";
 import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
-import { Sparkles, AlertTriangle, Image, FileText, User, Clock, Hash, MapPin, Search, CheckCircle, XCircle } from "lucide-react";
+import { Sparkles, AlertTriangle, Image, User, Clock, Hash, MapPin, Search, CheckCircle } from "lucide-react";
 
 interface DiagItem {
   id: number;
@@ -32,11 +32,9 @@ interface DiagData {
     healthy: number;
     has_issues: number;
     missing_poster_url: number;
-    missing_overview: number;
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
-    has_scrape_error: number;
   };
   items: DiagItem[];
 }
@@ -109,11 +107,9 @@ export function AdminPanel() {
   const FILTER_OPTIONS = [
     { value: "all", label: "全部", icon: null },
     { value: "poster_url", label: "海报", icon: "Image" },
-    { value: "overview", label: "简介", icon: "FileText" },
     { value: "runtime", label: "时长", icon: "Clock" },
     { value: "tmdb_id", label: "TMDB ID", icon: "Hash" },
     { value: "country", label: "国家", icon: "MapPin" },
-    { value: "scrape_error", label: "刮削异常", icon: "XCircle" },
   ];
 
   const loadDiagnostics = async () => {

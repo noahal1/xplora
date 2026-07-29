@@ -1035,8 +1035,6 @@ async def media_diagnostics(
     # Define which fields are "important" metadata for diagnostics
     METADATA_FIELDS = [
         ("poster_url", "海报"),
-        ("overview", "简介"),
-
         ("runtime", "时长"),
         ("tmdb_id", "TMDB ID"),
         ("country", "国家"),
@@ -1055,15 +1053,12 @@ async def media_diagnostics(
                 field_missing[attr] += 1
                 missing_fields.append({"field": attr, "label": label})
 
-        # TV-specific: also check series_poster_url and episode_count for TV items
+        # TV-specific: also check series_poster_url for TV items
         if r.media_type == "tv":
             if not r.series_poster_url:
                 missing_fields.append({"field": "series_poster_url", "label": "剧集海报"})
-            if not r.episode_count:
-                missing_fields.append({"field": "episode_count", "label": "集数"})
-                field_missing["episode_count"] = field_missing.get("episode_count", 0) + 1
 
-        if not missing_fields and not r.scrape_error:
+        if not missing_fields:
             continue  # skip fully healthy items
 
         items.append({
@@ -1075,8 +1070,8 @@ async def media_diagnostics(
             "rating": r.rating,
             "missing_fields": missing_fields,
             "missing_count": len(missing_fields),
-            "has_scrape_error": r.scrape_error is not None,
-            "scrape_error": r.scrape_error,
+            "has_scrape_error": False,
+            "scrape_error": None,
             "poster_url": r.poster_url,
             "overview": r.overview,
             "genre": r.genre,
@@ -1092,9 +1087,8 @@ async def media_diagnostics(
             "created_at": r.created_at.isoformat() if r.created_at else "",
         })
 
-    # Sort: items with scrape errors first, then by missing count desc, then by title
+    # Sort: by missing count desc, then by title
     items.sort(key=lambda x: (
-        0 if x["has_scrape_error"] else 1,
         -x["missing_count"],
         x["title"].lower(),
     ))
@@ -1108,14 +1102,10 @@ async def media_diagnostics(
     for attr, label in METADATA_FIELDS:
         summary[f"missing_{attr}"] = field_missing.get(attr, 0)
 
-    # Count items with scrape errors
-    summary["has_scrape_error"] = sum(1 for r in records if r.scrape_error is not None)
     # Count items without tmdb_id
     summary["missing_tmdb_id"] = sum(1 for r in records if not r.tmdb_id)
     # Count items without poster
     summary["missing_poster_url"] = sum(1 for r in records if not r.poster_url)
-    # Count TV items missing episode count
-    summary["missing_episode_count"] = field_missing.get("episode_count", 0)
 
     return {
         "summary": summary,

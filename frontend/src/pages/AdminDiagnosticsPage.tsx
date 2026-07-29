@@ -8,7 +8,7 @@ import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
 import { RematchModal } from "../components/ManageTab/RematchModal";
 import { DetailModal } from "../components/ManageTab/DetailModal";
-import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Search, CheckCircle, XCircle, Sparkles, Loader2, Info, Film, BrainCircuit } from "lucide-react";
+import { AlertTriangle, Image, Clock, Hash, MapPin, Search, CheckCircle, Sparkles, Loader2, Info, Film, BrainCircuit } from "lucide-react";
 
 interface DiagItem {
   id: number;
@@ -42,13 +42,9 @@ interface DiagData {
     healthy: number;
     has_issues: number;
     missing_poster_url: number;
-    missing_overview: number;
-
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
-    missing_episode_count: number;
-    has_scrape_error: number;
   };
   items: DiagItem[];
 }
@@ -58,13 +54,9 @@ const DIAG_PAGE_SIZE = 20;
 const FILTER_OPTIONS = [
   { value: "all", label: "全部", icon: null },
   { value: "poster_url", label: "海报", icon: "Image" },
-  { value: "overview", label: "简介", icon: "FileText" },
-
-  { value: "episode_count", label: "集数", icon: "Hash" },
   { value: "runtime", label: "时长", icon: "Clock" },
   { value: "tmdb_id", label: "TMDB ID", icon: "Hash" },
   { value: "country", label: "国家", icon: "MapPin" },
-  { value: "scrape_error", label: "刮削异常", icon: "XCircle" },
 ];
 
 /* ── Mobile Card Component ──────────────────────────────────── */
@@ -137,13 +129,7 @@ function DiagMobileCard({ item, enrichingIds, onEnrich, onAiInfer, onDetail, onR
         </div>
       )}
 
-      {/* Scrape error */}
-      {item.scrape_error && (
-        <div className="mt-1.5 text-[10px] text-red-500/80 truncate" title={item.scrape_error}>
-          <XCircle size={10} className="inline mr-0.5 shrink-0" />
-          {item.scrape_error}
-        </div>
-      )}          {/* Action buttons — wrap on narrow screens */}
+
       <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5" style={{ borderTop: "1px solid var(--border-subtle)" }}>
         <MobileActionBtn
           icon={enrichingIds.has(item.id) ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
@@ -167,7 +153,6 @@ function DiagMobileCard({ item, enrichingIds, onEnrich, onAiInfer, onDetail, onR
           icon={<Search size={13} />}
           label="重匹配"
           onClick={() => onRematch(toMediaDetail(item))}
-          className={item.has_scrape_error ? "text-amber" : ""}
         />
       </div>
     </div>
@@ -597,31 +582,11 @@ export function AdminDiagnosticsPage() {
 
               <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                  <FileText size={14} className="sm:size-4 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_overview}</div>
-                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失简介</div>
-                </div>
-              </div>
-
-              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
                   <Clock size={14} className="sm:size-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
                   <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_runtime}</div>
                   <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失时长</div>
-                </div>
-              </div>
-
-              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-                  <Hash size={14} className="sm:size-4 text-violet-600 dark:text-violet-400" />
-                </div>
-                <div>
-                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_episode_count}</div>
-                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失集数（TV）</div>
                 </div>
               </div>
 
@@ -642,16 +607,6 @@ export function AdminDiagnosticsPage() {
                 <div>
                   <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.missing_country}</div>
                   <div className="text-[9px] sm:text-[10px] text-muted-foreground">缺失国家</div>
-                </div>
-              </div>
-
-              <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-                  <XCircle size={14} className="sm:size-4 text-red-600 dark:text-red-400" />
-                </div>
-                <div>
-                  <div className="text-base sm:text-lg font-semibold tabular-nums">{diagData.summary.has_scrape_error}</div>
-                  <div className="text-[9px] sm:text-[10px] text-muted-foreground">刮削异常</div>
                 </div>
               </div>
             </div>
@@ -701,7 +656,6 @@ export function AdminDiagnosticsPage() {
                           <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-16">类型</th>
                           <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-16">状态</th>
                           <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">缺失字段</th>
-                          <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium">刮削错误</th>
                           <th className="text-left px-2 py-2 text-xs text-muted-foreground font-medium w-20">操作</th>
                         </tr>
                       </thead>
@@ -742,16 +696,6 @@ export function AdminDiagnosticsPage() {
                                 ))}
                               </div>
                             </td>
-                            <td className="px-2 py-2.5">
-                              {item.scrape_error ? (
-                                <span className="text-[10px] text-red-500/80 block max-w-[160px] truncate" title={item.scrape_error}>
-                                  <XCircle size={10} className="inline mr-0.5" />
-                                  {item.scrape_error}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground">—</span>
-                              )}
-                            </td>
                             <td className="px-2 py-2.5 whitespace-nowrap">
                               <div className="inline-flex items-center gap-0.5" style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--seed-radius)", padding: "1px" }}>
                                 <button
@@ -778,9 +722,9 @@ export function AdminDiagnosticsPage() {
                                   <Info size={14} />
                                 </button>
                                 <button
-                                  className={`px-1.5 py-1 rounded transition-colors ${item.has_scrape_error ? "text-amber" : "text-muted-foreground"} hover:text-sky hover:bg-sky/10`}
+                                  className="px-1.5 py-1 rounded transition-colors text-muted-foreground hover:text-sky hover:bg-sky/10"
                                   onClick={() => setRematchMovie(toMediaDetail(item))}
-                                  title={item.has_scrape_error ? "重新匹配（刮削异常）" : "重新匹配"}
+                                  title="重新匹配"
                                 >
                                   <Search size={14} />
                                 </button>

@@ -173,10 +173,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
           </span>
         </td>
 
-        {/* Episode count */}
-        <td className="px-3 py-2.5 border-b border-border/60">
-          <span className="text-muted-foreground text-xs tabular-nums">—</span>
-        </td>
+
 
         {/* Year range */}
         <td className="px-3 py-2.5 border-b border-border/60">
@@ -282,14 +279,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
             </span>
           </TableEditableCell>
 
-          {/* Episode count (editable) */}
-          <TableEditableCell movie={season} field="episode_count" editingCell={editingCell} sliderValue={sliderValue}
-            onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}
-            tdClassName="!py-1">
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {season.episode_count != null ? `${season.episode_count}ep` : "—"}
-            </span>
-          </TableEditableCell>
+
 
           {/* Year (editable) */}
           <TableEditableCell movie={season} field="year" editingCell={editingCell} sliderValue={sliderValue}
