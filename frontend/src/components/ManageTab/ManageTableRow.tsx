@@ -5,7 +5,7 @@ import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import { formatSeasonLabel } from "../../utils/groupTVSeries";
 import CountUp from "../CountUp";
-import { Film, AlertCircle, Star, Search, Sparkles, Loader2, Trash2, Check, Info, Heart } from "lucide-react";
+import { Film, AlertCircle, Star, Search, Sparkles, Loader2, Trash2, Check, Info, Heart, BrainCircuit } from "lucide-react";
 import { TableEditableCell } from "./TableEditableCell";
 import { ActionBtn } from "./ActionBtn";
 
@@ -15,11 +15,13 @@ export const ManageTableRow = memo(function ManageTableRow({
   editingCell, 
   sliderValue, 
   enrichingIds,
+  aiInferringIds,
   onToggle, 
   onConfirmDelete, 
   onSetDetailMovie, 
   onSetRematchMovie, 
   onEnrich, 
+  onAiInfer,
   onSetMarkWatchedMovie, 
   onStartInlineEdit, 
   onSaveInlineEdit,
@@ -30,11 +32,13 @@ export const ManageTableRow = memo(function ManageTableRow({
   editingCell: { movieId: number; field: string } | null;
   sliderValue: number;
   enrichingIds: Set<number>;
+  aiInferringIds: Set<number>;
   onToggle: (id: number) => void;
   onConfirmDelete: (movieId: number, title: string) => void;
   onSetDetailMovie: (movie: MediaDetail) => void;
   onSetRematchMovie: (movie: MediaDetail) => void;
   onEnrich: (id: number) => Promise<void>;
+  onAiInfer: (id: number) => Promise<void>;
   onSetMarkWatchedMovie: (movie: MediaDetail) => void;
   onStartInlineEdit: (movieId: number, field: string) => void;
   onSaveInlineEdit: (movieId: number, field: string, value: string) => Promise<void>;
@@ -135,6 +139,11 @@ export const ManageTableRow = memo(function ManageTableRow({
             label={enrichingIds.has(movie.id) ? t("manage.enriching") : t("manage.enrich")}
             onClick={() => onEnrich(movie.id)} disabled={enrichingIds.has(movie.id)}
             color="amber" highlight={enrichingIds.has(movie.id)} />
+          <ActionBtn
+            icon={aiInferringIds.has(movie.id) ? <Loader2 size={13} className="animate-spin" /> : <BrainCircuit size={13} />}
+            label={aiInferringIds.has(movie.id) ? "AI 推断中" : "AI 推断"}
+            onClick={() => onAiInfer(movie.id)} disabled={aiInferringIds.has(movie.id)}
+            color="sky" highlight={aiInferringIds.has(movie.id)} />
           <ActionBtn icon={<Trash2 size={13} />} label={t("common.delete")}
             onClick={() => onConfirmDelete(movie.id, movie.title)} color="destructive" />
         </div>
@@ -163,6 +172,7 @@ export const ManageTableRow = memo(function ManageTableRow({
   if (nextEditing && prev.sliderValue !== next.sliderValue) return false;
 
   if (prev.enrichingIds.has(id) !== next.enrichingIds.has(id)) return false;
+  if (prev.aiInferringIds.has(id) !== next.aiInferringIds.has(id)) return false;
   // Re-render when editing starts, ends, or changes for this row
   if (prev.editingCell?.movieId === id || next.editingCell?.movieId === id) return false;
 

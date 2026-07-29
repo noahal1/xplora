@@ -9,7 +9,7 @@ import App from "./App";
 // ── PWA Service Worker registration ───────────────────────────────
 // Expose registration so SWUpdatePrompt can trigger updates
 const swReady = { current: null as ServiceWorkerRegistration | null };
-(window as any).__swRegistration = swReady;
+window.__swRegistration = swReady;
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

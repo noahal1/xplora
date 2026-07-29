@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from auth import get_current_user
 from deps import get_user_db
-from helpers import parse_movie_data, NORMALIZE_GENRE
+from helpers import parse_movie_data, NORMALIZE_GENRE, NORMALIZE_COUNTRY
 from models import (
     MediaData,
     MediaRating,
@@ -43,6 +43,7 @@ from crud import (
 )
 from movie_search import search_movies as search_external_movies, get_movie_detail as get_external_movie_detail
 from scraper import async_background_enrich_movies, async_background_cache_posters
+from scraper.ai_repair import async_background_ai_repair, get_repair_progress, ai_repair_single_item, _normalize_genre_str, _normalize_country_str
 from poster_cache import download_and_cache_poster
 
 
@@ -658,6 +659,7 @@ async def media_filters(
     ).all()
 
     countries_set: set[str] = set()
+    countries_seen: set[str] = set()
     genres_set: set[str] = set()
     genres_seen: set[str] = set()
 
@@ -666,7 +668,11 @@ async def media_filters(
             for c in country.split("/"):
                 c = c.strip()
                 if c:
-                    countries_set.add(c)
+                    # Normalise Chinese country names to canonical English
+                    canonical = NORMALIZE_COUNTRY.get(c, c)
+                    if canonical.lower() not in countries_seen:
+                        countries_seen.add(canonical.lower())
+                        countries_set.add(canonical)
         if genre:
             # Normalize: replace all "/" and "," with " / " then split
             # Handles inconsistent separators like "Action/Adventure",
@@ -801,6 +807,206 @@ async def media_detail(
         return detail
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+# ── AI Repair ───────────────────────────────────────────────────────
+
+
+@router.post("/media/ai-repair")
+async def ai_repair_endpoint(
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Launch AI-powered data repair in the background.
+
+    Runs two passes:
+    1. **Missing fields**: AI infers genre/country for items missing these fields
+    2. **Duplicate detection**: AI identifies potential cross-language duplicates
+
+    Returns immediately — the repair runs asynchronously.
+    The frontend can poll ``GET /api/media/ai-repair/status`` for progress.
+    """
+    background_tasks.add_task(async_background_ai_repair, current_user["id"], "all")
+    log_operation(
+        current_user["id"], current_user["username"],
+        "ai_repair", "启动 AI 数据修复", db=db,
+    )
+    return {"status": "ok", "message": "AI 修复已启动，正在后台运行"}
+
+
+@router.post("/media/{media_id}/ai-infer")
+async def ai_infer_single(
+    media_id: int,
+    request: dict = {},
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Use AI to infer genre/country for a single media item.
+
+    **Two modes:**
+
+    1. **Infer only** (no ``apply`` in body):
+       - Always calls AI regardless of existing data
+       - If AI result differs from existing → returns ``needs_review: true``
+         with both existing + AI values (no DB write)
+       - If fields are missing → auto-applies AI result (backward-compatible)
+
+    2. **Apply confirmed fields** (``{"apply": {"genre": "...", "country": "..."}}``):
+       - Directly writes the specified fields without calling AI
+       - Used after user confirms in the diff modal
+
+    Unlike the batch ``POST /media/ai-repair``, this runs synchronously.
+    """
+    media_item = get_media_for_user(media_id, current_user["id"], db=db)
+    if not media_item:
+        raise HTTPException(status_code=404, detail="Media item not found")
+
+    existing_genre = media_item.genre
+    existing_country = media_item.country
+
+    # ── Mode 2: Direct apply ──
+    apply = request.get("apply")
+    if apply is not None:
+        payload = {}
+        if "genre" in apply:
+            payload["genre"] = apply["genre"]
+        if "country" in apply:
+            payload["country"] = apply["country"]
+        updated = False
+        if payload:
+            try:
+                updated_record = db_update_media(
+                    media_id=media_id,
+                    user_id=current_user["id"],
+                    db=db,
+                    **payload,
+                )
+                if updated_record:
+                    updated = True
+                    log_operation(
+                        current_user["id"], current_user["username"],
+                        "ai_infer_apply",
+                        f"AI 推断确认应用: {media_item.title} → genre={payload.get('genre', '—')}, country={payload.get('country', '—')}",
+                        db=db,
+                    )
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"应用失败: {str(e)}")
+        return {
+            "id": media_item.id,
+            "title": media_item.title,
+            "genre": updated_record.genre if (updated and payload.get("genre")) else existing_genre,
+            "country": updated_record.country if (updated and payload.get("country")) else existing_country,
+            "existing_genre": existing_genre,
+            "existing_country": existing_country,
+            "ai_genre": None,
+            "ai_country": None,
+            "needs_review": False,
+            "updated": updated,
+            "message": "AI 推断已应用" if updated else "未做任何更改",
+        }
+
+    # ── Mode 1: Always infer ──
+    result = ai_repair_single_item(media_item.title, media_item.year, media_item.genre, media_item.country)
+    ai_genre = result.get("genre")
+    ai_country = result.get("country")
+
+    # Check if existing data differs from AI suggestion
+    # Normalize both sides so Chinese ↔ English doesn't trigger a false diff
+    normalized_existing_genre = _normalize_genre_str(existing_genre) if existing_genre else None
+    genre_differs = (
+        existing_genre and ai_genre
+        and existing_genre != ai_genre
+        and normalized_existing_genre != ai_genre
+    )
+    normalized_existing_country = _normalize_country_str(existing_country)
+    country_differs = (
+        existing_country and ai_country
+        and existing_country != ai_country
+        and normalized_existing_country != ai_country
+    )
+
+    if genre_differs or country_differs:
+        # Needs review — return both values, don't write
+        return {
+            "id": media_item.id,
+            "title": media_item.title,
+            "genre": existing_genre,
+            "country": existing_country,
+            "existing_genre": existing_genre,
+            "existing_country": existing_country,
+            "ai_genre": ai_genre,
+            "ai_country": ai_country,
+            "needs_review": True,
+            "updated": False,
+            "message": "AI 推断结果与现有数据不同，请确认",
+        }
+
+    # Auto-apply for missing fields (no existing data to overwrite)
+    needs_genre = not existing_genre
+    needs_country = not existing_country
+    payload = {}
+    if needs_genre and ai_genre:
+        payload["genre"] = ai_genre
+    if needs_country and ai_country:
+        payload["country"] = ai_country
+
+    updated = False
+    if payload:
+        try:
+            updated_record = db_update_media(
+                media_id=media_id,
+                user_id=current_user["id"],
+                db=db,
+                **payload,
+            )
+            if updated_record:
+                updated = True
+                log_operation(
+                    current_user["id"], current_user["username"],
+                    "ai_infer_single",
+                    f"AI 推断: {media_item.title} → genre={payload.get('genre', '—')}, country={payload.get('country', '—')}",
+                    db=db,
+                )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
+
+    final_genre = payload.get("genre") if needs_genre else existing_genre
+    final_country = payload.get("country") if needs_country else existing_country
+    return {
+        "id": media_item.id,
+        "title": media_item.title,
+        "genre": final_genre,
+        "country": final_country,
+        "existing_genre": existing_genre,
+        "existing_country": existing_country,
+        "ai_genre": ai_genre,
+        "ai_country": ai_country,
+        "needs_review": False,
+        "updated": updated,
+        "message": "AI 推断完成" if updated else "AI 未能推断出可靠结果",
+    }
+
+
+@router.get("/media/ai-repair/status")
+async def ai_repair_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get the current progress of the AI repair task for the current user.
+
+    Returns ``null`` if no repair is running or the last repair has expired.
+
+    Progress dict:
+        ``status`` (str): ``"running"``, ``"done"``, or ``"error"``
+        ``step`` (str): current step name
+        ``message`` (str): human-readable status message
+        ``total`` (int): total items to process in this step
+        ``current`` (int): items processed so far
+    """
+    progress = get_repair_progress(current_user["id"])
+    if progress is None:
+        return {"status": None, "step": "", "message": "", "total": 0, "current": 0}
+    return progress
 
 
 # ── Media Diagnostics ────────────────────────────────────────────────

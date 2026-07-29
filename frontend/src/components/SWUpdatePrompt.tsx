@@ -14,7 +14,7 @@ export function SWUpdatePrompt() {
   }, []);
 
   const handleUpdate = () => {
-    const reg = (window as any).__swRegistration?.current as ServiceWorkerRegistration | null;
+    const reg = window.__swRegistration?.current as ServiceWorkerRegistration | null;
     if (!reg?.waiting) return;
     // SKIP_WAITING → SW activates → controllerchange → main.tsx reloads
     reg.waiting.postMessage({ type: "SKIP_WAITING" });

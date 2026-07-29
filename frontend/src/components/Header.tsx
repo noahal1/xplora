@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { Sun, Moon, Shuffle, Server } from "lucide-react";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -7,7 +7,8 @@ import { useTheme } from "../context/ThemeContext";
 import { Logo } from "./Logo";
 import { WheelPicker } from "./WheelPicker";
 import { Modal } from "./Modal";
-import { MediaServerTab } from "./MediaServerTab";
+
+const MediaServerTab = lazy(() => import("./MediaServerTab").then((m) => ({ default: m.MediaServerTab })));
 
 export function Header() {
   const { t } = useTranslation();
@@ -58,7 +59,13 @@ export function Header() {
         title={t("media_server.title")}
         size="lg"
       >
-        <MediaServerTab />
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-12">
+            <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+          </div>
+        }>
+          <MediaServerTab />
+        </Suspense>
       </Modal>
     </header>
   );

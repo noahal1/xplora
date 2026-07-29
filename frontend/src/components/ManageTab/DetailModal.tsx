@@ -24,13 +24,17 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
   const [saving, setSaving] = useState(false);
   const prevMovieIdRef = useRef<number | null>(null);
 
+  // Local copy for optimistic updates (avoids mutating the prop)
+  const [localMovie, setLocalMovie] = useState<MediaDetail | null>(null);
+
   // Local edit state initialised from movie prop
   const [form, setForm] = useState<Partial<MediaDetail>>({});
 
-  // Initialise form whenever the modal opens with a (new) movie
+  // Initialise local state whenever the modal opens with a (new) movie
   useEffect(() => {
     if (open && movie && movie.id !== prevMovieIdRef.current) {
       prevMovieIdRef.current = movie.id;
+      setLocalMovie(movie);
       setForm({
         title: movie.title,
         overview: movie.overview ?? "",
@@ -47,6 +51,7 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
   const handleClose = useCallback(() => {
     setEditing(false);
     setForm({});
+    setLocalMovie(null);
     onClose();
   }, [onClose]);
 
@@ -73,7 +78,8 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         tagline: form.tagline || null,
         runtime: form.runtime != null ? form.runtime : null,
       });
-      // Merge updated fields into local form and movie for immediate feedback
+      // Merge updated fields into local state for immediate feedback
+      setLocalMovie(updated);
       setForm({
         title: updated.title,
         overview: updated.overview ?? "",
@@ -84,16 +90,8 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
         media_type: updated.media_type || "movie",
         episode_count: updated.episode_count,
       });
-      // Optimistically update the movie object so view mode shows new data immediately
-      Object.assign(movie, {
-        title: updated.title,
-        overview: updated.overview,
-        country: updated.country,
-        tagline: updated.tagline,
-        runtime: updated.runtime,
-        media_type: updated.media_type,
-        episode_count: updated.episode_count,
-      });
+      // Mark stale so useEffect reinitialises from server data on next open
+      prevMovieIdRef.current = null;
       // onSave triggers fetchData in ManageTab to refresh from server
       showToast(t("manage.updated"), "success");
       onSave?.();
@@ -119,11 +117,14 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
       setEditing(true);
     }, [movie]);
 
-  if (!movie) return null;
+  // Use localMovie for display (optimistic updates after save) or fall back to prop
+  const displayMovie = localMovie ?? movie;
+
+  if (!displayMovie) return null;
 
   return (
     <Modal open={open} onClose={handleClose}
-      title={editing ? (form.title || t("detail_modal.edit_title")) : movie.title}
+      title={editing ? (form.title || t("detail_modal.edit_title")) : displayMovie.title}
       description={undefined}
       footer={editing ? (
         <div className="flex items-center gap-2 w-full justify-end">
@@ -211,40 +212,40 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
             <div className="w-[80px] sm:w-[100px] shrink-0">
               <div className="aspect-[2/3] rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center border border-border/50 shadow-sm"
               >
-                {movie.poster_url ? (
-                  <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
+                {displayMovie.poster_url ? (
+                  <ProgressiveImage src={displayMovie.poster_url} alt={displayMovie.title} className="w-full h-full object-cover" />
                 ) : <Film size={22} className="text-muted-foreground/30" />}
               </div>
             </div>
             <div className="flex-1 min-w-0 space-y-2">
               {/* Quick info badges */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                {movie.year && (
-                  <span className="font-medium">{movie.year}</span>
+                {displayMovie.year && (
+                  <span className="font-medium">{displayMovie.year}</span>
                 )}
-                {movie.genre && (
-                  <span className="line-clamp-2 max-w-[160px] sm:max-w-full opacity-70" title={translateGenres(movie.genre)}>{translateGenres(movie.genre)}</span>
+                {displayMovie.genre && (
+                  <span className="line-clamp-2 max-w-[160px] sm:max-w-full opacity-70" title={translateGenres(displayMovie.genre)}>{translateGenres(displayMovie.genre)}</span>
                 )}
-                {movie.runtime && (
-                  <span className="opacity-70">{movie.runtime} {t("detail_modal.minutes")}</span>
+                {displayMovie.runtime && (
+                  <span className="opacity-70">{displayMovie.runtime} {t("detail_modal.minutes")}</span>
                 )}
-                {movie.media_type === "tv" && (
+                {displayMovie.media_type === "tv" && (
                   <Badge variant="outline" className="text-[9px] text-sky border-sky/30 bg-sky/5 leading-none px-1.5 py-0 shrink-0">TV</Badge>
                 )}
               </div>
 
               {/* Episode count (TV only) */}
-              {movie.media_type === "tv" && movie.episode_count != null && (
+              {displayMovie.media_type === "tv" && displayMovie.episode_count != null && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{t("detail_modal.episode_count", "集数")}</span>
-                  <span className="text-sm font-medium">{movie.episode_count}</span>
+                  <span className="text-sm font-medium">{displayMovie.episode_count}</span>
                 </div>
               )}
 
               {/* Overview */}
-              {movie.overview ? (
+              {displayMovie.overview ? (
                 <p className="text-xs sm:text-sm leading-relaxed line-clamp-3 sm:line-clamp-4 text-foreground/80">
-                  {movie.overview}
+                  {displayMovie.overview}
                 </p>
               ) : (
                 <p className="text-xs sm:text-sm text-muted-foreground italic">{t("detail_modal.no_overview")}</p>
@@ -254,36 +255,36 @@ export function DetailModal({ open, movie, onClose, onSave }: DetailModalProps) 
 
           {/* Metadata grid — 1 col on mobile, 2 col on desktop */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 sm:gap-y-3">
-            {movie.country && (
+            {displayMovie.country && (
               <div>
                 <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.country")}</p>
-                <p className="text-sm">{movie.country}</p>
+                <p className="text-sm">{displayMovie.country}</p>
               </div>
             )}
-            {movie.runtime && (
+            {displayMovie.runtime && (
               <div>
                 <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.runtime")}</p>
-                <p className="text-sm">{movie.runtime} {t("detail_modal.minutes")}</p>
+                <p className="text-sm">{displayMovie.runtime} {t("detail_modal.minutes")}</p>
               </div>
             )}
-            {movie.tagline && (
+            {displayMovie.tagline && (
               <div className="sm:col-span-2">
                 <p className="text-[10px] sm:text-xs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider">{t("detail_modal.tagline")}</p>
-                <p className="text-sm italic">"{movie.tagline}"</p>
+                <p className="text-sm italic">"{displayMovie.tagline}"</p>
               </div>
             )}
           </div>
 
           {/* Badges row */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1">
-            {movie.imdb_id && (
+            {displayMovie.imdb_id && (
               <Badge variant="outline" className="text-[10px] gap-1 py-0.5">
                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 8.5h2v7h-2zm5.5 0h2v7h-2zm5.5-3.5h2v10.5h-2zM4 5.5h2v11H4z"/></svg>
-                {movie.imdb_id}
+                {displayMovie.imdb_id}
               </Badge>
             )}
-            {movie.tmdb_id && <Badge variant="outline" className="text-[10px] py-0.5">TMDB: {movie.tmdb_id}</Badge>}
-            {movie.poster_url ? (
+            {displayMovie.tmdb_id && <Badge variant="outline" className="text-[10px] py-0.5">TMDB: {displayMovie.tmdb_id}</Badge>}
+            {displayMovie.poster_url ? (
               <Badge variant="outline" className="text-[10px] text-green gap-1 py-0.5">
                 <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="20 6 9 17 4 12"/></svg>
                 {t("manage.metadata_complete")}

@@ -5,18 +5,20 @@ import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import { formatSeasonLabel } from "../../utils/groupTVSeries";
 import CountUp from "../CountUp";
-import { Film, Star, AlertCircle, Search, Sparkles, Loader2, Trash2, Check, Info, ChevronRight, Heart } from "lucide-react";
+import { Film, Star, AlertCircle, Search, Sparkles, Loader2, Trash2, Check, Info, ChevronRight, Heart, BrainCircuit } from "lucide-react";
 
 /* ── Mobile Card Row ──────────────────────────────────────────── */
-export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelected, enrichingIds, onToggle, onConfirmDelete, onSetDetailMovie, onSetRematchMovie, onEnrich, onSetMarkWatchedMovie, onStartInlineEdit }: {
+export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelected, enrichingIds, aiInferringIds, onToggle, onConfirmDelete, onSetDetailMovie, onSetRematchMovie, onEnrich, onAiInfer, onSetMarkWatchedMovie, onStartInlineEdit }: {
   movie: MediaDetail;
   isSelected: boolean;
   enrichingIds: Set<number>;
+  aiInferringIds: Set<number>;
   onToggle: (id: number) => void;
   onConfirmDelete: (movieId: number, title: string) => void;
   onSetDetailMovie: (movie: MediaDetail) => void;
   onSetRematchMovie: (movie: MediaDetail) => void;
   onEnrich: (id: number) => Promise<void>;
+  onAiInfer: (id: number) => Promise<void>;
   onSetMarkWatchedMovie: (movie: MediaDetail) => void;
   onStartInlineEdit: (movieId: number, field: string) => void;
 }) {
@@ -133,6 +135,13 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
           className={enrichingIds.has(movie.id) ? "text-primary" : "hover:text-amber"}
         />
         <MobileActionBtn
+          icon={aiInferringIds.has(movie.id) ? <Loader2 size={12} className="animate-spin" /> : <BrainCircuit size={12} />}
+          label={aiInferringIds.has(movie.id) ? "AI..." : "AI"}
+          onClick={() => onAiInfer(movie.id)}
+          disabled={aiInferringIds.has(movie.id)}
+          className={aiInferringIds.has(movie.id) ? "text-violet-500" : "hover:text-violet-500"}
+        />
+        <MobileActionBtn
           icon={<Trash2 size={12} />}
           label={t("common.delete")}
           onClick={() => onConfirmDelete(movie.id, movie.title)}
@@ -155,6 +164,7 @@ export const ManageMobileCard = memo(function ManageMobileCard({ movie, isSelect
   if (prev.movie.episode_count !== next.movie.episode_count) return false;
   if (prev.isSelected !== next.isSelected) return false;
   if (prev.enrichingIds.has(id) !== next.enrichingIds.has(id)) return false;
+  if (prev.aiInferringIds.has(id) !== next.aiInferringIds.has(id)) return false;
   return true;
 });
 

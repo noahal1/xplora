@@ -32,6 +32,8 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
   const [searchMediaType, setSearchMediaType] = useState<string>("movie");
   const searchSourceRef = useRef(searchSource);
   searchSourceRef.current = searchSource;
+  const searchMediaTypeRef = useRef(searchMediaType);
+  searchMediaTypeRef.current = searchMediaType;
 
   // Stable ref for latest search query (avoids stale closures in callbacks/effects)
   const searchParamsRef = useRef({ query: externalQuery });
@@ -54,7 +56,7 @@ export function SearchModal({ open, onClose, onAddSuccess, t }: SearchModalProps
       const data = await api.searchMedia(
         q.trim(),
         searchSourceRef.current,
-        searchMediaType === "all" ? undefined : searchMediaType,
+        searchMediaTypeRef.current === "all" ? undefined : searchMediaTypeRef.current,
       );
       if (seq !== searchSeqRef.current || !mountedRef.current) return;
       setSearchResults(data.results);

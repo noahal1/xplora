@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useToast } from "../context/ToastContext";
-import { getMediaDiagnostics, enrichAllMedia, enrichMedia } from "../api";
+import { getMediaDiagnostics, enrichAllMedia, enrichMedia, aiRepairMedia, getAiRepairStatus, aiInferMedia } from "../api";
 import { getErrMsg } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import type { MediaDetail } from "../types";
@@ -8,7 +8,7 @@ import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
 import { RematchModal } from "../components/ManageTab/RematchModal";
 import { DetailModal } from "../components/ManageTab/DetailModal";
-import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Search, CheckCircle, XCircle, Sparkles, Loader2, Info, Film } from "lucide-react";
+import { AlertTriangle, Image, FileText, Clock, Hash, MapPin, Search, CheckCircle, XCircle, Sparkles, Loader2, Info, Film, BrainCircuit } from "lucide-react";
 
 interface DiagItem {
   id: number;
@@ -68,10 +68,11 @@ const FILTER_OPTIONS = [
 ];
 
 /* ── Mobile Card Component ──────────────────────────────────── */
-function DiagMobileCard({ item, enrichingIds, onEnrich, onDetail, onRematch }: {
+function DiagMobileCard({ item, enrichingIds, onEnrich, onAiInfer, onDetail, onRematch }: {
   item: DiagItem;
   enrichingIds: Set<number>;
   onEnrich: (item: DiagItem) => Promise<void>;
+  onAiInfer: (item: DiagItem) => Promise<void>;
   onDetail: (item: MediaDetail) => void;
   onRematch: (item: MediaDetail) => void;
 }) {
@@ -152,6 +153,12 @@ function DiagMobileCard({ item, enrichingIds, onEnrich, onDetail, onRematch }: {
           className={enrichingIds.has(item.id) ? "text-primary" : "hover:text-amber"}
         />
         <MobileActionBtn
+          icon={<BrainCircuit size={13} />}
+          label="AI"
+          onClick={() => onAiInfer(item)}
+          className="hover:text-violet-500"
+        />
+        <MobileActionBtn
           icon={<Info size={13} />}
           label="详情"
           onClick={() => onDetail(toMediaDetail(item))}
@@ -219,9 +226,28 @@ export function AdminDiagnosticsPage() {
   const [diagData, setDiagData] = useState<DiagData | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [aiRepairing, setAiRepairing] = useState(false);
+  const [aiRepairResult, setAiRepairResult] = useState<string | null>(null);
+  const [aiRepairProgress, setAiRepairProgress] = useState<{
+    status: string | null;
+    step: string;
+    message: string;
+    total: number;
+    current: number;
+  } | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [diagFilter, setDiagFilter] = useState<string>("all");
   const [diagPage, setDiagPage] = useState(0);
   const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
+  const [aiInferringIds, setAiInferringIds] = useState<Set<number>>(new Set());
+  const [aiInferConfirm, setAiInferConfirm] = useState<{
+    itemId: number;
+    title: string;
+    existingGenre: string | null;
+    existingCountry: string | null;
+    aiGenre: string | null;
+    aiCountry: string | null;
+  } | null>(null);
   const [rematchMovie, setRematchMovie] = useState<MediaDetail | null>(null);
   const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
 
@@ -238,6 +264,67 @@ export function AdminDiagnosticsPage() {
   }, [filteredItems, diagPage]);
 
   const diagTotalPages = Math.ceil(filteredItems.length / DIAG_PAGE_SIZE);
+
+  const handleAiInfer = async (item: DiagItem) => {
+    let needsReview = false;
+    setAiInferringIds(prev => new Set(prev).add(item.id));
+    try {
+      const result = await aiInferMedia(item.id);
+      if (result.needs_review) {
+        needsReview = true;
+        setAiInferConfirm({
+          itemId: item.id,
+          title: result.title,
+          existingGenre: result.existing_genre,
+          existingCountry: result.existing_country,
+          aiGenre: result.ai_genre,
+          aiCountry: result.ai_country,
+        });
+        return;
+      }
+      if (result.updated) {
+        showToast(`「${result.title}」AI 推断成功`, "success");
+      } else {
+        showToast(`「${result.title}」${result.message}`, "success");
+      }
+      silentRefresh();
+    } catch (err) {
+      showToast(`AI 推断失败: ${getErrMsg(err)}`, "error");
+    } finally {
+      if (!needsReview) {
+        setAiInferringIds(prev => { const next = new Set(prev); next.delete(item.id); return next; });
+      }
+    }
+  };
+
+  const handleAiInferApply = async () => {
+    const confirm = aiInferConfirm;
+    if (!confirm) return;
+    const fields: { genre?: string | null; country?: string | null } = {};
+    if (confirm.aiGenre) fields.genre = confirm.aiGenre;
+    if (confirm.aiCountry) fields.country = confirm.aiCountry;
+    setAiInferConfirm(null);
+    try {
+      const result = await aiInferMedia(confirm.itemId, fields);
+      if (result.updated) {
+        showToast(`「${result.title}」AI 推断已应用`, "success");
+      } else {
+        showToast(`「${result.title}」${result.message}`, "success");
+      }
+      silentRefresh();
+    } catch (err) {
+      showToast(`AI 推断应用失败: ${getErrMsg(err)}`, "error");
+    } finally {
+      setAiInferringIds(prev => { const next = new Set(prev); next.delete(confirm.itemId); return next; });
+    }
+  };
+
+  const handleAiInferDismiss = () => {
+    if (aiInferConfirm) {
+      setAiInferringIds(prev => { const next = new Set(prev); next.delete(aiInferConfirm.itemId); return next; });
+    }
+    setAiInferConfirm(null);
+  };
 
   const handleEnrich = async (item: DiagItem) => {
     setEnrichingIds(prev => new Set(prev).add(item.id));
@@ -276,6 +363,73 @@ export function AdminDiagnosticsPage() {
       // Silently ignore — the triggering action already showed a toast
     }
   };
+
+  const startAiRepairPolling = () => {
+    // Clear any existing poll
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    setAiRepairProgress({ status: "running", step: "starting", message: "正在启动...", total: 0, current: 0 });
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const progress = await getAiRepairStatus();
+        if (!progress.status) {
+          // No active repair — stop polling
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          setAiRepairing(false);
+          setAiRepairProgress(null);
+          return;
+        }
+
+        setAiRepairProgress(progress);
+
+        if (progress.status === "done") {
+          // Repair complete
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          setAiRepairing(false);
+          setAiRepairResult(progress.message || "AI 修复完成");
+          setAiRepairProgress(null);
+          showToast(progress.message || "AI 修复完成", "success");
+          // Refresh diagnostics
+          silentRefresh();
+        } else if (progress.status === "error") {
+          // Repair failed
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          setAiRepairing(false);
+          setAiRepairResult(progress.message || "AI 修复失败");
+          setAiRepairProgress(null);
+          showToast(progress.message || "AI 修复失败", "error");
+        }
+      } catch {
+        // Ignore polling errors — will retry on next interval
+      }
+    }, 2000);
+  };
+
+  const handleAiRepair = async () => {
+    setAiRepairing(true);
+    setAiRepairResult(null);
+    setAiRepairProgress(null);
+    try {
+      const result = await aiRepairMedia();
+      showToast(result.message || "AI 修复已启动", "success");
+      // Start polling for progress
+      startAiRepairPolling();
+    } catch (err) {
+      showToast("AI 修复失败: " + getErrMsg(err), "error");
+      setAiRepairResult("AI 修复失败: " + getErrMsg(err));
+      setAiRepairing(false);
+    }
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
 
   const handleEnrichAll = async () => {
     setEnriching(true);
@@ -325,6 +479,14 @@ export function AdminDiagnosticsPage() {
             )}
           </h2>
           <button
+            onClick={handleAiRepair}
+            disabled={aiRepairing || !diagData || diagData.summary.total === 0}
+            className="btn btn-ghost btn-sm gap-1.5 text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 hover:bg-violet-500/10"
+          >
+            <BrainCircuit className={`w-3.5 h-3.5 ${aiRepairing ? "animate-pulse" : ""}`} />
+            {aiRepairing ? "AI 修复中..." : "AI 修复"}
+          </button>
+          <button
             onClick={handleEnrichAll}
             disabled={enriching || !diagData || diagData.summary.has_issues === 0}
             className="btn btn-primary btn-sm gap-1.5"
@@ -352,6 +514,55 @@ export function AdminDiagnosticsPage() {
           </div>
         ) : diagData ? (
           <div className="space-y-6">
+            {/* ── AI Repair Progress Card ──────────────────── */}
+            {aiRepairProgress && (
+              <div className="card p-4 sm:p-5 space-y-3 border-violet-500/20 bg-violet-500/5">
+                <div className="flex items-center gap-2.5">
+                  <div className="relative w-8 h-8">
+                    <BrainCircuit size={18} className="absolute inset-0 m-auto text-violet-600 dark:text-violet-400" />
+                    {aiRepairProgress.status === "running" && (
+                      <div className="w-8 h-8 rounded-full border-2 border-violet-500/30 border-t-violet-500 animate-stream-spin" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                      AI 数据修复
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {aiRepairProgress.message}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {aiRepairProgress.status === "running" && aiRepairProgress.total > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">进度</span>
+                      <span className="text-violet-600 dark:text-violet-400 tabular-nums">
+                        {Math.round((aiRepairProgress.current / aiRepairProgress.total) * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-violet-500/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500 ease-out"
+                        style={{
+                          width: `${Math.min(100, (aiRepairProgress.current / Math.max(1, aiRepairProgress.total)) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {aiRepairProgress.status === "running" && aiRepairProgress.total === 0 && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                    正在分析媒体库...
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ── Summary Cards ─────────────────────────────── */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               <div className="card p-2.5 sm:p-3 flex items-center gap-2 sm:gap-2.5">
@@ -552,6 +763,14 @@ export function AdminDiagnosticsPage() {
                                   {enrichingIds.has(item.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                                 </button>
                                 <button
+                                  className={`px-1.5 py-1 rounded transition-colors ${aiInferringIds.has(item.id) ? "text-violet-500 animate-pulse" : "text-muted-foreground hover:text-violet-500"} hover:bg-violet-500/10`}
+                                  onClick={() => handleAiInfer(item)}
+                                  disabled={aiInferringIds.has(item.id)}
+                                  title={aiInferringIds.has(item.id) ? "AI 推断中..." : "AI 推断"}
+                                >
+                                  <BrainCircuit size={14} />
+                                </button>
+                                <button
                                   className="px-1.5 py-1 rounded transition-colors text-muted-foreground hover:text-sky hover:bg-sky/10"
                                   onClick={() => setDetailMovie(toMediaDetail(item))}
                                   title="查看详情"
@@ -582,6 +801,7 @@ export function AdminDiagnosticsPage() {
                       item={item}
                       enrichingIds={enrichingIds}
                       onEnrich={handleEnrich}
+                      onAiInfer={handleAiInfer}
                       onDetail={setDetailMovie}
                       onRematch={setRematchMovie}
                     />
@@ -611,6 +831,23 @@ export function AdminDiagnosticsPage() {
                 所有条目元数据完整，无需处理
               </div>
             )}
+
+            {/* ── AI Repair Result Banner ───────────────────── */}
+            {aiRepairResult && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-500/10 text-violet-700 dark:text-violet-300 text-xs">
+                <BrainCircuit size={14} className="shrink-0" />
+                <span>{aiRepairResult}</span>
+                <button
+                  onClick={() => setAiRepairResult(null)}
+                  className="ml-auto shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-12 text-sm text-muted-foreground">
@@ -634,6 +871,70 @@ export function AdminDiagnosticsPage() {
         onClose={() => setDetailMovie(null)}
         onSave={() => { setDetailMovie(null); silentRefresh(); }}
       />
+
+      {/* ── AI Infer Confirmation Modal ───────────────────────── */}
+      {aiInferConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
+          <div className="w-full max-w-md rounded-xl bg-bg-card border border-border shadow-xl p-5 space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <BrainCircuit size={16} className="text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">AI 推断结果确认</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  「{aiInferConfirm.title}」的 AI 推断结果与现有数据不同
+                </p>
+              </div>
+            </div>
+
+            {/* Genre comparison */}
+            <div className="p-3 rounded-lg bg-accent/30">
+              <div className="text-xs font-medium mb-2">类型 (Genre)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 rounded border border-border/60 bg-bg-card text-xs">
+                  <div className="text-muted-foreground mb-0.5">现有</div>
+                  <div className="font-medium">{aiInferConfirm.existingGenre || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+                <div className="p-2 rounded border border-violet-500/30 bg-violet-500/5 text-xs">
+                  <div className="text-violet-600 dark:text-violet-400 mb-0.5">AI 建议</div>
+                  <div className="font-medium">{aiInferConfirm.aiGenre || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Country comparison */}
+            <div className="p-3 rounded-lg bg-accent/30">
+              <div className="text-xs font-medium mb-2">国家 (Country)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 rounded border border-border/60 bg-bg-card text-xs">
+                  <div className="text-muted-foreground mb-0.5">现有</div>
+                  <div className="font-medium">{aiInferConfirm.existingCountry || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+                <div className="p-2 rounded border border-violet-500/30 bg-violet-500/5 text-xs">
+                  <div className="text-violet-600 dark:text-violet-400 mb-0.5">AI 建议</div>
+                  <div className="font-medium">{aiInferConfirm.aiCountry || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button className="btn btn-ghost btn-sm" onClick={handleAiInferDismiss}>
+                取消
+              </button>
+              <button
+                className="btn btn-sm gap-1.5"
+                style={{ background: "var(--violet-600, #7c3aed)", color: "#fff", borderColor: "transparent" }}
+                onClick={handleAiInferApply}
+              >
+                <BrainCircuit size={12} />
+                应用 AI 结果
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail, MediaSearchResult, SortField } from "../../types";
 import * as api from "../../api";
@@ -16,7 +16,7 @@ import { StatusFilter } from "../StatusFilter";
 import { SearchInput } from "../SearchInput";
 import { ScrapeSourceFilter } from "../ScrapeSourceFilter";
 import FadeContent from "../FadeContent";
-import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server } from "lucide-react";
+import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server, BrainCircuit } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { useSort } from "../../hooks/useSort";
 import { isAbortError, getErrMsg } from "../../lib/utils";
@@ -36,7 +36,8 @@ import { FilterBar } from "../shared/FilterBar";
 import { groupTVSeries } from "../../utils/groupTVSeries";
 import type { TVSeriesGroup } from "../../utils/groupTVSeries";
 import { DownloadQueue } from "./DownloadQueue";
-import { MediaServerTab } from "../MediaServerTab";
+
+const MediaServerTab = lazy(() => import("../MediaServerTab").then((m) => ({ default: m.MediaServerTab })));
 
 const MANAGE_PAGE_SIZE = 16;
 
@@ -113,6 +114,19 @@ export function ManageTab() {
   /* ── Enriching IDs ───────────────────────────────────────────── */
   const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
 
+  /* ── AI Inferring IDs ───────────────────────────────────────── */
+  const [aiInferringIds, setAiInferringIds] = useState<Set<number>>(new Set());
+
+  /* ── AI Infer confirmation modal ────────────────────────────── */
+  const [aiInferConfirm, setAiInferConfirm] = useState<{
+    movieId: number;
+    title: string;
+    existingGenre: string | null;
+    existingCountry: string | null;
+    aiGenre: string | null;
+    aiCountry: string | null;
+  } | null>(null);
+
   // ── Group TV series by tv_series_id ──
   const { standalone: standaloneMedia, groups: tvGroups } = useMemo(
     () => groupTVSeries(mediaList),
@@ -149,7 +163,67 @@ export function ManageTab() {
     }
   }, [search.debouncedValue, page, statusFilter, mediaTypeFilter, genreFilter, countryFilter, errorFilter, sortField, sortDir]);
 
+  const handleAiInfer = useCallback(async (movieId: number) => {
+    let needsReview = false;
+    setAiInferringIds(prev => new Set(prev).add(movieId));
+    try {
+      const result = await api.aiInferMedia(movieId);
+      if (result.needs_review) {
+        needsReview = true;
+        setAiInferConfirm({
+          movieId,
+          title: result.title,
+          existingGenre: result.existing_genre,
+          existingCountry: result.existing_country,
+          aiGenre: result.ai_genre,
+          aiCountry: result.ai_country,
+        });
+        return;
+      }
+      if (result.updated) {
+        showToast(`«${result.title}» AI 推断成功`, "success");
+      } else {
+        showToast(`«${result.title}» ${result.message}`, "success");
+      }
+      fetchData(undefined, true);
+    } catch (err) {
+      showToast(`AI 推断失败: ${getErrMsg(err)}`, "error");
+    } finally {
+      if (!needsReview) {
+        setAiInferringIds(prev => { const next = new Set(prev); next.delete(movieId); return next; });
+      }
+    }
+  }, [fetchData, showToast]);
 
+  const handleAiInferApply = useCallback(async () => {
+    const confirm = aiInferConfirm;
+    if (!confirm) return;
+    const movieId = confirm.movieId;
+    const fields: { genre?: string | null; country?: string | null } = {};
+    if (confirm.aiGenre) fields.genre = confirm.aiGenre;
+    if (confirm.aiCountry) fields.country = confirm.aiCountry;
+    setAiInferConfirm(null);
+    try {
+      const result = await api.aiInferMedia(movieId, fields);
+      if (result.updated) {
+        showToast(`«${result.title}» AI 推断已应用`, "success");
+      } else {
+        showToast(`«${result.title}» ${result.message}`, "success");
+      }
+      fetchData(undefined, true);
+    } catch (err) {
+      showToast(`AI 推断应用失败: ${getErrMsg(err)}`, "error");
+    } finally {
+      setAiInferringIds(prev => { const next = new Set(prev); next.delete(movieId); return next; });
+    }
+  }, [aiInferConfirm, fetchData, showToast]);
+
+  const handleAiInferDismiss = useCallback(() => {
+    if (aiInferConfirm) {
+      setAiInferringIds(prev => { const next = new Set(prev); next.delete(aiInferConfirm.movieId); return next; });
+    }
+    setAiInferConfirm(null);
+  }, [aiInferConfirm]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -631,11 +705,13 @@ export function ManageTab() {
                     editingCell={editingCell}
                     sliderValue={sliderValue}
                     enrichingIds={enrichingIds}
+                    aiInferringIds={aiInferringIds}
                     onToggle={toggleSelection}
                     onConfirmDelete={confirmDelete}
                     onSetDetailMovie={setDetailMovie}
                     onSetRematchMovie={setRematchMovie}
                     onEnrich={handleEnrich}
+                    onAiInfer={handleAiInfer}
                     onSetMarkWatchedMovie={setMarkWatchedMovie}
                     onStartInlineEdit={startInlineEdit}
                     onSaveInlineEdit={saveInlineEdit}
@@ -651,11 +727,13 @@ export function ManageTab() {
                     sliderValue={sliderValue}
                     selected={selected}
                     enrichingIds={enrichingIds}
+                    aiInferringIds={aiInferringIds}
                     onToggleGroup={toggleGroup}
                     onToggle={toggleSelection}
                     onOpenDetail={setDetailMovie}
                     onSetRematchMovie={setRematchMovie}
                     onEnrich={handleEnrich}
+                    onAiInfer={handleAiInfer}
                     onRemoveGroup={removeGroup}
                     onConfirmDelete={confirmDelete}
                     onSetMarkWatchedMovie={setMarkWatchedMovie}
@@ -683,11 +761,13 @@ export function ManageTab() {
               movie={m}
               isSelected={selected.has(m.id)}
               enrichingIds={enrichingIds}
+              aiInferringIds={aiInferringIds}
               onToggle={toggleSelection}
               onConfirmDelete={confirmDelete}
               onSetDetailMovie={setDetailMovie}
               onSetRematchMovie={setRematchMovie}
               onEnrich={handleEnrich}
+              onAiInfer={handleAiInfer}
               onSetMarkWatchedMovie={setMarkWatchedMovie}
               onStartInlineEdit={startInlineEdit}
             />
@@ -729,6 +809,63 @@ export function ManageTab() {
         </div>}
       >
         {deleteConfirm?.type === "all" && <p className="text-sm text-muted-foreground">{t("manage.delete_confirm_all2")}</p>}
+      </Modal>
+
+      {/* ── AI Infer Confirmation Modal ─────────────────────────── */}
+      <Modal
+        open={aiInferConfirm !== null}
+        onClose={handleAiInferDismiss}
+        title={`AI 推断结果确认`}
+        description={aiInferConfirm ? `「${aiInferConfirm.title}」的 AI 推断结果与现有数据不同，请选择是否覆盖` : ""}
+        footer={
+          <div className="flex items-center gap-2 w-full justify-end">
+            <button className="btn btn-ghost btn-sm" onClick={handleAiInferDismiss}>
+              取消
+            </button>
+            <button className="btn btn-sm gap-1.5" style={{ background: "var(--violet-600, #7c3aed)", color: "#fff", borderColor: "transparent" }} onClick={handleAiInferApply}>
+              <BrainCircuit size={12} />
+              应用 AI 结果
+            </button>
+          </div>
+        }
+      >
+        {aiInferConfirm && (
+          <div className="space-y-3">
+            {/* Genre comparison */}
+            <div className="p-3 rounded-lg bg-accent/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">类型 (Genre)</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2 rounded border border-border/60 bg-bg-card">
+                  <div className="text-muted-foreground mb-1">现有</div>
+                  <div className="font-medium">{aiInferConfirm.existingGenre || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+                <div className="p-2 rounded border border-violet-500/30 bg-violet-500/5">
+                  <div className="text-violet-600 dark:text-violet-400 mb-1">AI 建议</div>
+                  <div className="font-medium">{aiInferConfirm.aiGenre || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Country comparison */}
+            <div className="p-3 rounded-lg bg-accent/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">国家 (Country)</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-2 rounded border border-border/60 bg-bg-card">
+                  <div className="text-muted-foreground mb-1">现有</div>
+                  <div className="font-medium">{aiInferConfirm.existingCountry || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+                <div className="p-2 rounded border border-violet-500/30 bg-violet-500/5">
+                  <div className="text-violet-600 dark:text-violet-400 mb-1">AI 建议</div>
+                  <div className="font-medium">{aiInferConfirm.aiCountry || <span className="text-muted-foreground italic">无</span>}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* ── TMDB Search & Import Dialog ─────────────────────────── */}
@@ -792,7 +929,13 @@ export function ManageTab() {
         title={t("media_server.title")}
         size="lg"
       >
-        <MediaServerTab />
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-12">
+            <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+          </div>
+        }>
+          <MediaServerTab />
+        </Suspense>
       </Modal>
     </FadeContent>
   );

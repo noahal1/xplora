@@ -19,6 +19,7 @@ NORMALIZE_GENRE: dict[str, str] = {
     "喜剧": "Comedy",
     "犯罪": "Crime",
     "纪录片": "Documentary",
+    "纪录": "Documentary",
     "剧情": "Drama",
     "家庭": "Family",
     "奇幻": "Fantasy",
@@ -43,6 +44,44 @@ NORMALIZE_GENRE: dict[str, str] = {
     # Variant English spellings → canonical
     "Science-Fiction": "Sci-Fi",
     "Science Fiction": "Sci-Fi",
+}
+
+# ── Country name normalisation ────────────────────────────────
+# Maps Chinese country names to canonical English ISO names.
+
+NORMALIZE_COUNTRY: dict[str, str] = {
+    "美国": "United States",
+    "中国": "China",
+    "中国大陆": "China",
+    "日本": "Japan",
+    "英国": "United Kingdom",
+    "法国": "France",
+    "德国": "Germany",
+    "韩国": "South Korea",
+    "南韩": "South Korea",
+    "意大利": "Italy",
+    "西班牙": "Spain",
+    "俄罗斯": "Russia",
+    "加拿大": "Canada",
+    "澳大利亚": "Australia",
+    "印度": "India",
+    "巴西": "Brazil",
+    "荷兰": "Netherlands",
+    "瑞典": "Sweden",
+    "挪威": "Norway",
+    "丹麦": "Denmark",
+    "芬兰": "Finland",
+    "比利时": "Belgium",
+    "瑞士": "Switzerland",
+    "奥地利": "Austria",
+    "波兰": "Poland",
+    "土耳其": "Turkey",
+    "墨西哥": "Mexico",
+    "阿根廷": "Argentina",
+    "新西兰": "New Zealand",
+    "泰国": "Thailand",
+    "香港": "Hong Kong",
+    "台湾": "Taiwan",
 }
 
 

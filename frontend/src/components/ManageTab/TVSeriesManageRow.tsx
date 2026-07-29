@@ -7,7 +7,7 @@ import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import {
   Film, Search, Sparkles, Trash2, Info, ChevronDown, ChevronRight,
-  Star, Loader2, AlertCircle, Heart, Check,
+  Star, Loader2, AlertCircle, Heart, Check, BrainCircuit,
 } from "lucide-react";
 import { TableEditableCell } from "./TableEditableCell";
 import CountUp from "../CountUp";
@@ -20,11 +20,13 @@ interface TVSeriesManageRowProps {
   editingCell: { movieId: number; field: string } | null;
   sliderValue: number;
   enrichingIds: Set<number>;
+  aiInferringIds: Set<number>;
   onToggleGroup: (tvSeriesId: string) => void;
   onToggle: (id: number) => void;
   onOpenDetail: (movie: MediaDetail) => void;
   onSetRematchMovie: (movie: MediaDetail) => void;
   onEnrich: (id: number) => Promise<void>;
+  onAiInfer: (id: number) => Promise<void>;
   onRemoveGroup: (seasonIds: number[]) => void;
   onConfirmDelete: (movieId: number, title: string) => void;
   onSetMarkWatchedMovie: (movie: MediaDetail) => void;
@@ -40,11 +42,13 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
   editingCell,
   sliderValue,
   enrichingIds,
+  aiInferringIds,
   onToggleGroup,
   onToggle,
   onOpenDetail,
   onSetRematchMovie,
   onEnrich,
+  onAiInfer,
   onRemoveGroup,
   onConfirmDelete,
   onSetMarkWatchedMovie,
@@ -80,6 +84,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
   const genre = firstSeason.genre;
   const hasEnrichError = group.seasons.some((s) => s.scrape_error && !s.poster_url);
   const anyEnriching = group.seasons.some((s) => enrichingIds.has(s.id));
+  const anyAiInferring = group.seasons.some((s) => aiInferringIds.has(s.id));
 
   return (
     <>
@@ -202,7 +207,13 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
               disabled={anyEnriching}
               color="amber"
               highlight={anyEnriching} />
-            <ActionBtn icon={<Trash2 size={13} />} label={t("watched.remove_all_seasons")}
+            <ActionBtn
+              icon={anyAiInferring ? <Loader2 size={13} className="animate-spin" /> : <BrainCircuit size={13} />}
+              label={"AI 推断"}
+              onClick={() => Promise.all(group.seasons.map((s) => onAiInfer(s.id)))}
+              disabled={anyAiInferring}
+              color="sky" />
+          <ActionBtn icon={<Trash2 size={13} />} label={t("watched.remove_all_seasons")}
               onClick={() => onRemoveGroup(group.seasons.map((s) => s.id))} color="destructive" />
           </div>
         </td>
@@ -321,6 +332,11 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
                 label={enrichingIds.has(season.id) ? t("manage.enriching") : t("manage.enrich")}
                 onClick={() => onEnrich(season.id)} disabled={enrichingIds.has(season.id)}
                 color="amber" highlight={enrichingIds.has(season.id)} size="sm" />
+              <ActionBtn
+                icon={aiInferringIds.has(season.id) ? <Loader2 size={11} className="animate-spin" /> : <BrainCircuit size={11} />}
+                label={"AI"}
+                onClick={() => onAiInfer(season.id)} disabled={aiInferringIds.has(season.id)}
+                color="sky" highlight={aiInferringIds.has(season.id)} size="sm" />
               <ActionBtn icon={<Trash2 size={11} />} label={t("common.delete")}
                 onClick={() => onConfirmDelete(season.id, season.title)} color="destructive" size="sm" />
             </div>

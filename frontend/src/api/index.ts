@@ -393,6 +393,53 @@ export async function getRecommendations(params: {
   });
 }
 
+/** Launch AI-powered data repair (background) */
+export async function aiRepairMedia(): Promise<{ status: string; message: string }> {
+  return fetchJSON(`${API_BASE}/media/ai-repair`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Use AI to infer missing genre/country for a single media item.
+ *
+ * First call (no ``apply``) runs AI inference. If ``needs_review`` is true,
+ * call again with ``apply`` to write the chosen fields.
+ */
+export async function aiInferMedia(
+  mediaId: number,
+  apply?: { genre?: string | null; country?: string | null }
+): Promise<{
+  id: number;
+  title: string;
+  genre: string | null;
+  country: string | null;
+  existing_genre: string | null;
+  existing_country: string | null;
+  ai_genre: string | null;
+  ai_country: string | null;
+  needs_review: boolean;
+  updated: boolean;
+  message: string;
+}> {
+  return fetchJSON(`${API_BASE}/media/${mediaId}/ai-infer`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: apply ? JSON.stringify({ apply }) : undefined,
+  });
+}
+
+/** Poll the current AI repair progress */
+export async function getAiRepairStatus(): Promise<{
+  status: string | null;
+  step: string;
+  message: string;
+  total: number;
+  current: number;
+}> {
+  return fetchJSON(`${API_BASE}/media/ai-repair/status`, { headers: getAuthHeaders() });
+}
+
 /** Run media diagnostics — checks metadata completeness, scrape errors, etc. */
 export async function getMediaDiagnostics(): Promise<{
   summary: {
