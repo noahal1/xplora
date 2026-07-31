@@ -1,8 +1,12 @@
-import { Star, Brain, Bot, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Star, Brain, Bot, Sparkles, Check, ListTodo } from "lucide-react";
 import type { TFunction } from "i18next";
 import { STRATEGIES } from "./strategies";
 import { MediaTypeFilter } from "../../MediaTypeFilter";
 import { GenreFilter } from "../../GenreFilter";
+import { SearchInput } from "../../SearchInput";
+import { VirtualList } from "../../VirtualList";
+import type { Playlist } from "../../../types";
 
 interface StrategySelectorProps {
   strategy: string;
@@ -13,10 +17,9 @@ interface StrategySelectorProps {
   onRecCountChange: (n: number) => void;
   strategyMood: string;
   onMoodChange: (v: string) => void;
-  strategyYearStart: string;
-  onYearStartChange: (v: string) => void;
-  strategyYearEnd: string;
-  onYearEndChange: (v: string) => void;
+  strategyPlaylistId: string;
+  onPlaylistChange: (id: string) => void;
+  playlists: Playlist[];
   mediaTypeFilter: string;
   onMediaTypeFilterChange: (v: string) => void;
   genreFilter: Set<string>;
@@ -32,8 +35,8 @@ export function StrategySelector({
   selectedModel, onModelChange,
   recCount, onRecCountChange,
   strategyMood, onMoodChange,
-  strategyYearStart, onYearStartChange,
-  strategyYearEnd, onYearEndChange,
+  strategyPlaylistId, onPlaylistChange,
+  playlists,
   mediaTypeFilter, onMediaTypeFilterChange,
   genreFilter, onGenreFilterChange,
   uniqueGenres,
@@ -41,6 +44,19 @@ export function StrategySelector({
   onGenerate,
   t,
 }: StrategySelectorProps) {
+  const [playlistQuery, setPlaylistQuery] = useState("");
+
+  // Filter playlists by name/description for the picker search
+  const filteredPlaylists = useMemo(() => {
+    const q = playlistQuery.trim().toLowerCase();
+    if (!q) return playlists;
+    return playlists.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q),
+    );
+  }, [playlists, playlistQuery]);
+
   return (
     <div className="flex flex-col items-center py-6 sm:py-10 px-3 sm:px-4">
       {/* Sparkle icon */}
@@ -121,29 +137,101 @@ export function StrategySelector({
         </div>
       )}
 
-      {strategy === "era" && (
-        <div className="w-full max-w-[320px] mb-5">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={strategyYearStart}
-              onChange={(e) => onYearStartChange(e.target.value)}
-              placeholder={t("recommend.strategy_era_start")}
-              className="input-field text-center"
-              min={1900}
-              max={2030}
-            />
-            <span className="text-xs text-fg-dim">—</span>
-            <input
-              type="number"
-              value={strategyYearEnd}
-              onChange={(e) => onYearEndChange(e.target.value)}
-              placeholder={t("recommend.strategy_era_end")}
-              className="input-field text-center"
-              min={1900}
-              max={2030}
-            />
-          </div>
+      {strategy === "playlist" && (
+        <div className="w-full max-w-[520px] mb-5">
+          <p className="text-label mb-2 sm:mb-3 text-center text-fg-dim">
+            {t("recommend.strategy_playlist_placeholder")}
+          </p>
+          {playlists.length === 0 ? (
+            <div className="text-center py-6 rounded-lg border border-dashed border-border bg-muted/20">
+              <p className="text-sm text-foreground">{t("playlists.no_playlists")}</p>
+              <p className="text-xs mt-0.5 text-muted-foreground">{t("playlists.no_playlists_hint")}</p>
+            </div>
+          ) : (
+            <>
+              {/* Search box */}
+              <div className="mb-2">
+                <SearchInput
+                  value={playlistQuery}
+                  onChange={setPlaylistQuery}
+                  onClear={() => setPlaylistQuery("")}
+                  placeholder={t("playlists.search_playlists_placeholder")}
+                />
+              </div>
+
+              {filteredPlaylists.length === 0 ? (
+                <div className="text-center py-6 rounded-lg border border-dashed border-border bg-muted/20">
+                  <p className="text-sm text-foreground">{t("playlists.search_playlists_empty")}</p>
+                </div>
+              ) : (
+                <VirtualList
+                  items={filteredPlaylists}
+                  rowHeight={64}
+                  maxHeight="260px"
+                  overscan={6}
+                  className="rounded-lg pr-1"
+                  keyFn={(p) => `pl-${p.id}`}
+                  renderRow={(p) => {
+                    const isSelected = String(p.id) === strategyPlaylistId;
+                    return (
+                      <button
+                        onClick={() => onPlaylistChange(String(p.id))}
+                        className="w-full h-[calc(100%-4px)] mb-1 flex items-center gap-2.5 p-2 rounded-lg text-left transition-all"
+                        style={{
+                          background: isSelected ? "var(--accent-glow)" : "var(--bg-input)",
+                          border: isSelected
+                            ? "1px solid var(--primary-30)"
+                            : "1px solid var(--border-subtle)",
+                        }}
+                      >
+                        {/* Cover thumbnail */}
+                        <div className="w-8 h-11 rounded overflow-hidden shrink-0 border border-border-subtle">
+                          {p.cover_url ? (
+                            <img
+                              src={p.cover_url}
+                              alt=""
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <div
+                              className="w-full h-full flex items-center justify-center"
+                              style={{ background: "linear-gradient(135deg, var(--primary-20), transparent)" }}
+                            >
+                              <ListTodo size={12} className="text-primary/70" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className="text-xs truncate"
+                            style={{ fontWeight: isSelected ? 590 : 510, color: isSelected ? "var(--seed-accent)" : "var(--fg-secondary)" }}
+                          >
+                            {p.name}
+                          </p>
+                          <p className="text-[10px] mt-0.5 text-muted-foreground">
+                            {t("playlists.item_count", { count: p.item_count ?? 0 })}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <span
+                            className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
+                            style={{ background: "var(--seed-primary)", color: "#0f0f0f" }}
+                          >
+                            <Check size={10} strokeWidth={3} />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  }}
+                />
+              )}
+            </>
+          )}
+          <p className="text-caption text-fg-dim text-center mt-2">
+            {t("recommend.strategy_playlist_hint")}
+          </p>
         </div>
       )}
 
@@ -202,15 +290,18 @@ export function StrategySelector({
               : t("recommend.need_more_movies")}
           </p>
         )}
+        {strategy === "playlist" && !strategyPlaylistId && filteredCount >= 2 && (
+          <p className="text-sm text-muted-foreground">{t("recommend.strategy_playlist_required")}</p>
+        )}
 
         <button
           onClick={onGenerate}
-          disabled={filteredCount < 2}
+          disabled={filteredCount < 2 || (strategy === "playlist" && !strategyPlaylistId)}
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40"
           style={{
-            background: filteredCount >= 2 ? "var(--seed-primary)" : "var(--bg-input)",
-            color: filteredCount >= 2 ? "#0f0f0f" : "var(--fg-dim)",
-            border: filteredCount >= 2 ? "none" : "1px solid var(--border-default)",
+            background: filteredCount >= 2 && !(strategy === "playlist" && !strategyPlaylistId) ? "var(--seed-primary)" : "var(--bg-input)",
+            color: filteredCount >= 2 && !(strategy === "playlist" && !strategyPlaylistId) ? "#0f0f0f" : "var(--fg-dim)",
+            border: filteredCount >= 2 && !(strategy === "playlist" && !strategyPlaylistId) ? "none" : "1px solid var(--border-default)",
           }}
         >
           <Sparkles size={14} />

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaItem, Recommendation, ChatMessage, ExternalDetail, DBSession, DBSessionDetail } from "../types";
+import type { MediaItem, Recommendation, ChatMessage, ExternalDetail, DBSession, DBSessionDetail, Playlist } from "../types";
 import * as api from "../api";
 import { exportJSON } from "../utils/export";
 import { useToast } from "../context/ToastContext";
@@ -39,8 +39,8 @@ export function RecommendTab() {
 
   // Strategy-specific inputs
   const [strategyMood, setStrategyMood] = useState("");
-  const [strategyYearStart, setStrategyYearStart] = useState("");
-  const [strategyYearEnd, setStrategyYearEnd] = useState("");
+  const [strategyPlaylistId, setStrategyPlaylistId] = useState("");
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,9 +80,12 @@ export function RecommendTab() {
   const loadMoviesFromDB = useCallback(async () => {
     setLoadingMovies(true);
     try {
-      const [watchedData, wishlistData] = await Promise.all([
+      // Playlist fetch is best-effort — a failure must not block the core
+      // movie/wishlist data (Promise.all would reject the whole batch).
+      const [watchedData, wishlistData, playlistResult] = await Promise.all([
         api.listMedia({ page: 0, page_size: 5000, status: "watched" }),
         api.listMedia({ page: 0, page_size: 5000, status: "wish" }),
+        api.listPlaylists().catch(() => ({ playlists: [] })),
       ]);
       setMovies(
         watchedData.media.map((m, i) => ({
@@ -103,6 +106,7 @@ export function RecommendTab() {
       setWishlistTmdbIds(
         new Set(wishlistData.media.map((m) => m.tmdb_id).filter((x): x is string => !!x))
       );
+      setPlaylists(playlistResult.playlists);
     } catch (err) {
       console.error("Failed to load movies:", err);
       toastRef.current(tRef.current("recommend.load_error"), "error");
@@ -214,13 +218,12 @@ export function RecommendTab() {
       case "mood":
         if (strategyMood) params.mood = strategyMood;
         break;
-      case "era":
-        if (strategyYearStart) params.year_start = parseInt(strategyYearStart, 10);
-        if (strategyYearEnd) params.year_end = parseInt(strategyYearEnd, 10);
+      case "playlist":
+        if (strategyPlaylistId) params.playlist_id = parseInt(strategyPlaylistId, 10);
         break;
     }
     return Object.keys(params).length > 0 ? params : undefined;
-  }, [strategy, strategyMood, strategyYearStart, strategyYearEnd, mediaTypeFilter]);
+  }, [strategy, strategyMood, strategyPlaylistId, mediaTypeFilter]);
 
   // Derive unique genre tags from watched movies
   const uniqueGenres = useGenreExtractor(movies);
@@ -536,10 +539,9 @@ export function RecommendTab() {
             onRecCountChange={(n) => setRecCount(n)}
             strategyMood={strategyMood}
             onMoodChange={setStrategyMood}
-            strategyYearStart={strategyYearStart}
-            onYearStartChange={setStrategyYearStart}
-            strategyYearEnd={strategyYearEnd}
-            onYearEndChange={setStrategyYearEnd}
+            strategyPlaylistId={strategyPlaylistId}
+            onPlaylistChange={setStrategyPlaylistId}
+            playlists={playlists}
             mediaTypeFilter={mediaTypeFilter}
             onMediaTypeFilterChange={setMediaTypeFilter}
             genreFilter={genreFilter}

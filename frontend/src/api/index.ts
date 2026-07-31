@@ -670,6 +670,26 @@ export async function generatePlaylistAIName(data: {
   });
 }
 
+/** AI: detect famous director/actor for a movie → suggest a people playlist */
+export async function aiPeoplePlaylist(data: {
+  title: string;
+  year?: number | null;
+  genre?: string | null;
+  overview?: string | null;
+  media_type?: string | null;
+  model?: string;
+  lang?: string;
+}): Promise<{
+  people: Array<{ name: string; role: string; playlist_name: string }>;
+  model_used: string;
+}> {
+  return fetchJSON(`${API_BASE}/playlists/ai-people`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
 /** AI: suggest which existing playlist(s) a movie fits best */
 export async function aiCategorizePlaylist(data: {
   title: string;

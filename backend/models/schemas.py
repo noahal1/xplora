@@ -85,6 +85,7 @@ class StrategyParams(SQLModel):
     year_end: Optional[int] = Field(None, description="End year for era-based recommendations")
     target_genre: Optional[str] = Field(None, description="Target genre for explore-new-genre strategy")
     media_type: Optional[str] = Field(None, description="Filter: 'movie' or 'tv' to restrict to one type")
+    playlist_id: Optional[int] = Field(None, description="Playlist ID for the playlist-fill strategy")
 
 
 class RecommendationRequest(SQLModel):
@@ -99,7 +100,7 @@ class RecommendationRequest(SQLModel):
     )
     strategy: str = Field(
         default="taste",
-        description="Recommendation strategy: 'taste', 'classics', 'mood', 'era', 'gems', 'explore'",
+        description="Recommendation strategy: 'taste', 'classics', 'mood', 'era', 'gems', 'explore', 'playlist'",
     )
     strategy_params: Optional[StrategyParams] = Field(
         None, description="Optional parameters for the strategy"
@@ -206,6 +207,19 @@ class PlaylistReorderRequest(SQLModel):
 
 class PlaylistAINameRequest(SQLModel):
     """Generate an AI playlist name based on a single movie."""
+    title: str = Field(description="Movie/TV title")
+    year: Optional[int] = Field(None, description="Release year")
+    genre: Optional[str] = Field(None, description="Genre(s)")
+    overview: Optional[str] = Field(None, max_length=2000, description="Brief synopsis")
+    media_type: Optional[str] = Field(None, description="'movie' or 'tv'")
+    model: str = Field(
+        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
+    )
+    lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
+
+
+class PlaylistPeopleRequest(SQLModel):
+    """Detect famous director/actor for a single movie → suggest a people playlist."""
     title: str = Field(description="Movie/TV title")
     year: Optional[int] = Field(None, description="Release year")
     genre: Optional[str] = Field(None, description="Genre(s)")

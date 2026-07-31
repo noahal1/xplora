@@ -198,15 +198,17 @@
     "new_session": "新会话",
     "already_in_wishlist": "已添加",
     "strategy_label": "推荐策略",
+    "strategy_era": "特定年代",
     "strategy_taste": "按口味推荐",
     "strategy_classics": "经典必看",
     "strategy_mood": "根据心情",
-    "strategy_era": "特定年代",
+    "strategy_playlist": "片单填充",
+    "strategy_playlist_placeholder": "选择要填充的片单...",
+    "strategy_playlist_hint": "AI 分析片单主题，推荐适合加入该片单的影片",
+    "strategy_playlist_required": "请先选择一个片单",
     "strategy_gems": "冷门佳作",
     "strategy_explore": "探索新类型",
     "strategy_mood_placeholder": "描述你此刻的心情...",
-    "strategy_era_start": "起始",
-    "strategy_era_end": "结束",
     "cancel_generating": "取消",
     "cancelled": "已取消"
   },
@@ -566,7 +568,7 @@
   "update": {
     "checking": "正在检查更新...",
     "check_now": "检查更新",
-    "up_to_date": "🎉 Xplora 已是最新版本 ({{version}})",
+    "up_to_date": "🎉 Xplora 已是最新版本",
     "available": "🚀 新版本 {{latest}} 可用",
     "current": "当前版本",
     "latest": "最新版本",
@@ -578,8 +580,7 @@
     "published_at": "发布于 {{date}}",
     "notification_badge": "有新版本可用",
     "update_now": "立即更新",
-    "updating": "更新中...",
-    "up_to_date": "🎉 Xplora 已是最新版本"
+    "updating": "更新中..."
   },
   "about": {
     "title": "关于 Xplora",
@@ -786,6 +787,8 @@
     "save_failed": "保存失败：{{message}}",
     "no_playlists": "还没有片单",
     "no_playlists_hint": "创建你的第一个片单，精选想看的电影和剧集",
+    "search_playlists_placeholder": "搜索片单...",
+    "search_playlists_empty": "没有找到匹配的片单",
     "item_count": "共 {{count}} 部",
     "item_count_one": "共 {{count}} 部",
     "created_at": "创建于 {{date}}",
@@ -829,7 +832,14 @@
     "ai_complete_desc": "为「{{name}}」生成补齐计划",
     "ai_complete_hint": "AI 根据片单已有内容推断主题，推荐缺失的影片/剧集，点击即可加入",
     "ai_completing": "AI 正在生成补齐计划...",
-    "ai_complete_none": "没有找到需要补齐的影片"
+    "ai_complete_none": "没有找到需要补齐的影片",
+    "ai_people": "AI 导演/演员片单",
+    "ai_people_hint": "若该影视出自著名导演或演员，自动生成对应片单",
+    "ai_people_detecting": "AI 识别中...",
+    "ai_people_suggest": "AI 建议创建以下片单：",
+    "ai_people_director": "导演",
+    "ai_people_actor": "主演",
+    "ai_people_failed": "AI 识别失败：{{message}}"
   },
   "share": {
     "title": "分享片单",

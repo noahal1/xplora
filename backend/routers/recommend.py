@@ -197,6 +197,66 @@ def _select_source_movies_by_genre(
     return selected
 
 
+def _enrich_playlist_strategy(
+    db: Session,
+    user_id: int,
+    strategy: str,
+    strategy_params_dict: Optional[dict],
+    excluded_titles: list[str],
+    excluded_tmdb_ids: set[str],
+) -> tuple[dict, list[str], set[str]]:
+    """For the 'playlist' strategy, load the selected playlist and its items.
+
+    Injects playlist context (name / description / items) into
+    ``strategy_params_dict`` so the AI can fill the playlist's theme, and
+    adds the playlist's existing items to the exclusion lists so the AI
+    never re-recommends titles already in the playlist.
+
+    Returns ``(strategy_params_dict, excluded_titles, excluded_tmdb_ids)``.
+    Non-playlist strategies return their inputs unchanged.
+    """
+    if strategy != "playlist":
+        return strategy_params_dict, excluded_titles, excluded_tmdb_ids
+
+    playlist_id = (strategy_params_dict or {}).get("playlist_id")
+    if not playlist_id:
+        return strategy_params_dict, excluded_titles, excluded_tmdb_ids
+
+    from crud import get_playlist, list_items
+    playlist = get_playlist(user_id, int(playlist_id), db)
+    if not playlist:
+        return strategy_params_dict, excluded_titles, excluded_tmdb_ids
+
+    items = list_items(playlist.id, db)
+    items_data = [
+        {
+            "title": i.title,
+            "year": i.year,
+            "genre": i.genre,
+            "media_type": i.media_type,
+            "tmdb_id": i.tmdb_id,
+        }
+        for i in items
+    ]
+
+    params = dict(strategy_params_dict or {})
+    params["playlist_id"] = playlist.id
+    params["playlist_name"] = playlist.name
+    params["playlist_description"] = playlist.description or ""
+    params["playlist_items"] = items_data
+
+    # Exclude items already in the playlist so they're never re-recommended
+    excluded_titles = list(excluded_titles)
+    excluded_tmdb_ids = set(excluded_tmdb_ids)
+    for i in items:
+        if i.title:
+            excluded_titles.append(i.title)
+        if i.tmdb_id:
+            excluded_tmdb_ids.add(str(i.tmdb_id))
+
+    return params, excluded_titles, excluded_tmdb_ids
+
+
 def _build_previous_feedback(
     db: Session, user_id: int,
     wishlist_titles: set[str] | None = None,
@@ -447,9 +507,26 @@ async def recommend(
         # wishlist) get HARD-excluded so the AI won't re-recommend them.
         excluded_titles = library["excluded_titles"] + previous_feedback["hard_ignore_titles"]
 
-        # ── Select source TMDB IDs (genre-diverse) for candidate pool ──
+        # ── Playlist strategy: inject playlist context + exclusions ──
         strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
-        user_source_items = _select_source_movies_by_genre(library["watched_with_tmdb"])
+        excluded_tmdb_ids = set(library["excluded_tmdb_ids"])
+        strategy_params_dict, excluded_titles, excluded_tmdb_ids = _enrich_playlist_strategy(
+            db, current_user["id"], request.strategy, strategy_params_dict,
+            excluded_titles, excluded_tmdb_ids,
+        )
+
+        # ── Select source TMDB IDs for candidate pool ────────────────
+        # Playlist strategy: source from the playlist's own items so the
+        # TMDB candidate pool is theme-relevant; others: genre-balanced
+        # watched movies.
+        if request.strategy == "playlist" and strategy_params_dict and strategy_params_dict.get("playlist_items"):
+            playlist_tmdb = [
+                (str(i["tmdb_id"]), i.get("media_type") or "movie")
+                for i in strategy_params_dict["playlist_items"] if i.get("tmdb_id")
+            ]
+            user_source_items = playlist_tmdb[:15]
+        else:
+            user_source_items = _select_source_movies_by_genre(library["watched_with_tmdb"])
         if user_source_items:
             if strategy_params_dict is None:
                 strategy_params_dict = {}
@@ -461,7 +538,7 @@ async def recommend(
             watched_titles=excluded_titles,
             taste_analysis=taste_analysis,
             previous_feedback=previous_feedback,
-            excluded_tmdb_ids=library["excluded_tmdb_ids"],
+            excluded_tmdb_ids=excluded_tmdb_ids,
         )
         # Auto-save recommendations to DB (same as the streaming endpoint does)
         if recommendations:
@@ -508,9 +585,23 @@ async def recommend_stream(
     # ── Merge hard-ignored titles into exclusion list ────────────────
     excluded_titles = library["excluded_titles"] + previous_feedback["hard_ignore_titles"]
 
-    # ── Select source TMDB IDs (genre-diverse) for candidate pool ──
+    # ── Playlist strategy: inject playlist context + exclusions ──
     strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
-    user_source_items = _select_source_movies_by_genre(library["watched_with_tmdb"])
+    excluded_tmdb_ids = set(library["excluded_tmdb_ids"])
+    strategy_params_dict, excluded_titles, excluded_tmdb_ids = _enrich_playlist_strategy(
+        db, current_user["id"], request.strategy, strategy_params_dict,
+        excluded_titles, excluded_tmdb_ids,
+    )
+
+    # ── Select source TMDB IDs for candidate pool ────────────────
+    if request.strategy == "playlist" and strategy_params_dict and strategy_params_dict.get("playlist_items"):
+        playlist_tmdb = [
+            (str(i["tmdb_id"]), i.get("media_type") or "movie")
+            for i in strategy_params_dict["playlist_items"] if i.get("tmdb_id")
+        ]
+        user_source_items = playlist_tmdb[:15]
+    else:
+        user_source_items = _select_source_movies_by_genre(library["watched_with_tmdb"])
     if user_source_items:
         if strategy_params_dict is None:
             strategy_params_dict = {}
@@ -523,7 +614,7 @@ async def recommend_stream(
             strategy_params=strategy_params_dict,
             watched_titles=excluded_titles,
             previous_feedback=previous_feedback,
-            excluded_tmdb_ids=library["excluded_tmdb_ids"],
+            excluded_tmdb_ids=excluded_tmdb_ids,
         ),
         media_type="text/event-stream",
         headers={

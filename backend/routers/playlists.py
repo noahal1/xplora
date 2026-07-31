@@ -32,6 +32,7 @@ from models import (
     PlaylistItemUpdate,
     PlaylistReorderRequest,
     PlaylistAINameRequest,
+    PlaylistPeopleRequest,
     PlaylistCategorizeRequest,
     PlaylistCompleteRequest,
 )
@@ -165,6 +166,30 @@ async def generate_playlist_name_endpoint(
         count=3,
     ))
     return {"names": names, "model_used": model}
+
+
+@router.post("/playlists/ai-people")
+async def detect_famous_people_endpoint(
+    request: PlaylistPeopleRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Detect if a movie is by a famous director/actor → suggest a people playlist.
+
+    Returns an empty ``people`` list when the movie isn't associated with any
+    well-known director/actor, so the frontend simply hides the suggestion.
+    """
+    service, model = _get_ai_service(request.model, current_user["id"])
+    people = _run_ai(lambda: service.detect_famous_people(
+        {
+            "title": request.title,
+            "year": request.year,
+            "genre": request.genre,
+            "overview": request.overview,
+            "media_type": request.media_type,
+        },
+        lang=request.lang or "zh",
+    ))
+    return {"people": people, "model_used": model}
 
 
 # ── AI categorize / complete ────────────────────────────────────────
