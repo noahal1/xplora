@@ -368,7 +368,7 @@ export async function triggerUpdate(): Promise<{ status: string; message: string
 
 /** Get movie recommendations (non-streaming, bypasses Cloudflare SSE issues) */
 export async function getRecommendations(params: {
-  movies: { title: string; rating: number; year?: number | null; genre?: string | null }[];
+  movies: { title: string; rating: number; year?: number | null; genre?: string | null; media_type?: string | null }[];
   model: string;
   count: number;
   strategy: string;
@@ -525,6 +525,193 @@ export async function removeFromTopRated(mediaId: number): Promise<{ status: str
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ media_id: mediaId }),
+  });
+}
+
+import type { Playlist, PlaylistItem, PublicPlaylist } from "../types";
+
+// ── Playlist (片单) API ──────────────────────────────────────────
+
+/** List all playlists for the current user */
+export async function listPlaylists(): Promise<{ playlists: Playlist[]; total: number }> {
+  return fetchJSON(`${API_BASE}/playlists`, { headers: getAuthHeaders() });
+}
+
+/** Create a new playlist */
+export async function createPlaylist(data: { name: string; description?: string | null }): Promise<Playlist> {
+  return fetchJSON(`${API_BASE}/playlists`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Get a single playlist with its items */
+export async function getPlaylist(id: number): Promise<Playlist> {
+  return fetchJSON(`${API_BASE}/playlists/${id}`, { headers: getAuthHeaders() });
+}
+
+/** Rename / update playlist metadata */
+export async function updatePlaylist(
+  id: number,
+  data: { name?: string; description?: string | null }
+): Promise<Playlist> {
+  return fetchJSON(`${API_BASE}/playlists/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Delete a playlist */
+export async function deletePlaylist(id: number): Promise<{ status: string }> {
+  return fetchJSON(`${API_BASE}/playlists/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Enable sharing; returns the share token */
+export async function sharePlaylist(id: number): Promise<{ status: string; share_token: string }> {
+  return fetchJSON(`${API_BASE}/playlists/${id}/share`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Disable sharing (revokes token) */
+export async function unsharePlaylist(id: number): Promise<{ status: string }> {
+  return fetchJSON(`${API_BASE}/playlists/${id}/share`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Get current share state */
+export async function getShareState(id: number): Promise<{ shared: boolean; share_token: string | null }> {
+  return fetchJSON(`${API_BASE}/playlists/${id}/share`, { headers: getAuthHeaders() });
+}
+
+/** Add an item to a playlist (media_id or snapshot fields) */
+export async function addPlaylistItem(
+  playlistId: number,
+  data: {
+    media_id?: number | null;
+    title?: string | null;
+    year?: number | null;
+    genre?: string | null;
+    media_type?: string | null;
+    poster_url?: string | null;
+    overview?: string | null;
+    tmdb_id?: string | null;
+    country?: string | null;
+    note?: string | null;
+  }
+): Promise<PlaylistItem> {
+  return fetchJSON(`${API_BASE}/playlists/${playlistId}/items`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Reorder playlist items */
+export async function reorderPlaylistItems(
+  playlistId: number,
+  orderedIds: number[]
+): Promise<{ status: string; count: number }> {
+  return fetchJSON(`${API_BASE}/playlists/${playlistId}/items/reorder`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ordered_ids: orderedIds }),
+  });
+}
+
+/** Update a playlist item (note / metadata) */
+export async function updatePlaylistItem(
+  playlistId: number,
+  itemId: number,
+  data: { note?: string | null; title?: string | null; year?: number | null; genre?: string | null; poster_url?: string | null }
+): Promise<PlaylistItem> {
+  return fetchJSON(`${API_BASE}/playlists/${playlistId}/items/${itemId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** Remove an item from a playlist */
+export async function deletePlaylistItem(playlistId: number, itemId: number): Promise<{ status: string }> {
+  return fetchJSON(`${API_BASE}/playlists/${playlistId}/items/${itemId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Fetch a shared playlist read-only (no auth) */
+export async function getPublicPlaylist(token: string): Promise<PublicPlaylist> {
+  return fetchJSON(`${API_BASE}/share/${encodeURIComponent(token)}`, { headers: {} });
+}
+
+/** Generate a playlist name with AI based on a single movie */
+export async function generatePlaylistAIName(data: {
+  title: string;
+  year?: number | null;
+  genre?: string | null;
+  overview?: string | null;
+  media_type?: string | null;
+  model?: string;
+  lang?: string;
+}): Promise<{ names: string[]; model_used: string }> {
+  return fetchJSON(`${API_BASE}/playlists/ai-name`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** AI: suggest which existing playlist(s) a movie fits best */
+export async function aiCategorizePlaylist(data: {
+  title: string;
+  year?: number | null;
+  genre?: string | null;
+  overview?: string | null;
+  media_type?: string | null;
+  model?: string;
+  lang?: string;
+}): Promise<{
+  suggestions: Array<{ playlist_id: number; name: string; reason: string; confidence: number }>;
+  model_used: string;
+  reason?: string;
+}> {
+  return fetchJSON(`${API_BASE}/playlists/ai-categorize`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/** AI: generate a completion plan — items a playlist is missing */
+export async function aiCompletePlaylist(
+  id: number,
+  data: { model?: string; lang?: string; count?: number }
+): Promise<{
+  suggestions: Array<{
+    title: string;
+    year?: number | null;
+    genre?: string | null;
+    media_type?: string | null;
+    reason: string;
+    confidence: number;
+    poster_url?: string | null;
+    tmdb_id?: string | null;
+  }>;
+  model_used: string;
+}> {
+  return fetchJSON(`${API_BASE}/playlists/${id}/ai-complete`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
   });
 }
 

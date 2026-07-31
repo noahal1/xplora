@@ -588,6 +588,12 @@ def _run_per_user_column_migrations(user_id: int):
     if "moviepilot_connections" not in existing_tables:
         _create_moviepilot_connections_table(engine, user_id)
 
+    # ── Migration: playlists / playlist_items tables ──
+    if "playlists" not in existing_tables:
+        _create_playlists_tables(engine, user_id)
+    else:
+        _playlists_add_share_token_column(engine, user_id)
+
     # ── Migration: media_server_library_cache table ──
     if "media_server_library_cache" not in existing_tables:
         _create_media_server_library_cache_table(engine, user_id)
@@ -790,6 +796,81 @@ def _media_server_add_last_synced_column(engine, user_id: int):
                 logger.warning(f"  [Migration] Error adding last_synced to media_servers for user id={user_id}: {e}")
         except Exception as e:
             logger.warning(f"  [Migration] Error adding last_synced to media_servers for user id={user_id}: {e}")
+
+
+def _create_playlists_tables(engine, user_id: int):
+    """Create the playlists + playlist_items tables for a per-user database."""
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS playlists (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    name VARCHAR(100) NOT NULL,
+                    description VARCHAR(500),
+                    cover_url VARCHAR(500),
+                    share_token VARCHAR(64),
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS playlist_items (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    playlist_id INTEGER NOT NULL REFERENCES playlists(id),
+                    media_id INTEGER,
+                    title VARCHAR(255) NOT NULL,
+                    year INTEGER,
+                    genre VARCHAR(255),
+                    media_type VARCHAR(10) NOT NULL DEFAULT 'movie',
+                    poster_url VARCHAR(500),
+                    overview TEXT,
+                    tmdb_id VARCHAR(50),
+                    country VARCHAR(100),
+                    note VARCHAR(500),
+                    sort_order INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist
+                ON playlist_items (playlist_id)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_playlists_share_token
+                ON playlists (share_token)
+            """))
+            conn.commit()
+            logger.info(f"  [Migration] Created playlists tables for user id={user_id}")
+    except Exception as e:
+        logger.warning(f"  [Migration] Error creating playlists tables for user id={user_id}: {e}")
+
+
+def _playlists_add_share_token_column(engine, user_id: int):
+    """Add share_token column to playlists table (older installations)."""
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        columns = [c["name"] for c in inspect(engine).get_columns("playlists")]
+    except Exception:
+        return
+
+    if "share_token" not in columns:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE playlists ADD COLUMN share_token VARCHAR(64)"))
+                conn.commit()
+                logger.info(f"  [Migration] Added share_token column to playlists for user id={user_id}")
+        except OperationalError as e:
+            if "duplicate column" in str(e).lower():
+                pass
+            else:
+                logger.warning(f"  [Migration] Error adding share_token to playlists for user id={user_id}: {e}")
+        except Exception as e:
+            logger.warning(f"  [Migration] Error adding share_token to playlists for user id={user_id}: {e}")
 
 
 def _create_moviepilot_connections_table(engine, user_id: int):

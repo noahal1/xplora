@@ -121,6 +121,65 @@ class OperationLogRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
 
+class PlaylistRecord(SQLModel, table=True):
+    """A user-curated playlist (片单) — a named collection of media items.
+
+    Shareable via a random token (``share_token``); when set, anyone with
+    the token can view the playlist read-only without authentication.
+    """
+
+    __tablename__ = "playlists"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", nullable=False, index=True)
+    name: str = Field(max_length=100, nullable=False, description="Playlist name, e.g. 'Weekend Movies'")
+    description: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    cover_url: Optional[str] = Field(default=None, max_length=500, nullable=True, description="Cover poster from the first item")
+    share_token: Optional[str] = Field(default=None, max_length=64, nullable=True, index=True, description="Random public share token; null = not shared")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+    items: list["PlaylistItemRecord"] = Relationship(
+        back_populates="playlist",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class PlaylistItemRecord(SQLModel, table=True):
+    """A single entry within a playlist.
+
+    Stores a metadata snapshot (title/year/genre/poster/...) so items
+    survive even if the source ``media_items`` row is deleted, and also
+    keeps an optional ``media_id`` reference for opening the detail modal
+    when the item originated from the user's library.
+    """
+
+    __tablename__ = "playlist_items"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    playlist_id: int = Field(foreign_key="playlists.id", nullable=False, index=True)
+    # NOTE: media_id is intentionally NOT a foreign key — it's a best-effort
+    # soft reference to a media_items row. Deleting a library item must NOT
+    # fail or cascade into playlists; playlist items store their own snapshot.
+    media_id: Optional[int] = Field(default=None, nullable=True, index=True)
+
+    # ── Snapshot fields (independent of media_items) ──
+    title: str = Field(max_length=255, nullable=False)
+    year: Optional[int] = Field(default=None, nullable=True)
+    genre: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    media_type: str = Field(default="movie", max_length=10, nullable=False)
+    poster_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    overview: Optional[str] = Field(default=None, nullable=True)
+    tmdb_id: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    country: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    note: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    sort_order: Optional[int] = Field(default=None, nullable=True)
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+    playlist: Optional[PlaylistRecord] = Relationship(back_populates="items")
+
+
 class MediaServerRecord(SQLModel, table=True):
     """A media server (Plex / Jellyfin / FeiNiu) linked to a user account."""
 

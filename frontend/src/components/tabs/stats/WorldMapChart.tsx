@@ -5,6 +5,7 @@
    Responsive: desktop shows SVG map, mobile shows compact bar list. */
 
 import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 /* ── Country name → ISO 3166-1 alpha-2 mapping ────────────────
    Comprehensive mapping from TMDB/TVmaze country names to ISO codes. */
@@ -458,30 +459,56 @@ function MobileCountryList({ sortedCountries, maxBar, getColor }: {
   maxBar: number;
   getColor: (count: number) => string;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const PREVIEW_COUNT = 5;
+  const visible = expanded ? sortedCountries : sortedCountries.slice(0, PREVIEW_COUNT);
+  const hiddenCount = sortedCountries.length - PREVIEW_COUNT;
+
   return (
-    <div className="space-y-[3px]">
-      {sortedCountries.map(([iso, entry]) => {
-        const pct = Math.max((entry.count / maxBar) * 100, 2);
-        return (
-          <div key={iso} className="flex items-center gap-2 py-1.5">
-            <span className="text-xs font-medium truncate shrink-0" style={{ width: "5.5rem", color: "var(--fg-secondary)" }}>
-              {getDisplayName(iso, entry.names[0])}
-            </span>
-            <div className="flex-1 h-2 rounded-full overflow-hidden bg-bg-input">
-              <div
-                className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{
-                  width: `${pct}%`,
-                  background: `linear-gradient(90deg, ${getColor(entry.count)}, color-mix(in srgb, ${getColor(entry.count)} 30%, transparent))`,
-                }}
-              />
+    <div>
+      <div className="space-y-[3px]">
+        {visible.map(([iso, entry]) => {
+          const pct = Math.max((entry.count / maxBar) * 100, 2);
+          return (
+            <div key={iso} className="flex items-center gap-2 py-1.5">
+              <span className="text-xs font-medium truncate shrink-0" style={{ width: "5.5rem", color: "var(--fg-secondary)" }}>
+                {getDisplayName(iso, entry.names[0])}
+              </span>
+              <div className="flex-1 h-2 rounded-full overflow-hidden bg-bg-input">
+                <div
+                  className="h-full rounded-full transition-all duration-700 ease-out"
+                  style={{
+                    width: `${pct}%`,
+                    background: `linear-gradient(90deg, ${getColor(entry.count)}, color-mix(in srgb, ${getColor(entry.count)} 30%, transparent))`,
+                  }}
+                />
+              </div>
+              <span className="text-xs font-semibold tabular-nums shrink-0 text-right" style={{ width: "2.5rem", color: "var(--fg-muted)" }}>
+                {entry.count}
+              </span>
             </div>
-            <span className="text-xs font-semibold tabular-nums shrink-0 text-right" style={{ width: "2.5rem", color: "var(--fg-muted)" }}>
-              {entry.count}
-            </span>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full mt-2 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium bg-primary/10 text-primary transition-colors hover:bg-primary/15 active:scale-[0.98]"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp size={14} /> 收起
+            </>
+          ) : (
+            <>
+              <ChevronDown size={14} /> 展开全部 {hiddenCount} 个国家/地区
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }

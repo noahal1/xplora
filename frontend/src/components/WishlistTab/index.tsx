@@ -24,6 +24,7 @@ import { WishlistDesktopRow } from "../tabs/wishlist/WishlistDesktopRow";
 import { WishlistSearchModal } from "../tabs/wishlist/WishlistSearchModal";
 import { WishlistAddModal } from "../tabs/wishlist/WishlistAddModal";
 import { PTSearchModal } from "./PTSearchModal";
+import { AddToPlaylistModal, type PlaylistTargetItem } from "../PlaylistsTab/AddToPlaylistModal";
 
 export interface WishlistEntry {
   id: number;
@@ -75,6 +76,20 @@ export function WishlistTab() {
   // === Modals ===
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+
+  // === Add-to-playlist modal ===
+  const [playlistTarget, setPlaylistTarget] = useState<PlaylistTargetItem | null>(null);
+  const openAddToPlaylist = useCallback((item: WishlistEntry) => {
+    setPlaylistTarget({
+      media_id: item.id,
+      title: item.title,
+      year: item.year,
+      genre: item.genre,
+      media_type: item.media_type || "movie",
+      poster_url: item.poster_url,
+      tmdb_id: item.tmdb_id,
+    });
+  }, []);
 
   // === Server availability (with item ID for playback link) ===
   interface ServerMatch {
@@ -300,6 +315,7 @@ export function WishlistTab() {
                           serverPlayUrl={serverAvailable && serverMatches[m.title]?.found && serverMatches[m.title]?.itemId
                             ? `${serverBaseUrl}/web/index.html#!/details?id=${serverMatches[m.title].itemId}`
                             : undefined}
+                          onAddToPlaylist={openAddToPlaylist}
                         />
                       ))}
                     </div>
@@ -317,6 +333,7 @@ export function WishlistTab() {
                           serverPlayUrl={serverAvailable && serverMatches[m.title]?.found && serverMatches[m.title]?.itemId
                             ? `${serverBaseUrl}/web/index.html#!/details?id=${serverMatches[m.title].itemId}`
                             : undefined}
+                          onAddToPlaylist={openAddToPlaylist}
                         />
                       ))}
                     </div>
@@ -384,6 +401,13 @@ export function WishlistTab() {
 
       {/* === Rating Modal === */}
       <WishlistRatingModal open={markingMovie !== null} movie={markingMovie} onClose={() => setMarkingMovie(null)} onConfirm={confirmMarkAsWatched} />
+
+      {/* === Add-to-Playlist Modal === */}
+      <AddToPlaylistModal
+        open={playlistTarget !== null}
+        onClose={() => setPlaylistTarget(null)}
+        item={playlistTarget}
+      />
 
       {/* Empty State (no items, no filters) */}
       {total === 0 && !filter.debouncedValue && mediaTypeFilter === "all" && !loading && (

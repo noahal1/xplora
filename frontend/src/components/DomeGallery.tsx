@@ -47,14 +47,16 @@ export default function DomeGallery({
   const masonryItems = useMemo<MasonryItem[]>(() => {
     return movies.map((m, i) => {
       const rank = i + 1;
-      const factor = rank === 1 ? 1.0 : rank % 3 === 0 ? 0.8 : rank % 3 === 1 ? 0.7 : 0.6;
+      const factor = isMobile
+        ? rank === 1 ? 0.85 : rank <= 3 ? 0.75 : 0.50
+        : rank === 1 ? 1.0 : rank <= 3 ? 0.9 : rank % 3 === 0 ? 0.8 : rank % 3 === 1 ? 0.7 : 0.6;
       return {
         id: `m-${rank}`,
         height: Math.round(factor * 100),
         data: { ...m, rank },
       };
     });
-  }, [movies]);
+  }, [movies, isMobile]);
 
   // Custom render for each masonry item
   const renderItem = (item: MasonryItem) => {
@@ -108,7 +110,7 @@ export default function DomeGallery({
             overlayContent={
               <div
                 className={`absolute inset-0 bg-gradient-to-t from-black/88 via-black/30 to-transparent
-                  flex flex-col justify-end ${isMobile ? "p-2" : "p-3"}
+                  flex flex-col justify-end ${isMobile ? "p-1.5" : "p-3"}
                   transition-opacity duration-300 opacity-100`}
               >
                 <span

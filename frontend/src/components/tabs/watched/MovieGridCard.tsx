@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
 import TiltedCard from "../../TiltedCard";
-import { Film, X } from "lucide-react";
+import { Film, X, ListTodo } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import CountUp from "../../CountUp";
 import { formatSeasonLabel } from "../../../utils/groupTVSeries";
@@ -10,11 +10,12 @@ import { RatingSlider } from "../../shared/RatingSlider";
 import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized grid card — cinematic poster with overlay ─────── */
-export const MovieGridCard = memo(function MovieGridCard({ movie, onRemove, onSaveRating, onOpenDetail }: {
+export const MovieGridCard = memo(function MovieGridCard({ movie, onRemove, onSaveRating, onOpenDetail, onAddToPlaylist }: {
   movie: MediaDetail;
   onRemove: (id: number) => void;
   onSaveRating: (id: number, rating: number) => Promise<void>;
   onOpenDetail: (movie: MediaDetail) => void;
+  onAddToPlaylist?: (movie: MediaDetail) => void;
 }) {
   const { t } = useTranslation();
   const {
@@ -28,6 +29,14 @@ export const MovieGridCard = memo(function MovieGridCard({ movie, onRemove, onSa
 
   return (
     <div className="group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 bg-bg-card border border-border">
+      {/* Add-to-playlist button — visible on hover (right side, left of delete) */}
+      {onAddToPlaylist && (
+        <button
+          className="absolute top-2 right-9 z-20 flex items-center justify-center w-6 h-6 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 max-sm:opacity-100 hover:text-primary transition-all duration-200 backdrop-blur-sm"
+          onClick={(e) => { e.stopPropagation(); onAddToPlaylist(movie); }} title={t("playlists.add_to_playlist")}>
+          <ListTodo size={13} />
+        </button>
+      )}
       {/* Delete button — always visible on mobile, hover on desktop */}
       <button
         className="absolute top-2 right-2 z-20 flex items-center justify-center w-6 h-6 sm:w-6 sm:h-6 rounded-full bg-black/60 text-white/70 opacity-0 group-hover:opacity-100 max-sm:opacity-100 hover:bg-red-500/80 hover:text-white transition-all duration-200 backdrop-blur-sm"

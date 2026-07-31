@@ -36,13 +36,17 @@ def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
     return [m.title for m in movies if m.title]
 
 
-def _load_user_library(db: Session, user_id: int) -> dict:
+def _load_user_library(db: Session, user_id: int, media_type: Optional[str] = None) -> dict:
     """Load all watched + wishlist items in a single DB query.
 
     Replaces the previous three separate queries:
     ``_get_all_excluded_and_wishlist``,
     ``_get_all_excluded_tmdb_ids``, and
     ``_select_source_movies_by_genre``.
+
+    When ``media_type`` is provided (e.g. ``"movie"`` or ``"tv"``), only items
+    of that type are loaded so the TMDB candidate pool and exclusion list
+    respect the user's media type filter.
 
     Returns a dict with:
       - excluded_titles: list[str] — deduplicated titles for AI exclusion
@@ -51,12 +55,13 @@ def _load_user_library(db: Session, user_id: int) -> dict:
       - watched_with_tmdb: list — watched records with tmdb_id, sorted by
         rating desc, for genre-balanced source movie selection
     """
-    rows = db.exec(
-        select(MediaItemRecord).where(
-            MediaItemRecord.status.in_(["watched", "wish"]),
-            MediaItemRecord.user_id == user_id,
-        ).order_by(MediaItemRecord.rating.desc())
-    ).all()
+    query = select(MediaItemRecord).where(
+        MediaItemRecord.status.in_(["watched", "wish"]),
+        MediaItemRecord.user_id == user_id,
+    )
+    if media_type and media_type in ("movie", "tv"):
+        query = query.where(MediaItemRecord.media_type == media_type)
+    rows = db.exec(query.order_by(MediaItemRecord.rating.desc())).all()
 
     excluded_titles: list[str] = []
     wishlist_titles: set[str] = set()
@@ -92,7 +97,7 @@ def _load_user_library(db: Session, user_id: int) -> dict:
 def _select_source_movies_by_genre(
     watched_with_tmdb: list,
     max_total: int = 15,
-) -> list[str]:
+) -> list[tuple[str, str]]:
     """Select source movies for TMDB candidate pool using balanced genre grouping.
 
     Takes an already-queried list of watched MediaItemRecords (with tmdb_id)
@@ -104,7 +109,9 @@ def _select_source_movies_by_genre(
     The input list should be pre-sorted by rating descending (done by
     ``_load_user_library``).
 
-    Returns a list of TMDB ID strings.
+    Returns a list of ``(tmdb_id, media_type)`` tuples (e.g. ``("123", "movie")``
+    or ``("456", "tv")``) so that downstream code can call the correct TMDB API
+    (movie vs TV similar/recommendations).
     """
     from collections import defaultdict
     genre_groups: dict[str, list] = defaultdict(list)
@@ -117,7 +124,7 @@ def _select_source_movies_by_genre(
         else:
             no_genre.append(m)
 
-    selected: list[str] = []
+    selected: list[tuple[str, str]] = []
     seen_ids: set[str] = set()
 
     genres = sorted(genre_groups.keys())
@@ -127,7 +134,8 @@ def _select_source_movies_by_genre(
             tid = str(m.tmdb_id)
             if tid not in seen_ids:
                 seen_ids.add(tid)
-                selected.append(tid)
+                mt = getattr(m, "media_type", "movie") or "movie"
+                selected.append((tid, mt))
         return selected
 
     # ── Distribute slots evenly across genres ────────────────────────
@@ -145,7 +153,8 @@ def _select_source_movies_by_genre(
             tid = str(m.tmdb_id)
             if tid not in seen_ids:
                 seen_ids.add(tid)
-                selected.append(tid)
+                mt = getattr(m, "media_type", "movie") or "movie"
+                selected.append((tid, mt))
                 taken += 1
 
     # Second pass: redistribute leftover slots from genres that had
@@ -160,7 +169,8 @@ def _select_source_movies_by_genre(
                 tid = str(m.tmdb_id)
                 if tid not in seen_ids:
                     seen_ids.add(tid)
-                    selected.append(tid)
+                    mt = getattr(m, "media_type", "movie") or "movie"
+                    selected.append((tid, mt))
 
     # Fill remaining slots with movies that have no genre
     if len(selected) < max_total:
@@ -168,7 +178,8 @@ def _select_source_movies_by_genre(
             tid = str(m.tmdb_id)
             if tid not in seen_ids:
                 seen_ids.add(tid)
-                selected.append(tid)
+                mt = getattr(m, "media_type", "movie") or "movie"
+                selected.append((tid, mt))
                 if len(selected) >= max_total:
                     break
 
@@ -178,7 +189,8 @@ def _select_source_movies_by_genre(
             tid = str(m.tmdb_id)
             if tid not in seen_ids:
                 seen_ids.add(tid)
-                selected.append(tid)
+                mt = getattr(m, "media_type", "movie") or "movie"
+                selected.append((tid, mt))
                 if len(selected) >= max_total:
                     break
 
@@ -280,7 +292,7 @@ def _build_previous_feedback(
 
 def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None, watched_titles=None, previous_feedback=None, excluded_tmdb_ids=None):
     """SSE generator that auto-saves recommendations to DB on completion."""
-    service = AIService(api_key=api_key, model_type=model)
+    service = AIService(api_key=api_key, model_type=model, user_id=user_id)
     taste_analysis = service._analyze_user_taste(movies)
     watched = watched_titles or _extract_watched_titles(movies)
     # Pass strategy_params so the streaming generator can extract user_tmdb_ids
@@ -340,7 +352,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
 
 def _followup_stream_with_persistence(movies, count, model, api_key, user_id, watched_titles=None, excluded_tmdb_ids=None, previous_recommendations=None, conversation=None, question=""):
     """SSE generator that auto-saves follow-up recommendations to DB on completion."""
-    service = AIService(api_key=api_key, model_type=model)
+    service = AIService(api_key=api_key, model_type=model, user_id=user_id)
     taste_analysis = service._analyze_user_taste(movies)
     watched = watched_titles or _extract_watched_titles(movies)
     raw_generator = service.get_followup_stream(
@@ -419,9 +431,10 @@ async def recommend(
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
     try:
-        service = AIService(api_key=api_key, model_type=request.model)
+        service = AIService(api_key=api_key, model_type=request.model, user_id=current_user["id"])
         # Single DB query: titles + TMDB IDs + source movies — all in one
-        library = _load_user_library(db, current_user["id"])
+        mt_filter = (request.strategy_params or {}).media_type if request.strategy_params else None
+        library = _load_user_library(db, current_user["id"], media_type=mt_filter)
         previous_feedback = _build_previous_feedback(
             db, current_user["id"],
             library["wishlist_titles"],
@@ -436,11 +449,11 @@ async def recommend(
 
         # ── Select source TMDB IDs (genre-diverse) for candidate pool ──
         strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
-        user_tmdb_ids = _select_source_movies_by_genre(library["watched_with_tmdb"])
-        if user_tmdb_ids:
+        user_source_items = _select_source_movies_by_genre(library["watched_with_tmdb"])
+        if user_source_items:
             if strategy_params_dict is None:
                 strategy_params_dict = {}
-            strategy_params_dict["user_tmdb_ids"] = user_tmdb_ids
+            strategy_params_dict["user_tmdb_ids"] = user_source_items
 
         recommendations = service.get_recommendations(
             movies, request.count, request.strategy,
@@ -484,7 +497,8 @@ async def recommend_stream(
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
     # Single DB query: titles + TMDB IDs + source movies — all in one
-    library = _load_user_library(db, current_user["id"])
+    mt_filter = (request.strategy_params or {}).media_type if request.strategy_params else None
+    library = _load_user_library(db, current_user["id"], media_type=mt_filter)
     previous_feedback = _build_previous_feedback(
         db, current_user["id"],
         library["wishlist_titles"],
@@ -496,11 +510,11 @@ async def recommend_stream(
 
     # ── Select source TMDB IDs (genre-diverse) for candidate pool ──
     strategy_params_dict = request.strategy_params.model_dump() if request.strategy_params else None
-    user_tmdb_ids = _select_source_movies_by_genre(library["watched_with_tmdb"])
-    if user_tmdb_ids:
+    user_source_items = _select_source_movies_by_genre(library["watched_with_tmdb"])
+    if user_source_items:
         if strategy_params_dict is None:
             strategy_params_dict = {}
-        strategy_params_dict["user_tmdb_ids"] = user_tmdb_ids
+        strategy_params_dict["user_tmdb_ids"] = user_source_items
 
     return StreamingResponse(
         _stream_with_persistence(
@@ -529,7 +543,7 @@ async def followup_stream(
     """SSE streaming endpoint for follow-up conversation. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     api_key = get_api_key(request.model)
-    # Single DB query: titles + TMDB IDs — all in one
+    # Single DB query: titles + TMDB IDs — all in one (already filtered by initial recommendation)
     library = _load_user_library(db, current_user["id"])
     return StreamingResponse(
         _followup_stream_with_persistence(

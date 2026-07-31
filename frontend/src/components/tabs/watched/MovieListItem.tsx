@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../../types";
 import { ProgressiveImage } from "../../ProgressiveImage";
-import { Film, X } from "lucide-react";
+import { Film, X, ListTodo } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
 import CountUp from "../../CountUp";
@@ -11,11 +11,12 @@ import { RatingSlider } from "../../shared/RatingSlider";
 import { useRatingEditor } from "../../../hooks/useRatingEditor";
 
 /* ── Memo-ized list item — rich layout with poster & metadata ── */
-export const MovieListItem = memo(function MovieListItem({ movie, onRemove, onSaveRating, onOpenDetail }: {
+export const MovieListItem = memo(function MovieListItem({ movie, onRemove, onSaveRating, onOpenDetail, onAddToPlaylist }: {
   movie: MediaDetail;
   onRemove: (id: number) => void;
   onSaveRating: (id: number, rating: number) => Promise<void>;
   onOpenDetail: (movie: MediaDetail) => void;
+  onAddToPlaylist?: (movie: MediaDetail) => void;
 }) {
   const { t } = useTranslation();
   const {
@@ -87,6 +88,13 @@ export const MovieListItem = memo(function MovieListItem({ movie, onRemove, onSa
             {justSaved && <span className="text-green text-[10px]">✓</span>}
             <span className="font-bold text-sm"><CountUp end={movie.rating} decimals={1} /></span>
           </span>
+        )}
+        {onAddToPlaylist && (
+          <button
+            className="flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-all duration-200 opacity-0 group-hover:opacity-100 max-sm:opacity-100"
+            onClick={() => onAddToPlaylist(movie)} title={t("playlists.add_to_playlist")}>
+            <ListTodo size={13} />
+          </button>
         )}
         <button
           className="flex items-center justify-center w-7 h-7 rounded-full text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all duration-200 opacity-0 group-hover:opacity-100 max-sm:opacity-100"

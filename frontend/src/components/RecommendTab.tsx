@@ -14,6 +14,7 @@ import { StrategySelector } from "./tabs/recommend/StrategySelector";
 import { SessionHistory } from "./tabs/recommend/SessionHistory";
 import { TMDBDetailModal } from "./shared/TMDBDetailModal";
 import { ResultsSection } from "./tabs/recommend/ResultsSection";
+import { AddToPlaylistModal, type PlaylistTargetItem } from "./PlaylistsTab/AddToPlaylistModal";
 
 
 export function RecommendTab() {
@@ -59,6 +60,9 @@ export function RecommendTab() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
 
+  // === Add-to-playlist modal ===
+  const [playlistTarget, setPlaylistTarget] = useState<PlaylistTargetItem | null>(null);
+
   /* ── History / past sessions ───────────────────────────── */
   const [sessions, setSessions] = useState<DBSession[]>([]);
   const [sessionsTotal, setSessionsTotal] = useState(0);
@@ -94,10 +98,10 @@ export function RecommendTab() {
         new Set(wishlistData.media.map((m) => m.title.toLowerCase()))
       );
       setWatchedTmdbIds(
-        new Set(watchedData.media.map((m) => m.tmdb_id).filter(Boolean))
+        new Set(watchedData.media.map((m) => m.tmdb_id).filter((x): x is string => !!x))
       );
       setWishlistTmdbIds(
-        new Set(wishlistData.media.map((m) => m.tmdb_id).filter(Boolean))
+        new Set(wishlistData.media.map((m) => m.tmdb_id).filter((x): x is string => !!x))
       );
     } catch (err) {
       console.error("Failed to load movies:", err);
@@ -202,18 +206,21 @@ export function RecommendTab() {
 
   /* ── Build strategy params ──────────────────────────────── */
   const getStrategyParams = useCallback(() => {
+    const params: Record<string, unknown> = {};
+    if (mediaTypeFilter && mediaTypeFilter !== "all") {
+      params.media_type = mediaTypeFilter;
+    }
     switch (strategy) {
       case "mood":
-        return { mood: strategyMood };
+        if (strategyMood) params.mood = strategyMood;
+        break;
       case "era":
-        return {
-          year_start: strategyYearStart ? parseInt(strategyYearStart, 10) : undefined,
-          year_end: strategyYearEnd ? parseInt(strategyYearEnd, 10) : undefined,
-        };
-      default:
-        return undefined;
+        if (strategyYearStart) params.year_start = parseInt(strategyYearStart, 10);
+        if (strategyYearEnd) params.year_end = parseInt(strategyYearEnd, 10);
+        break;
     }
-  }, [strategy, strategyMood, strategyYearStart, strategyYearEnd]);
+    return Object.keys(params).length > 0 ? params : undefined;
+  }, [strategy, strategyMood, strategyYearStart, strategyYearEnd, mediaTypeFilter]);
 
   // Derive unique genre tags from watched movies
   const uniqueGenres = useGenreExtractor(movies);
@@ -251,7 +258,7 @@ export function RecommendTab() {
     try {
       const sp = getStrategyParams();
       const data = await api.getRecommendations({
-        movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
+        movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre, media_type: m.media_type })),
         model: selectedModel,
         count: recCount,
         strategy,
@@ -344,7 +351,7 @@ export function RecommendTab() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre })),
+          movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre, media_type: m.media_type })),
           previous_recommendations: recommendations,
           conversation: chatMessages,
           question: text,
@@ -584,6 +591,14 @@ export function RecommendTab() {
           addingToWishlist={addingToWishlist}
           onAddToWishlist={addToWishlist}
           onOpenDetail={setDetailRec}
+          onAddToPlaylist={(rec: Recommendation) => setPlaylistTarget({
+            title: rec.title,
+            year: rec.year ?? null,
+            genre: rec.genre ?? null,
+            media_type: rec.media_type || "movie",
+            poster_url: rec.poster_url,
+            tmdb_id: rec.tmdb_id ?? null,
+          })}
           onNewSession={() => { setRecommendations([]); setShowChat(false); setChatMessages([]); setAddingToWishlist({}); }}
           onExportJSON={handleExportJSON}
           t={t}
@@ -601,6 +616,13 @@ export function RecommendTab() {
         tagline={detailData?.tagline}
         onClose={closeDetail}
         t={t}
+      />
+
+      {/* === Add-to-Playlist Modal === */}
+      <AddToPlaylistModal
+        open={playlistTarget !== null}
+        onClose={() => setPlaylistTarget(null)}
+        item={playlistTarget}
       />
 
       {/* === Recommendation History Section === */}

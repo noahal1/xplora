@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import type { WishlistEntry } from "../../WishlistTab";
 import { Badge } from "../../ui/badge";
 import { ProgressiveImage } from "../../ProgressiveImage";
-import { Film, ChevronRight } from "lucide-react";
+import { Film, ChevronRight, ListTodo } from "lucide-react";
 import { translateGenres } from "../../../utils/genre";
 import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 
@@ -16,9 +16,11 @@ interface WishlistDesktopRowProps {
   onServer?: boolean;
   /** Direct playback URL on the media server (Jellyfin web player) */
   serverPlayUrl?: string;
+  /** Add this item to a playlist */
+  onAddToPlaylist?: (item: WishlistEntry) => void;
 }
 
-export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer, serverPlayUrl }: WishlistDesktopRowProps) {
+export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer, serverPlayUrl, onAddToPlaylist }: WishlistDesktopRowProps) {
   const { t } = useTranslation();
 
   return (
@@ -82,6 +84,12 @@ export function WishlistDesktopRow({ item, onMarkWatched, onDelete, onOpenDetail
           <button className="text-xs text-orange-500 hover:text-orange-600 px-1.5 py-1 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
             onClick={(e) => { e.stopPropagation(); onSearchPT(item); }} title={t("moviepilot.search_pt")}>
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /><path d="M11 8v6" /><path d="M8 11h6" /></svg>
+          </button>
+        )}
+        {onAddToPlaylist && (
+          <button className="text-muted-foreground hover:text-primary px-1.5 py-1 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"
+            onClick={(e) => { e.stopPropagation(); onAddToPlaylist(item); }} title={t("playlists.add_to_playlist")}>
+            <ListTodo size={14} />
           </button>
         )}
         <button className="text-muted-foreground hover:text-destructive px-1 py-1 rounded transition-all opacity-0 group-hover:opacity-100 max-sm:opacity-100"

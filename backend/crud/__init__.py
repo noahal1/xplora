@@ -66,6 +66,22 @@ from crud.moviepilot import (
     delete_mp_connection,
 )
 
+from crud.playlists import (
+    create_playlist,
+    get_playlist,
+    get_playlist_by_token,
+    list_playlists,
+    update_playlist,
+    delete_playlist,
+    enable_share,
+    disable_share,
+    list_items,
+    add_item as add_playlist_item,
+    update_item as update_playlist_item,
+    delete_item as delete_playlist_item,
+    reorder_items as reorder_playlist_items,
+)
+
 __all__ = [
     # Users
     "create_user",
@@ -120,4 +136,18 @@ __all__ = [
     "update_mp_connection",
     "update_mp_last_connected",
     "delete_mp_connection",
+    # Playlists
+    "create_playlist",
+    "get_playlist",
+    "get_playlist_by_token",
+    "list_playlists",
+    "update_playlist",
+    "delete_playlist",
+    "enable_share",
+    "disable_share",
+    "list_items",
+    "add_playlist_item",
+    "update_playlist_item",
+    "delete_playlist_item",
+    "reorder_playlist_items",
 ]

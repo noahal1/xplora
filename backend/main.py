@@ -91,6 +91,7 @@ from routers.logs import router as logs_router
 from routers.updates import router as updates_router
 from routers.media_server import router as media_server_router
 from routers.moviepilot import router as moviepilot_router
+from routers.playlists import router as playlists_router
 
 app.include_router(auth_router)
 app.include_router(media_router)
@@ -102,6 +103,7 @@ app.include_router(logs_router)
 app.include_router(updates_router)
 app.include_router(media_server_router)
 app.include_router(moviepilot_router)
+app.include_router(playlists_router)
 
 
 # ── Health check ────────────────────────────────────────────────────

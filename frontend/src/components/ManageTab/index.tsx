@@ -535,27 +535,19 @@ export function ManageTab() {
         expandLabel={t("manage.filter_expand")}
       >
         <div className="flex flex-col gap-0 sm:gap-0">
-          {/* Row 1: Status + MediaType + Sort + ScrapeSource (compact) */}
-          {/* Row 1: Status + MediaType (spaced groups) */}
-          <div className="flex items-start sm:items-center gap-2 sm:gap-1 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
-            <div className="max-sm:[&>*]:mb-0 shrink-0 flex items-center">
-              <StatusFilter
-                status={statusFilter}
-                error={errorFilter}
-                onStatusChange={(v) => { setStatusFilter(v); setErrorFilter(false); setPage(0); setSelected(new Set()); }}
-                onErrorToggle={() => { setErrorFilter((v) => !v); setStatusFilter(""); setPage(0); setSelected(new Set()); }}
-              />
-            </div>
-            <div className="flex items-center shrink-0">
-              <MediaTypeFilter
-                selected={mediaTypeFilter}
-                allValue=""
-                onSelect={(v) => { setMediaTypeFilter(v); setPage(0); setSelected(new Set()); }}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-start sm:items-center gap-0 sm:gap-0 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+          {/* Row 1: Status + MediaType + Sort — left-aligned in one row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-1 flex-wrap">
+            <StatusFilter
+              status={statusFilter}
+              error={errorFilter}
+              onStatusChange={(v) => { setStatusFilter(v); setErrorFilter(false); setPage(0); setSelected(new Set()); }}
+              onErrorToggle={() => { setErrorFilter((v) => !v); setStatusFilter(""); setPage(0); setSelected(new Set()); }}
+            />
+            <MediaTypeFilter
+              selected={mediaTypeFilter}
+              allValue=""
+              onSelect={(v) => { setMediaTypeFilter(v); setPage(0); setSelected(new Set()); }}
+            />
             <SortControls
               field={sortField}
               dir={sortDir}

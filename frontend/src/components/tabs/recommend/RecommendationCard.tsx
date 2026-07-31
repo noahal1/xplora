@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import { Percent, Plus, Loader2, Film, Check } from "lucide-react";
+import { Percent, Plus, Loader2, Film, Check, ListTodo } from "lucide-react";
 import type { Recommendation } from "../../../types";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
@@ -11,11 +11,12 @@ interface RecommendationCardProps {
   addingToWishlist: boolean;
   onAddToWishlist: () => void;
   onOpenDetail: () => void;
+  onAddToPlaylist?: () => void;
   t: TFunction;
 }
 
 export function RecommendationCard({
-  rec, index, addingToWishlist, onAddToWishlist, onOpenDetail, t,
+  rec, index, addingToWishlist, onAddToWishlist, onOpenDetail, onAddToPlaylist, t,
 }: RecommendationCardProps) {
   return (
     <div
@@ -94,6 +95,16 @@ export function RecommendationCard({
               ) : (
                 <Plus size={12} />
               )}
+            </button>
+          )}
+          {onAddToPlaylist && (
+            <button
+              className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-all hover:bg-accent"
+              style={{ color: "var(--fg-dim)" }}
+              onClick={(e) => { e.stopPropagation(); onAddToPlaylist(); }}
+              title={t("playlists.add_to_playlist")}
+            >
+              <ListTodo size={12} />
             </button>
           )}
           <div className="flex items-center gap-1">

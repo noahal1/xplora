@@ -1,5 +1,5 @@
 import { memo, useRef } from "react";
-import { ArrowUp, ArrowDown, Film, Star, Trash2 } from "lucide-react";
+import { GripVertical, ArrowUp, ArrowDown, Film, Star, Trash2 } from "lucide-react";
 import type { MediaDetail } from "../../../types";
 import { ProgressiveImage } from "../../ProgressiveImage";
 
@@ -42,6 +42,7 @@ export const TopRatedMobileCard = memo(function TopRatedMobileCard({
   const medal = isTop3 ? MEDAL_COLORS[idx] : null;
   const delay = idx * 60;
   const dragHandleRef = useRef<HTMLDivElement>(null);
+  const rankColor = getRankColor(idx);
 
   return (
     <div
@@ -70,177 +71,160 @@ export const TopRatedMobileCard = memo(function TopRatedMobileCard({
           ? "0 0 0 2px var(--seed-primary, #f59e0b)"
           : isDragging
           ? "0 4px 16px rgba(0,0,0,0.25)"
+          : isTop3
+          ? `0 2px 12px ${medal!.shadow}20`
           : "none",
         zIndex: isDragging ? 10 : 1,
       }}
-      className="p-3 rounded-xl transition-all duration-200 active:scale-[0.99]"
+      className="p-0 rounded-2xl overflow-hidden transition-all duration-200"
     >
-      {/* Row 1: Rank + Poster + Title/Meta + Actions */}
-      <div className="flex items-start gap-2.5">
-        {/* Rank badge — also serves as drag handle in edit mode */}
-        {editMode ? (
-          <div
-            ref={dragHandleRef}
-            className="shrink-0 relative mt-0.5 touch-none cursor-grab active:cursor-grabbing"
-            onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e, idx); }}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-            style={{ touchAction: "none" }}
-          >
-            {isTop3 && medal ? (
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-md"
-                style={{ background: medal.bg, boxShadow: `0 2px 8px ${medal.shadow}` }}
-              >
-                {idx + 1}
-              </div>
-            ) : (
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                style={{ background: `${getRankColor(idx)}15`, color: getRankColor(idx) }}
-              >
-                {idx + 1}
-              </div>
-            )}
-            {/* Drag grip indicator dots */}
-            <div className="flex justify-center gap-0.5 mt-0.5 opacity-40">
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
-                <circle cx="9" cy="5" r="1" /><circle cx="15" cy="5" r="1" />
-                <circle cx="9" cy="19" r="1" /><circle cx="15" cy="19" r="1" />
-              </svg>
-            </div>
-          </div>
-        ) : (
-          <div className="shrink-0 relative mt-0.5">
-            {isTop3 && medal ? (
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-md"
-                style={{ background: medal.bg, boxShadow: `0 2px 8px ${medal.shadow}` }}
-              >
-                {idx + 1}
-              </div>
-            ) : (
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                style={{ background: `${getRankColor(idx)}15`, color: getRankColor(idx) }}
-              >
-                {idx + 1}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Poster */}
+      {/* Main content row */}
+      <div className="flex items-stretch">
+        {/* Left accent stripe for ranking */}
         <div
-          className="w-10 h-[58px] shrink-0 rounded-lg overflow-hidden bg-muted/60 flex items-center justify-center cursor-pointer border border-border-subtle"
-          onClick={() => !editMode && onClick(movie)}
+          className="shrink-0 flex flex-col items-center justify-center"
+          style={{
+            width: isTop3 ? 52 : 40,
+            background: isTop3
+              ? medal!.bg
+              : `${rankColor}12`,
+          }}
         >
-          {movie.poster_url ? (
-            <ProgressiveImage src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover" />
+          {editMode ? (
+            <div
+              ref={dragHandleRef}
+              className="flex flex-col items-center gap-0.5 touch-none cursor-grab active:cursor-grabbing"
+              onTouchStart={(e) => { e.stopPropagation(); onTouchStart(e, idx); }}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              style={{ touchAction: "none" }}
+            >
+              <span
+                className="font-extrabold leading-none"
+                style={{
+                  fontSize: isTop3 ? 17 : 14,
+                  color: isTop3 ? "#fff" : rankColor,
+                }}
+              >
+                {idx + 1}
+              </span>
+              <GripVertical size={12} className={isTop3 ? "text-white/40" : "text-muted-foreground/30"} />
+            </div>
           ) : (
-            <Film size={16} className="text-muted-foreground/30" />
+            <span
+              className="font-extrabold leading-none"
+              style={{
+                fontSize: isTop3 ? 17 : 14,
+                color: isTop3 ? "#fff" : rankColor,
+              }}
+            >
+              {idx + 1}
+            </span>
           )}
         </div>
 
-        {/* Title + Meta */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-1">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`font-medium text-sm truncate ${isTop3 ? "bg-clip-text text-transparent" : ""}`}
-                  style={isTop3 ? {
-                    backgroundImage: idx === 0
-                      ? "linear-gradient(135deg, #f59e0b, #eab308)"
-                      : idx === 1
-                      ? "linear-gradient(135deg, #94a3b8, #cbd5e1)"
-                      : "linear-gradient(135deg, #b45309, #d97706)",
-                  } : {}}
-                  onClick={() => !editMode && onClick(movie)}
-                >
-                  {movie.title}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/80">
-                <div className="flex items-center gap-1">
-                  <Star size={10} className="text-amber" fill="currentColor" />
-                  <span className="text-xs font-bold tabular-nums text-amber">{movie.rating.toFixed(1)}</span>
-                </div>
-                {movie.year && <span className="text-[10px] opacity-40">{movie.year}</span>}
-                {movie.genre && (
-                  <span className="text-[10px] opacity-30 truncate max-w-[80px]">{movie.genre}</span>
-                )}
-              </div>
+        {/* Poster column */}
+        <div
+          className="w-[68px] shrink-0 overflow-hidden cursor-pointer relative"
+          onClick={() => !editMode && onClick(movie)}
+        >
+          {movie.poster_url ? (
+            <ProgressiveImage
+              src={movie.poster_url}
+              alt={movie.title}
+              className="w-full h-full object-cover absolute inset-0"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-muted/40">
+              <Film size={16} className="text-muted-foreground/20" />
             </div>
+          )}
+          {/* Subtle gradient overlay on right edge */}
+          <div
+            className="absolute inset-y-0 right-0 w-3 pointer-events-none"
+            style={{
+              background: `linear-gradient(to right, transparent, var(--bg-card))`,
+            }}
+          />
+        </div>
 
-            {/* Medal emoji + Remove (non-edit mode) */}
-            {!editMode && (
-              <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                {isTop3 && (
-                  <span className="text-base leading-none">
-                    {idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}
-                  </span>
-                )}
-                <button
-                  className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
-                  onClick={(e) => { e.stopPropagation(); onRemove(movie); }}
-                  title="移除"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
+        {/* Info + Actions */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center py-2.5 pr-2.5 pl-2.5 gap-1">
+          {/* Title */}
+          <span
+            className={`font-semibold text-sm leading-tight line-clamp-2 ${isTop3 ? "bg-clip-text text-transparent" : ""}`}
+            style={isTop3 ? {
+              backgroundImage: idx === 0
+                ? "linear-gradient(135deg, #f59e0b, #eab308)"
+                : idx === 1
+                ? "linear-gradient(135deg, #94a3b8, #cbd5e1)"
+                : "linear-gradient(135deg, #b45309, #d97706)",
+            } : {}}
+          >
+            {movie.title}
+          </span>
+
+          {/* Meta row */}
+          <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-0.5">
+              <Star size={9} className="text-amber" fill="currentColor" />
+              <span className="font-bold tabular-nums text-amber text-[11px]">{movie.rating.toFixed(1)}</span>
+            </div>
+            {movie.year && (
+              <span className="text-[10px] text-muted-foreground/50">{movie.year}</span>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Row 2: Edit mode controls (when editing) */}
-      {editMode && (
-        <div className="flex items-center gap-2 mt-2.5 pt-2.5 overflow-x-auto no-scrollbar" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-          {/* Drag handle hint — hidden on mobile to save space */}
-          <div className="hidden sm:flex items-center gap-1 px-2 py-1 text-[10px] opacity-40">
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
-              <circle cx="9" cy="5" r="1" /><circle cx="15" cy="5" r="1" />
-              <circle cx="9" cy="19" r="1" /><circle cx="15" cy="19" r="1" />
-            </svg>
-            <span>拖拽排名徽章排序</span>
-          </div>
-          <div className="flex items-center gap-1 ml-auto">
+          {/* Genre tag */}
+          {movie.genre && (
+            <span className="text-[9px] text-muted-foreground/30 truncate">{movie.genre}</span>
+          )}
+        </div>
+
+        {/* Right actions column */}
+        {!editMode ? (
+          <div className="flex flex-col items-center justify-center gap-1 pr-2.5">
+            {isTop3 && (
+              <span className="text-base leading-none">
+                {idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}
+              </span>
+            )}
             <button
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
-              onClick={(e) => { e.stopPropagation(); onMoveUp(idx); }}
-              disabled={idx === 0}
-              title="上移"
-            >
-              <ArrowUp size={13} />
-              <span className="hidden sm:inline">上移</span>
-            </button>
-            <button
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none"
-              onClick={(e) => { e.stopPropagation(); onMoveDown(idx); }}
-              disabled={idx === total - 1}
-              title="下移"
-            >
-              <ArrowDown size={13} />
-              <span className="hidden sm:inline">下移</span>
-            </button>
-            <button
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              className="p-1.5 rounded-full text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all"
               onClick={(e) => { e.stopPropagation(); onRemove(movie); }}
               title="移除"
             >
-              <Trash2 size={13} />
-              <span className="hidden sm:inline">移除</span>
+              <Trash2 size={12} />
             </button>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-1 pr-2.5">
+            <button
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-accent/50 transition-all disabled:opacity-15 disabled:pointer-events-none"
+              onClick={(e) => { e.stopPropagation(); onMoveUp(idx); }}
+              disabled={idx === 0}
+            >
+              <ArrowUp size={14} />
+            </button>
+            <button
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-accent/50 transition-all disabled:opacity-15 disabled:pointer-events-none"
+              onClick={(e) => { e.stopPropagation(); onMoveDown(idx); }}
+              disabled={idx === total - 1}
+            >
+              <ArrowDown size={14} />
+            </button>
+            <button
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground/20 hover:text-destructive hover:bg-destructive/10 transition-all"
+              onClick={(e) => { e.stopPropagation(); onRemove(movie); }}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }, (prev, next) => {
-  const id = prev.movie.id;
   if (prev.movie.title !== next.movie.title) return false;
   if (prev.movie.rating !== next.movie.rating) return false;
   if (prev.movie.year !== next.movie.year) return false;

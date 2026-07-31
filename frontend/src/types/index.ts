@@ -284,3 +284,43 @@ export interface SortConfig {
   field: SortField;
   dir: SortDir;
 }
+
+/** A single entry within a playlist — metadata snapshot + optional media reference */
+export interface PlaylistItem {
+  id: number;
+  media_id: number | null;
+  title: string;
+  year: number | null;
+  genre: string | null;
+  media_type: string;
+  poster_url: string | null;
+  overview: string | null;
+  tmdb_id: string | null;
+  country: string | null;
+  note: string | null;
+  sort_order: number | null;
+  created_at: string;
+}
+
+/** A user-curated playlist (片单) */
+export interface Playlist {
+  id: number;
+  name: string;
+  description: string | null;
+  cover_url: string | null;
+  share_token: string | null;
+  created_at: string;
+  updated_at: string;
+  item_count?: number;
+  items?: PlaylistItem[];
+}
+
+/** Public read-only view of a shared playlist (no internal IDs) */
+export interface PublicPlaylist {
+  name: string;
+  description: string | null;
+  cover_url: string | null;
+  created_at: string;
+  item_count: number;
+  items: Array<Omit<PlaylistItem, "id" | "media_id" | "created_at">>;
+}

@@ -22,12 +22,13 @@ async def export_my_data(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """Export current user's data as JSON (movies + wishlist + sessions)."""
-    from models import MediaItemRecord, SessionRecord, RecommendationRecord
+    """Export current user's data as JSON (movies + wishlist + sessions + playlists)."""
+    from models import MediaItemRecord, SessionRecord, RecommendationRecord, PlaylistRecord, PlaylistItemRecord
 
     user_id = current_user["id"]
     movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == user_id).all()
     sessions = db.query(SessionRecord).filter(SessionRecord.user_id == user_id).all()
+    playlists = db.query(PlaylistRecord).filter(PlaylistRecord.user_id == user_id).all()
 
     sessions_data = []
     for s in sessions:
@@ -60,6 +61,33 @@ async def export_my_data(
             for m in movies
         ],
         "sessions": sessions_data,
+        "playlists": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "cover_url": p.cover_url,
+                "share_token": p.share_token,
+                "created_at": p.created_at.isoformat(),
+                "updated_at": p.updated_at.isoformat(),
+                "items": [
+                    {
+                        "title": it.title,
+                        "year": it.year,
+                        "genre": it.genre,
+                        "media_type": it.media_type,
+                        "poster_url": it.poster_url,
+                        "overview": it.overview,
+                        "tmdb_id": it.tmdb_id,
+                        "country": it.country,
+                        "note": it.note,
+                        "sort_order": it.sort_order,
+                    }
+                    for it in db.query(PlaylistItemRecord).filter(PlaylistItemRecord.playlist_id == p.id).all()
+                ],
+            }
+            for p in playlists
+        ],
     }
 
     return StreamingResponse(
@@ -78,7 +106,7 @@ async def import_my_data(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """Import movies from a previously exported JSON file.
+    """Import movies (and playlists) from a previously exported JSON file.
 
     Metadata enrichment (poster, overview, etc.) runs asynchronously
     in the background after the response is sent.
@@ -134,6 +162,46 @@ async def import_my_data(
         wish_list = [WishlistItem(title=m["title"], year=m["year"], genre=m.get("genre")) for m in wish_items]
         total_records.extend(save_wishlist_items(wish_list, current_user["id"], db=db))
 
+    # ── Restore playlists (snapshot items, no media_id links) ──
+    from models import PlaylistRecord, PlaylistItemRecord
+
+    playlist_count = 0
+    for p in data.get("playlists", []) or []:
+        name = (p.get("name") or "").strip()
+        if not name:
+            continue
+        playlist = PlaylistRecord(
+            user_id=current_user["id"],
+            name=name,
+            description=p.get("description"),
+            cover_url=p.get("cover_url"),
+            share_token=p.get("share_token"),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.add(playlist)
+        db.flush()
+        for idx, it in enumerate(p.get("items", []) or []):
+            title = (it.get("title") or "").strip()
+            if not title:
+                continue
+            db.add(PlaylistItemRecord(
+                playlist_id=playlist.id,
+                title=title,
+                year=it.get("year"),
+                genre=it.get("genre"),
+                media_type=it.get("media_type") or "movie",
+                poster_url=it.get("poster_url"),
+                overview=it.get("overview"),
+                tmdb_id=it.get("tmdb_id"),
+                country=it.get("country"),
+                note=it.get("note"),
+                sort_order=it.get("sort_order", idx),
+                created_at=datetime.now(timezone.utc),
+            ))
+        playlist_count += 1
+    db.commit()
+
     # Launch background metadata scraping for all imported records
     movie_ids = [r.id for r in total_records]
     if movie_ids:
@@ -141,5 +209,5 @@ async def import_my_data(
 
     # Determine primary status type for response
     status_type = "watched" if len(watched_items) >= len(wish_items) else "wish"
-    log_operation(current_user["id"], current_user["username"], "import_data", f"导入数据: {len(total_records)} 部电影", db=db)
-    return {"status": "imported", "count": len(total_records), "status_type": status_type}
+    log_operation(current_user["id"], current_user["username"], "import_data", f"导入数据: {len(total_records)} 部电影, {playlist_count} 个片单", db=db)
+    return {"status": "imported", "count": len(total_records), "status_type": status_type, "playlists": playlist_count}

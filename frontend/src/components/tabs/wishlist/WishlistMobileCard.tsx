@@ -1,14 +1,14 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { ProgressiveImage } from "../../ProgressiveImage";
-import { Film, ChevronRight, Check, Info, Trash2 } from "lucide-react";
+import { Film, ChevronRight, Check, Info, Trash2, ListTodo } from "lucide-react";
 import { Badge } from "../../ui/badge";
 import { translateGenres } from "../../../utils/genre";
 import { formatSeasonLabel } from "../../../utils/groupTVSeries";
 import type { WishlistEntry } from "../../WishlistTab/index";
 
 /* ── Memo-ized mobile card — compact card layout for small screens ── */
-export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer, serverPlayUrl }: {
+export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMarkWatched, onDelete, onOpenDetail, onSearchPT, onServer, serverPlayUrl, onAddToPlaylist }: {
   item: WishlistEntry;
   onMarkWatched: (item: WishlistEntry) => void;
   onDelete: (id: number) => void;
@@ -18,6 +18,8 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
   onServer?: boolean;
   /** Direct playback URL on the media server (Jellyfin web player) */
   serverPlayUrl?: string;
+  /** Add this item to a playlist */
+  onAddToPlaylist?: (item: WishlistEntry) => void;
 }) {
   const { t } = useTranslation();
 
@@ -114,6 +116,16 @@ export const WishlistMobileCard = memo(function WishlistMobileCard({ item, onMar
           <Info size={14} />
           <span className="hidden sm:inline">{t("manage.detail")}</span>
         </button>
+        {onAddToPlaylist && (
+          <button
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+            onClick={() => onAddToPlaylist(item)}
+            title={t("playlists.add_to_playlist")}
+          >
+            <ListTodo size={14} />
+            <span className="hidden sm:inline">{t("playlists.add_to_playlist")}</span>
+          </button>
+        )}
         <button
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-auto"
           onClick={() => onDelete(item.id)}

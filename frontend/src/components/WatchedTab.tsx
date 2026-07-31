@@ -30,6 +30,7 @@ import { TVSeriesGroupItem } from "./tabs/watched/TVSeriesGroupItem";
 import { TVSeriesGroupCard } from "./tabs/watched/TVSeriesGroupCard";
 import { ImportModal } from "./tabs/watched/ImportModal";
 import { SearchModal } from "./tabs/watched/SearchModal";
+import { AddToPlaylistModal, type PlaylistTargetItem } from "./PlaylistsTab/AddToPlaylistModal";
 
 const PAGE_SIZE = 16;
 
@@ -64,6 +65,20 @@ export function WatchedTab() {
   const [reloadTrigger, setReloadTrigger] = useState(0);
 
   const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
+
+  // === Add-to-playlist modal ===
+  const [playlistTarget, setPlaylistTarget] = useState<PlaylistTargetItem | null>(null);
+  const openAddToPlaylist = useCallback((movie: MediaDetail) => {
+    setPlaylistTarget({
+      media_id: movie.id,
+      title: movie.title,
+      year: movie.year,
+      genre: movie.genre,
+      media_type: movie.media_type || "movie",
+      poster_url: movie.poster_url,
+      tmdb_id: movie.tmdb_id,
+    });
+  }, []);
 
   // ── Group TV series by tv_series_id ──
   const { standalone: standaloneMedia, groups: tvGroups } = useMemo(
@@ -413,6 +428,7 @@ export function WatchedTab() {
                       onRemove={removeMovie}
                       onSaveRating={handleSaveRating}
                       onOpenDetail={setDetailMovie}
+                      onAddToPlaylist={openAddToPlaylist}
                     />
                   ))}
                   {tvGroups.map((g) => (
@@ -434,6 +450,7 @@ export function WatchedTab() {
                         onRemove={removeMovie}
                         onSaveRating={handleSaveRating}
                         onOpenDetail={setDetailMovie}
+                        onAddToPlaylist={openAddToPlaylist}
                       />
                     ))}
                     {tvGroups.map((g) => (
@@ -455,6 +472,7 @@ export function WatchedTab() {
                         onRemove={removeMovie}
                         onSaveRating={handleSaveRating}
                         onOpenDetail={setDetailMovie}
+                        onAddToPlaylist={openAddToPlaylist}
                       />
                     ))}
                     {tvGroups.map((g) => (
@@ -535,6 +553,13 @@ export function WatchedTab() {
         open={detailMovie !== null}
         movie={detailMovie}
         onClose={() => setDetailMovie(null)}
+      />
+
+      {/* === Add-to-Playlist Modal === */}
+      <AddToPlaylistModal
+        open={playlistTarget !== null}
+        onClose={() => setPlaylistTarget(null)}
+        item={playlistTarget}
       />
     </div>
   );

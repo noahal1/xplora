@@ -16,6 +16,7 @@ interface ResultsSectionProps {
   addingToWishlist: Record<number, boolean>;
   onAddToWishlist: (rec: Recommendation, idx: number) => void;
   onOpenDetail: (rec: Recommendation) => void;
+  onAddToPlaylist?: (rec: Recommendation) => void;
   onNewSession: () => void;
   onExportJSON: () => void;
   t: TFunction;
@@ -24,7 +25,7 @@ interface ResultsSectionProps {
 export function ResultsSection({
   recommendations, modelUsed, strategy, sourceInfo,
   addingToWishlist,
-  onAddToWishlist, onOpenDetail, onNewSession, onExportJSON, t,
+  onAddToWishlist, onOpenDetail, onAddToPlaylist, onNewSession, onExportJSON, t,
 }: ResultsSectionProps) {
   const { showToast } = useToast();
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -64,6 +65,7 @@ export function ResultsSection({
             addingToWishlist={!!addingToWishlist[i]}
             onAddToWishlist={() => onAddToWishlist(rec, i)}
             onOpenDetail={() => onOpenDetail(rec)}
+            onAddToPlaylist={onAddToPlaylist ? () => onAddToPlaylist(rec) : undefined}
             t={t}
           />
         ))}

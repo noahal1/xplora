@@ -146,6 +146,7 @@ def _normalize_ratings(movies: list[MediaRating]) -> list[MediaRating]:
             rating=max(0.0, min(10.0, round(m.rating, 1))),
             year=m.year,
             genre=m.genre,
+            media_type=m.media_type,
         )
         for m in movies
     ]
@@ -185,6 +186,7 @@ def parse_movie_data(raw_data) -> list[MediaRating]:
                 rating=rating,
                 year=item.get("year"),
                 genre=item.get("genre"),
+                media_type=item.get("media_type", "movie"),
             )
         )
     if len(movies) < 1:

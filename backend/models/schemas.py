@@ -52,6 +52,7 @@ class MediaRating(SQLModel):
     rating: float = Field(ge=0.0, le=10.0, description="User rating (0-10)")
     year: Optional[int] = Field(None, description="Release year")
     genre: Optional[str] = Field(None, description="Genre(s)")
+    media_type: Optional[str] = Field(None, description="Media type: 'movie' or 'tv'")
 
 
 class WishlistItem(SQLModel):
@@ -83,6 +84,7 @@ class StrategyParams(SQLModel):
     year_start: Optional[int] = Field(None, description="Start year for era-based recommendations")
     year_end: Optional[int] = Field(None, description="End year for era-based recommendations")
     target_genre: Optional[str] = Field(None, description="Target genre for explore-new-genre strategy")
+    media_type: Optional[str] = Field(None, description="Filter: 'movie' or 'tv' to restrict to one type")
 
 
 class RecommendationRequest(SQLModel):
@@ -151,3 +153,91 @@ class FollowUpRequest(SQLModel):
         default=3, ge=1, le=10,
         description="Number of new recommendations if requested",
     )
+
+
+# ============================================
+# Playlist (片单) Schemas
+# ============================================
+
+
+class PlaylistCreate(SQLModel):
+    """Create a new playlist."""
+    name: str = Field(min_length=1, max_length=100, description="Playlist name")
+    description: Optional[str] = Field(None, max_length=500, description="Optional description")
+
+
+class PlaylistUpdate(SQLModel):
+    """Rename / update a playlist's metadata."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="New name")
+    description: Optional[str] = Field(None, max_length=500, description="New description")
+
+
+class PlaylistItemInput(SQLModel):
+    """Add an item to a playlist.
+
+    Either provide ``media_id`` (references the user's media library)
+    or the snapshot fields directly (for items searched externally).
+    """
+    media_id: Optional[int] = Field(None, description="Reference to a media_items row (optional)")
+    title: Optional[str] = Field(None, max_length=255, description="Title (required when media_id is not provided)")
+    year: Optional[int] = Field(None, description="Release year")
+    genre: Optional[str] = Field(None, max_length=255, description="Genre(s)")
+    media_type: Optional[str] = Field(None, description="'movie' or 'tv'")
+    poster_url: Optional[str] = Field(None, max_length=500, description="Poster URL")
+    overview: Optional[str] = Field(None, description="Overview")
+    tmdb_id: Optional[str] = Field(None, max_length=50, description="TMDB ID for dedup")
+    country: Optional[str] = Field(None, max_length=100, description="Country")
+    note: Optional[str] = Field(None, max_length=500, description="Optional note")
+
+
+class PlaylistItemUpdate(SQLModel):
+    """Update a playlist item's note (and optionally metadata)."""
+    note: Optional[str] = Field(None, max_length=500, description="Item note")
+    title: Optional[str] = Field(None, max_length=255, description="Title")
+    year: Optional[int] = Field(None, description="Release year")
+    genre: Optional[str] = Field(None, max_length=255, description="Genre(s)")
+    poster_url: Optional[str] = Field(None, max_length=500, description="Poster URL")
+
+
+class PlaylistReorderRequest(SQLModel):
+    """Reorder playlist items."""
+    ordered_ids: list[int] = Field(description="Item IDs in the new order")
+
+
+class PlaylistAINameRequest(SQLModel):
+    """Generate an AI playlist name based on a single movie."""
+    title: str = Field(description="Movie/TV title")
+    year: Optional[int] = Field(None, description="Release year")
+    genre: Optional[str] = Field(None, description="Genre(s)")
+    overview: Optional[str] = Field(None, max_length=2000, description="Brief synopsis")
+    media_type: Optional[str] = Field(None, description="'movie' or 'tv'")
+    model: str = Field(
+        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
+    )
+    lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
+
+
+class PlaylistCategorizeRequest(SQLModel):
+    """Ask AI which existing playlist(s) a single movie fits best."""
+    title: str = Field(description="Movie/TV title")
+    year: Optional[int] = Field(None, description="Release year")
+    genre: Optional[str] = Field(None, description="Genre(s)")
+    overview: Optional[str] = Field(None, max_length=2000, description="Brief synopsis")
+    media_type: Optional[str] = Field(None, description="'movie' or 'tv'")
+    model: str = Field(
+        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
+    )
+    lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
+
+
+class PlaylistCompleteRequest(SQLModel):
+    """Generate an AI 'completion plan' — items a playlist is missing."""
+    model: str = Field(
+        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
+    )
+    lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
+    count: int = Field(
+        default=6, ge=1, le=12,
+        description="Number of recommended completion items to generate",
+    )
+

@@ -7,6 +7,8 @@ from models.db import (
     SessionRecord,
     RecommendationRecord,
     OperationLogRecord,
+    PlaylistRecord,
+    PlaylistItemRecord,
     MediaServerRecord,
     MoviePilotRecord,
 )
@@ -28,6 +30,14 @@ from models.schemas import (
     RecommendationResponse,
     ConversationMessage,
     FollowUpRequest,
+    PlaylistCreate,
+    PlaylistUpdate,
+    PlaylistItemInput,
+    PlaylistItemUpdate,
+    PlaylistReorderRequest,
+    PlaylistAINameRequest,
+    PlaylistCategorizeRequest,
+    PlaylistCompleteRequest,
 )
 
 __all__ = [
@@ -54,4 +64,12 @@ __all__ = [
     "RecommendationResponse",
     "ConversationMessage",
     "FollowUpRequest",
+    "PlaylistCreate",
+    "PlaylistUpdate",
+    "PlaylistItemInput",
+    "PlaylistItemUpdate",
+    "PlaylistReorderRequest",
+    "PlaylistAINameRequest",
+    "PlaylistCategorizeRequest",
+    "PlaylistCompleteRequest",
 ]
