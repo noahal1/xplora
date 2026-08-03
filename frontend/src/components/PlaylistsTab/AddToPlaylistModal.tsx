@@ -40,7 +40,6 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
   const [aiNames, setAiNames] = useState<string[]>([]);
   const [aiCategorizing, setAiCategorizing] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<Array<{ playlist_id: number; name: string; reason: string; confidence: number }>>([]);
-  const [aiPeopleLoading, setAiPeopleLoading] = useState(false);
   const [aiPeople, setAiPeople] = useState<Array<{ name: string; role: string; playlist_name: string }>>([]);
 
   // Load playlists when the modal opens
@@ -122,7 +121,8 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
     }
   }, [item, newName, newCreating, createAndAdd]);
 
-  /** Ask AI to invent 3 playlist name candidates based on this movie */
+  /** Ask AI to invent 3 playlist name candidates based on this movie — and, in
+   * the same call, detect a famous director/actor themed playlist (if any). */
   const handleAIName = useCallback(async () => {
     if (!item || aiNaming) return;
     setAiNaming(true);
@@ -135,6 +135,9 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
         media_type: item.media_type ?? "movie",
         lang: i18n.language?.startsWith("en") ? "en" : "zh",
       });
+      // People suggestions come back in the same call — set them even if the
+      // model returned no names (so they aren't dropped in that edge case).
+      setAiPeople(res.people || []);
       if (res.names && res.names.length > 0) {
         setAiNames(res.names);
         showToast(t("playlists.ai_name_generated"), "success");
@@ -181,31 +184,6 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
       setAiCategorizing(false);
     }
   }, [item, aiCategorizing, i18n.language, showToast, t]);
-
-  /** Ask AI to detect a famous director/actor and suggest a people playlist */
-  const handleAIPeople = useCallback(async () => {
-    if (!item || aiPeopleLoading) return;
-    setAiPeopleLoading(true);
-    setAiPeople([]);
-    try {
-      const res = await api.aiPeoplePlaylist({
-        title: item.title,
-        year: item.year ?? null,
-        genre: item.genre ?? null,
-        overview: item.overview ?? null,
-        media_type: item.media_type ?? "movie",
-        lang: i18n.language?.startsWith("en") ? "en" : "zh",
-      });
-      if (res.people && res.people.length > 0) {
-        setAiPeople(res.people);
-      }
-      // No famous director/actor found → silently skip (没有就算了吧)
-    } catch (err) {
-      showToast(t("playlists.ai_people_failed", { message: getErrMsg(err) }), "error");
-    } finally {
-      setAiPeopleLoading(false);
-    }
-  }, [item, aiPeopleLoading, i18n.language, showToast, t]);
 
   /** Create a people-themed playlist (e.g. "诺兰导演作品") and add the item */
   const handleCreatePeoplePlaylist = useCallback((name: string) => {
@@ -322,45 +300,6 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
           />
         )}
 
-        {/* AI famous director/actor playlist */}
-        {item && (
-          <div className="space-y-2">
-            <button
-              onClick={handleAIPeople}
-              disabled={aiPeopleLoading || !item}
-              title={t("playlists.ai_people_hint")}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-primary/25 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:pointer-events-none"
-            >
-              {aiPeopleLoading ? <Loader2 size={13} className="animate-spin" /> : <Clapperboard size={13} />}
-              {aiPeopleLoading ? t("playlists.ai_people_detecting") : t("playlists.ai_people")}
-            </button>
-            {aiPeople.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] text-muted-foreground">{t("playlists.ai_people_suggest")}</p>
-                {aiPeople.map((p) => (
-                  <button
-                    key={`${p.name}-${p.role}`}
-                    disabled={adding}
-                    onClick={() => handleCreatePeoplePlaylist(p.playlist_name)}
-                    className="w-full flex items-center gap-2 p-2 rounded-lg border border-primary/25 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all text-left disabled:opacity-60"
-                  >
-                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-primary/10 text-primary shrink-0">
-                      <Clapperboard size={13} />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{p.playlist_name}</p>
-                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                        {p.role === "director" ? t("playlists.ai_people_director") : t("playlists.ai_people_actor")} · {p.name}
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-primary shrink-0"><Plus size={11} />{t("wishlist.add")}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Create new playlist inline */}
         <div className="space-y-1.5 pt-1 border-t border-border">
           <div className="flex items-center gap-2">
@@ -391,7 +330,8 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
             {aiNaming ? t("playlists.ai_generating") : t("playlists.ai_name")}
           </button>
 
-          {/* AI candidate picker */}
+          {/* AI candidate picker — name chips + famous director/actor playlist
+              suggestions, both from the same combined AI call */}
           {aiNames.length > 0 && (
             <div className="space-y-1">
               <p className="text-[10px] text-muted-foreground">{t("playlists.ai_name_pick")}</p>
@@ -406,6 +346,30 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+          {item && aiPeople.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] text-muted-foreground">{t("playlists.ai_people_suggest")}</p>
+              {aiPeople.map((p) => (
+                <button
+                  key={`${p.name}-${p.role}`}
+                  disabled={adding}
+                  onClick={() => handleCreatePeoplePlaylist(p.playlist_name)}
+                  className="w-full flex items-center gap-2 p-2 rounded-lg border border-primary/25 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all text-left disabled:opacity-60"
+                >
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-primary/10 text-primary shrink-0">
+                    <Clapperboard size={13} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{p.playlist_name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                      {p.role === "director" ? t("playlists.ai_people_director") : t("playlists.ai_people_actor")} · {p.name}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-primary shrink-0"><Plus size={11} />{t("wishlist.add")}</span>
+                </button>
+              ))}
             </div>
           )}
         </div>

@@ -783,7 +783,7 @@
     "add_to_playlist_failed": "Failed to add to playlist: {{message}}",
     "no_library_items": "No movies in your library yet",
     "ai_name": "AI name",
-    "ai_name_hint": "Let AI suggest a playlist name from this title",
+    "ai_name_hint": "Let AI suggest a playlist name from this title; if it is by a famous director/actor, it also suggests a people-themed playlist",
     "ai_generating": "AI is naming...",
     "ai_name_generated": "AI suggested a playlist name",
     "ai_name_failed": "AI naming failed: {{message}}",
@@ -799,13 +799,9 @@
     "ai_complete_hint": "AI infers the theme from existing items and recommends missing titles. Click to add.",
     "ai_completing": "AI is generating the plan...",
     "ai_complete_none": "No missing titles found",
-    "ai_people": "Director / Actor",
-    "ai_people_hint": "If this title is by a famous director or actor, create a matching playlist",
-    "ai_people_detecting": "AI is detecting...",
     "ai_people_suggest": "AI suggests creating:",
     "ai_people_director": "Director",
-    "ai_people_actor": "Starring",
-    "ai_people_failed": "AI detection failed: {{message}}"
+    "ai_people_actor": "Starring"
   },
   "share": {
     "title": "Share Playlist",

@@ -32,7 +32,6 @@ from models import (
     PlaylistItemUpdate,
     PlaylistReorderRequest,
     PlaylistAINameRequest,
-    PlaylistPeopleRequest,
     PlaylistCategorizeRequest,
     PlaylistCompleteRequest,
 )
@@ -144,17 +143,21 @@ async def generate_playlist_name_endpoint(
     request: PlaylistAINameRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Generate 3 playlist name candidates using AI based on a single movie.
+    """Generate playlist name candidates AND famous director/actor people
+    playlist suggestions using AI based on a single movie — one combined call.
 
     Lets the user create a new playlist from a single movie without
     having to think up a name — the AI invents fitting collection names
-    (e.g. adding 《盗梦空间》 → 「烧脑科幻精选」「梦境迷踪」).
+    (e.g. adding 《盗梦空间》 → 「高分科幻精选」「周末观影清单」) and, in the same
+    prompt, detects whether the movie is by a globally famous director/actor
+    (e.g. → 「诺兰导演作品」). ``people`` is empty when no famous
+    director/actor is associated with the movie.
 
     Falls back to the other configured model if the requested one has no
     API key configured.
     """
     service, model = _get_ai_service(request.model, current_user["id"])
-    names = _run_ai(lambda: service.generate_playlist_names(
+    result = _run_ai(lambda: service.generate_playlist_names(
         {
             "title": request.title,
             "year": request.year,
@@ -165,31 +168,11 @@ async def generate_playlist_name_endpoint(
         lang=request.lang or "zh",
         count=3,
     ))
-    return {"names": names, "model_used": model}
-
-
-@router.post("/playlists/ai-people")
-async def detect_famous_people_endpoint(
-    request: PlaylistPeopleRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    """Detect if a movie is by a famous director/actor → suggest a people playlist.
-
-    Returns an empty ``people`` list when the movie isn't associated with any
-    well-known director/actor, so the frontend simply hides the suggestion.
-    """
-    service, model = _get_ai_service(request.model, current_user["id"])
-    people = _run_ai(lambda: service.detect_famous_people(
-        {
-            "title": request.title,
-            "year": request.year,
-            "genre": request.genre,
-            "overview": request.overview,
-            "media_type": request.media_type,
-        },
-        lang=request.lang or "zh",
-    ))
-    return {"people": people, "model_used": model}
+    return {
+        "names": result.get("names", []),
+        "people": result.get("people", []),
+        "model_used": model,
+    }
 
 
 # ── AI categorize / complete ────────────────────────────────────────

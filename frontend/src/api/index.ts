@@ -653,7 +653,10 @@ export async function getPublicPlaylist(token: string): Promise<PublicPlaylist> 
   return fetchJSON(`${API_BASE}/share/${encodeURIComponent(token)}`, { headers: {} });
 }
 
-/** Generate a playlist name with AI based on a single movie */
+/** Generate playlist name candidates + famous director/actor suggestions with AI
+ * based on a single movie — one combined call. Returns both ``names`` (pick one
+ * to name a new playlist) and ``people`` (famous director/actor themed
+ * playlists, empty when not applicable). */
 export async function generatePlaylistAIName(data: {
   title: string;
   year?: number | null;
@@ -662,28 +665,12 @@ export async function generatePlaylistAIName(data: {
   media_type?: string | null;
   model?: string;
   lang?: string;
-}): Promise<{ names: string[]; model_used: string }> {
-  return fetchJSON(`${API_BASE}/playlists/ai-name`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data),
-  });
-}
-
-/** AI: detect famous director/actor for a movie → suggest a people playlist */
-export async function aiPeoplePlaylist(data: {
-  title: string;
-  year?: number | null;
-  genre?: string | null;
-  overview?: string | null;
-  media_type?: string | null;
-  model?: string;
-  lang?: string;
 }): Promise<{
+  names: string[];
   people: Array<{ name: string; role: string; playlist_name: string }>;
   model_used: string;
 }> {
-  return fetchJSON(`${API_BASE}/playlists/ai-people`, {
+  return fetchJSON(`${API_BASE}/playlists/ai-name`, {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),

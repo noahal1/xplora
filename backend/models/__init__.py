@@ -36,7 +36,6 @@ from models.schemas import (
     PlaylistItemUpdate,
     PlaylistReorderRequest,
     PlaylistAINameRequest,
-    PlaylistPeopleRequest,
     PlaylistCategorizeRequest,
     PlaylistCompleteRequest,
 )
@@ -71,7 +70,6 @@ __all__ = [
     "PlaylistItemUpdate",
     "PlaylistReorderRequest",
     "PlaylistAINameRequest",
-    "PlaylistPeopleRequest",
     "PlaylistCategorizeRequest",
     "PlaylistCompleteRequest",
 ]

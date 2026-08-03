@@ -218,19 +218,6 @@ class PlaylistAINameRequest(SQLModel):
     lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
 
 
-class PlaylistPeopleRequest(SQLModel):
-    """Detect famous director/actor for a single movie → suggest a people playlist."""
-    title: str = Field(description="Movie/TV title")
-    year: Optional[int] = Field(None, description="Release year")
-    genre: Optional[str] = Field(None, description="Genre(s)")
-    overview: Optional[str] = Field(None, max_length=2000, description="Brief synopsis")
-    media_type: Optional[str] = Field(None, description="'movie' or 'tv'")
-    model: str = Field(
-        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
-    )
-    lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
-
-
 class PlaylistCategorizeRequest(SQLModel):
     """Ask AI which existing playlist(s) a single movie fits best."""
     title: str = Field(description="Movie/TV title")

@@ -817,7 +817,7 @@
     "add_to_playlist_failed": "加入片单失败：{{message}}",
     "no_library_items": "片库中还没有影片",
     "ai_name": "AI 生成片单名",
-    "ai_name_hint": "让 AI 根据这部影片自动生成片单名",
+    "ai_name_hint": "让 AI 根据这部影片生成片单名；若出自著名导演/演员，也会一并推荐人物主题片单",
     "ai_generating": "AI 生成中...",
     "ai_name_generated": "AI 已生成片单名",
     "ai_name_failed": "AI 生成片单名失败：{{message}}",
@@ -833,13 +833,9 @@
     "ai_complete_hint": "AI 根据片单已有内容推断主题，推荐缺失的影片/剧集，点击即可加入",
     "ai_completing": "AI 正在生成补齐计划...",
     "ai_complete_none": "没有找到需要补齐的影片",
-    "ai_people": "AI 导演/演员片单",
-    "ai_people_hint": "若该影视出自著名导演或演员，自动生成对应片单",
-    "ai_people_detecting": "AI 识别中...",
     "ai_people_suggest": "AI 建议创建以下片单：",
     "ai_people_director": "导演",
-    "ai_people_actor": "主演",
-    "ai_people_failed": "AI 识别失败：{{message}}"
+    "ai_people_actor": "主演"
   },
   "share": {
     "title": "分享片单",
