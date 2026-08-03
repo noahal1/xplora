@@ -635,12 +635,10 @@ Movie Info:
 - Current country: {current_country}
 
 Task:
-1. **Genre**: Always suggest a genre. The current genre may be incorrect (e.g. a superhero movie tagged as "纪录片").
-   Use standard English names like: Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Family, Fantasy, History, Horror, Music, Mystery, Romance, Sci-Fi, Thriller, War, Western, and reasonable combinations (e.g. "Sci-Fi & Fantasy", "War & Politics").
-   Multiple genres: separate with " / ".
-   IMPORTANT: If the current genre is already provided AND is in Chinese, respond in Chinese to match (e.g. "喜剧 / 剧情" instead of "Comedy / Drama").
-2. **Country**: Always suggest a country. Infer the primary country of origin (e.g. "United States", "China", "Japan", "United Kingdom", "South Korea", "France", "Germany").
-   IMPORTANT: If the current country is already provided AND is in Chinese, respond in Chinese to match (e.g. "美国" instead of "United States").
+1. **Genre**: Always suggest a genre using standard English names like:
+   Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Family, Fantasy, History, Horror, Music, Mystery, Romance, Sci-Fi, Thriller, War, Western, and reasonable combinations (e.g. "Sci-Fi & Fantasy", "War & Politics").
+   Separate multiple genres with " / ". The current genre may be incorrect (e.g. a superhero movie tagged as "纪录片").
+2. **Country**: Always suggest a country. Infer the primary country of origin and respond with its standard English name (e.g. "United States", "China", "Japan", "United Kingdom", "South Korea", "France", "Germany").
 
 For most well-known movies you can infer from the title. Make a reasonable guess if you are fairly confident. Only return null for genuinely obscure or unknown titles.
 

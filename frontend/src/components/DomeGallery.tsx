@@ -3,7 +3,7 @@ import TiltedCard from "./TiltedCard";
 import Masonry from "./Masonry";
 import type { MasonryItem } from "./Masonry";
 
-type MovieItem = { id: number; title: string; poster_url?: string; rating: number; year?: number | null };
+type MovieItem = { id: number; title: string; poster_url?: string | null; rating: number; year?: number | null };
 
 interface DomeGalleryProps {
   movies: MovieItem[];

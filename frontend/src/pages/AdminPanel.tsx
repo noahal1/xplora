@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDate, formatDateTime } from "../utils/date";
 import FadeContent from "../components/FadeContent";
 import { Pagination } from "../components/Pagination";
-import { Sparkles, AlertTriangle, Image, User, Clock, Hash, MapPin, Search, CheckCircle } from "lucide-react";
+import { Sparkles, AlertTriangle, Image, User, Clock, Hash, MapPin, Search, CheckCircle, FileText, XCircle } from "lucide-react";
 
 interface DiagItem {
   id: number;
@@ -32,9 +32,12 @@ interface DiagData {
     healthy: number;
     has_issues: number;
     missing_poster_url: number;
+    missing_overview: number;
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
+    missing_episode_count: number;
+    has_scrape_error: number;
   };
   items: DiagItem[];
 }

@@ -350,7 +350,7 @@ export function ManageTab() {
       }
       case "year": {
         const val = value ? parseInt(value) : null;
-        if (value && (isNaN(val) || val < 1888 || val > 2030)) return;
+        if (value && (val === null || isNaN(val) || val < 1888 || val > 2030)) return;
         updatedFields.year = val;
         break;
       }
@@ -751,14 +751,12 @@ export function ManageTab() {
             <TVSeriesGroupItem
               key={g.tvSeriesId}
               group={g}
-              isSelected={g.seasons.every((s) => selected.has(s.id))}
-              onToggleGroup={toggleGroup}
               onRemoveSeason={(id) => {
                 const movie = mediaList.find((m) => m.id === id);
                 if (movie) confirmDelete(id, movie.title);
               }}
               onRemoveGroup={removeGroup}
-              onOpenDetail={setDetailMovie}
+              onOpenDetail={(m) => setDetailMovie(m)}
             />
           ))}
           <Pagination currentPage={page} totalPages={totalPages}
@@ -892,7 +890,6 @@ export function ManageTab() {
         open={showDownloadQueue}
         onClose={() => setShowDownloadQueue(false)}
         title={t("moviepilot.overview")}
-        size="lg"
       >
         <DownloadQueue />
       </Modal>
@@ -902,7 +899,6 @@ export function ManageTab() {
         open={showMediaServer}
         onClose={() => setShowMediaServer(false)}
         title={t("media_server.title")}
-        size="lg"
       >
         <Suspense fallback={
           <div className="flex items-center justify-center py-12">

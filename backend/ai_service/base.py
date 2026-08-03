@@ -1,8 +1,8 @@
 """Base AI service client setup and shared attributes."""
 
-from openai import OpenAI
+from openai import OpenAI, BadRequestError
 
-from .constants import MODEL_CONFIGS
+from .constants import MODEL_CONFIGS, logger
 
 
 class AIServiceBase:
@@ -32,3 +32,34 @@ class AIServiceBase:
             api_key=api_key,
             base_url=config["api_base"],
         )
+
+    def _create_chat(
+        self,
+        *,
+        messages: list[dict],
+        temperature: float,
+        max_tokens: int,
+        timeout: int = 60,
+        stream: bool = False,
+    ):
+        """Create a chat completion with json_object mode + graceful fallback.
+
+        Requests ``response_format={"type": "json_object"}`` when possible for
+        reliable JSON output, but retries without it once if the gateway/
+        proxy doesn't support ``response_format`` (some do not).
+        """
+        kwargs = dict(
+            model=self.model_name,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            stream=stream,
+        )
+        try:
+            return self.client.chat.completions.create(
+                **kwargs, response_format={"type": "json_object"},
+            )
+        except BadRequestError:
+            logger.warning("json_object response_format unsupported, retrying without it")
+            return self.client.chat.completions.create(**kwargs)

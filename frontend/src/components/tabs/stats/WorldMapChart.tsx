@@ -6,6 +6,7 @@
 
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import type { GeoPermissibleObjects } from "d3-geo";
 
 /* ── Country name → ISO 3166-1 alpha-2 mapping ────────────────
    Comprehensive mapping from TMDB/TVmaze country names to ISO codes. */
@@ -246,7 +247,9 @@ export function WorldMapChart({ data }: Props) {
           import("topojson-client"),
         ]);
 
-        const countries = feature(topology, topology.objects.countries);
+        const countries = feature(topology, topology.objects.countries) as unknown as {
+          features: Array<{ id?: string | number }>;
+        };
         const features = countries.features;
 
         // Exclude Antarctica (ISO "010") from rendering
@@ -266,7 +269,7 @@ export function WorldMapChart({ data }: Props) {
         const pathGen = geoPath().projection(projection);
         const records: FeatureRecord[] = renderFeatures.map(
           (f: { id?: string | number }, idx: number) => {
-            const pathData = pathGen(f) || "";
+            const pathData = pathGen(f as GeoPermissibleObjects) || "";
             const numericId = String(f.id ?? "");
             return {
               key: numericId || `feat-${idx}`,
@@ -348,8 +351,7 @@ export function WorldMapChart({ data }: Props) {
   if (!hasData) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-        <svg className="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
-          className="text-fg-dim">
+        <svg className="w-10 h-10 opacity-30 text-fg-dim" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
           <circle cx="12" cy="12" r="10" />
           <path d="M2 12h20" />
           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />

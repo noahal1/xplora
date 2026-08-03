@@ -3,10 +3,9 @@
 import json
 import re
 
-from openai import BadRequestError
 from models import MediaRecommendation
 
-from .constants import logger
+from .constants import SYSTEM_PROMPT_PLAYLIST, logger
 
 
 class PlaylistMixin:
@@ -116,38 +115,15 @@ class PlaylistMixin:
             return rotated[:count]
 
         try:
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a playlist curation expert. Respond with valid JSON only.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.7,
-                    max_tokens=600,
-                    timeout=30,
-                    response_format={"type": "json_object"},
-                )
-            except BadRequestError as e:
-                # Some API gateways / proxies don't support response_format —
-                # retry once without it so generation still works.
-                logger.warning("json_object unsupported (%s), retrying without it", e)
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a playlist curation expert. Respond with valid JSON only.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.7,
-                    max_tokens=600,
-                    timeout=30,
-                )
+            response = self._create_chat(
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_PLAYLIST},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+                max_tokens=600,
+                timeout=30,
+            )
             content = response.choices[0].message.content or ""
         except Exception as e:
             logger.warning("AI playlist name generation failed: %s", e)
@@ -285,19 +261,14 @@ class PlaylistMixin:
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            response = self._create_chat(
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a playlist curation expert. Respond with valid JSON only.",
-                    },
+                    {"role": "system", "content": SYSTEM_PROMPT_PLAYLIST},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
                 max_tokens=500,
                 timeout=30,
-                response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content or ""
         except Exception as e:
@@ -422,19 +393,14 @@ class PlaylistMixin:
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            response = self._create_chat(
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a playlist curation expert. Respond with valid JSON only.",
-                    },
+                    {"role": "system", "content": SYSTEM_PROMPT_PLAYLIST},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,
                 max_tokens=900,
                 timeout=45,
-                response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content or ""
         except Exception as e:

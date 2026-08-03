@@ -163,6 +163,7 @@ export interface MediaSearchResult {
   year: number | null;
   genre: string;
   poster_url: string | null;
+  overview?: string | null;
   source_id: string;
   source: string;
   media_type?: string;

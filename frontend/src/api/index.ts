@@ -466,6 +466,18 @@ export async function getMediaDiagnostics(): Promise<{
     missing_count: number;
     has_scrape_error: boolean;
     scrape_error: string | null;
+    poster_url: string | null;
+    overview: string | null;
+    genre: string | null;
+    runtime: number | null;
+    imdb_id: string | null;
+    tmdb_id: string | null;
+    country: string | null;
+    tagline: string | null;
+    tv_series_id: string | null;
+    season_number: number | null;
+    episode_count: number | null;
+    series_poster_url: string | null;
     created_at: string;
   }>;
 }> {

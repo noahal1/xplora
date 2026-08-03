@@ -7,7 +7,7 @@ from models import MediaRating, MediaRecommendation
 from movie_search import get_tmdb_movie_recommendations, get_tmdb_movie_similar, get_tmdb_tv_recommendations, get_tmdb_tv_similar
 from config_manager import get_api_key as get_config_api_key
 
-from .constants import MAX_TOKENS, TMDB_CACHE_TTL, _tmdb_cache_key, _tmdb_candidate_cache, logger
+from .constants import MAX_TOKENS, SYSTEM_PROMPT_TMDB, TMDB_CACHE_TTL, _tmdb_cache_key, _tmdb_candidate_cache, logger
 
 
 class TMDCMixin:
@@ -229,13 +229,9 @@ class TMDCMixin:
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
+            response = self._create_chat(
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional movie recommendation expert. Select from the provided candidate list only.",
-                    },
+                    {"role": "system", "content": SYSTEM_PROMPT_TMDB},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,

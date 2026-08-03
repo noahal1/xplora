@@ -908,7 +908,6 @@ export function MediaServerTab() {
         open={showMPConfig}
         onClose={() => { setShowMPConfig(false); loadMpConfig(); }}
         title={t("moviepilot.title")}
-        size="lg"
       >
         <MoviePilotConfig />
       </Modal>

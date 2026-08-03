@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { Recommendation, ExternalDetail, DBSessionDetail } from "../types";
+import type { Recommendation, ExternalDetail, DBSession, DBSessionDetail } from "../types";
 import * as api from "../api";
 import { getErrMsg } from "../lib/utils";
 import { useToast } from "../context/ToastContext";

@@ -73,6 +73,27 @@ class PromptMixin:
                 + f"现有条目: {p_items_desc or '（空）'}\n"
             )
 
+        # ── Language-adaptive title instruction (shared by both modes) ──
+        cjk_in_movies = sum(1 for m in movies if has_cjk(m.title or ""))
+        use_cjk_titles = bool(movies) and cjk_in_movies > len(movies) / 2
+
+        if use_cjk_titles:
+            title_instruction = (
+                "Use Chinese/localized titles for ALL movies where a Chinese title "
+                'exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", '
+                '"Inception" → "盗梦空间"). '
+                "Only use English titles for movies without a known Chinese translation."
+            )
+            json_title_hint = "Movie Title (use Chinese title if available)"
+        else:
+            title_instruction = (
+                "Use original English titles for ALL movies. "
+                'Do NOT translate titles to Chinese (e.g. "肖申克的救赎" → '
+                '"The Shawshank Redemption", "盗梦空间" → "Inception"). '
+                "Only use Chinese titles for movies that do not have an English original title."
+            )
+            json_title_hint = "Movie Title (use English original title)"
+
         # ── Branch: hybrid mode (TMDB candidates) vs pure AI ────────
         is_hybrid = candidates is not None
 
@@ -84,7 +105,7 @@ class PromptMixin:
                 + (f" ({c['year']})" if c.get("year") else "")
                 + (f" [{c['genre']}]" if c.get("genre") else "")
                 + (f" TMDB评分: {c.get('vote_average', 'N/A')}" if c.get('vote_average') else "")
-                + f" — 来自{int(round(c['score']))}部电影推荐"
+                + f" — 来自{int(round(c['score']))}部作品推荐"
                 for i, c in enumerate(candidates_sample)
             )
 
@@ -109,13 +130,13 @@ These are movies that fans of the user's favorite films also enjoy:
 3. Confidence score (0-1) should reflect how well the movie matches the user's taste
 4. Ensure diversity in genre, era, and style
 5. The reason MUST be in Chinese
-6. Use Chinese/localized titles where available{media_type_instruction}
+6. {title_instruction}{media_type_instruction}
 
 Respond with ONLY valid JSON in the following format, without any markdown formatting or code blocks:
 {{
     "recommendations": [
         {{
-            "title": "Movie Title (use Chinese title if available)",
+            "title": "{json_title_hint}",
             "year": 2024,
             "genre": "Sci-Fi / Action",
             "reason": "Recommendation reason in Chinese, referencing user's taste",
@@ -195,27 +216,6 @@ You MUST NOT recommend any of the following movies, even if they seem like a goo
             if feedback_parts:
                 feedback_section = "\n\n## Previous Recommendation Feedback\n" + "\n\n".join(feedback_parts)
 
-        # Language-adaptive title instruction
-        cjk_in_sample = sum(1 for m in sample if has_cjk(m.title))
-        use_cjk_titles = cjk_in_sample > len(sample) / 2
-
-        if use_cjk_titles:
-            title_instruction = (
-                "Use Chinese/localized titles for ALL movies where a Chinese title "
-                'exists (e.g. "The Shawshank Redemption" → "肖申克的救赎", '
-                '"Inception" → "盗梦空间"). '
-                "Only use English titles for movies without a known Chinese translation."
-            )
-            json_title_hint = "Movie Title (use Chinese title if available)"
-        else:
-            title_instruction = (
-                "Use original English titles for ALL movies. "
-                'Do NOT translate titles to Chinese (e.g. "肖申克的救赎" → '
-                '"The Shawshank Redemption", "盗梦空间" → "Inception"). '
-                "Only use Chinese titles for movies that do not have an English original title."
-            )
-            json_title_hint = "Movie Title (use English original title)"
-
         return f"""You are a professional movie recommendation expert. Based on the movies the user has watched and their ratings, recommend NEW movies they haven't seen.
 
 ## User's Taste Profile
@@ -255,17 +255,6 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         """Get strategy-specific instructions for the AI prompt."""
         params = params or {}
 
-        # Playlist items description (used by the "playlist" strategy) —
-        # derived inline so it's available regardless of when this is called.
-        playlist_items = params.get("playlist_items") or []
-        playlist_items_desc = "、".join(
-            (i.get("title") or "") + (f" ({i.get('year')})" if i.get("year") else "")
-            for i in playlist_items[:20]
-        )
-        if len(playlist_items) > 20:
-            playlist_items_desc += "…"
-        playlist_items_desc = playlist_items_desc or "（空）"
-
         strategy_prompts = {
             "taste": (
                 f"Based on the user's taste patterns above, recommend {count} movies they would likely enjoy. "
@@ -299,9 +288,8 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             "playlist": (
                 f"Fill out the user's playlist 「{params.get('playlist_name', '')}」. "
                 + (f"Playlist description: {params.get('playlist_description', '')}. " if params.get("playlist_description") else "")
-                + f"The playlist currently contains: {playlist_items_desc}. "
                 + f"Recommend {count} movies/shows that BEST complete this playlist's theme. "
-                + f"Do NOT recommend anything already in the playlist. "
+                + f"Do NOT recommend anything already in the playlist (its existing items are listed in the 目标片单 section). "
                 + f"Each reason should explain why the title belongs in this specific playlist."
             ),
             "explore": (
@@ -348,11 +336,16 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
             f"- {r.title}" + (f" ({r.year})" if r.year else "") +
             (f" [{r.genre}]" if r.genre else "") +
             f" — Confidence: {r.confidence * 100:.0f}%" +
-            f" — Reason: {r.reason}"
+            f" — Reason: {(r.reason or '')[:100]}"
             for r in previous_recommendations
         )
 
-        conv_history = "\n".join(f"{m.role}: {m.content}" for m in conversation)
+        # Cap conversation history to the most recent messages, truncating
+        # each message so long threads don't blow the token budget.
+        conv_history = "\n".join(
+            f"{m.role}: {m.content[:200]}"
+            for m in conversation[-12:]
+        )
 
         # Taste analysis
         taste_summary = ""

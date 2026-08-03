@@ -11,6 +11,8 @@ from .constants import (
     MAX_API_RETRIES,
     MAX_TOKENS,
     STRATEGY_TEMPERATURES,
+    SYSTEM_PROMPT_FOLLOWUP,
+    SYSTEM_PROMPT_RECOMMEND,
     TMDB_SKIP_STRATEGIES,
     _get_filtered_out,
     _get_title,
@@ -142,13 +144,9 @@ class RecommendMixin:
         def _sync_call_ai(prompt: str, attempt: int):
             """Blocking (non-streaming) AI call used by _retry_loop."""
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
+                response = self._create_chat(
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a professional movie recommendation expert who analyzes user taste and recommends suitable movies. Always respond with valid JSON only.",
-                        },
+                        {"role": "system", "content": SYSTEM_PROMPT_RECOMMEND},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=temperature,
@@ -235,13 +233,9 @@ class RecommendMixin:
             )
 
             try:
-                stream = self.client.chat.completions.create(
-                    model=self.model_name,
+                stream = self._create_chat(
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a professional movie recommendation expert helping a user understand their recommendations. Always respond with valid JSON only.",
-                        },
+                        {"role": "system", "content": SYSTEM_PROMPT_FOLLOWUP},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=temperature,
@@ -450,13 +444,9 @@ class RecommendMixin:
 
             # SSE stream from AI
             try:
-                stream = self.client.chat.completions.create(
-                    model=self.model_name,
+                stream = self._create_chat(
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a professional movie recommendation expert who analyzes user taste and recommends suitable movies. Always respond with valid JSON only.",
-                        },
+                        {"role": "system", "content": SYSTEM_PROMPT_RECOMMEND},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=temperature,

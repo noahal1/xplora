@@ -42,9 +42,12 @@ interface DiagData {
     healthy: number;
     has_issues: number;
     missing_poster_url: number;
+    missing_overview: number;
     missing_runtime: number;
     missing_tmdb_id: number;
     missing_country: number;
+    missing_episode_count: number;
+    has_scrape_error: number;
   };
   items: DiagItem[];
 }
@@ -186,7 +189,7 @@ function toMediaDetail(item: DiagItem): MediaDetail {
     title: item.title,
     year: item.year,
     media_type: item.media_type,
-    status: item.status,
+    status: item.status as MediaDetail["status"],
     rating: item.rating,
     scrape_error: item.scrape_error,
     poster_url: item.poster_url,

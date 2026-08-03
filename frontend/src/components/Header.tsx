@@ -57,7 +57,6 @@ export function Header() {
         open={showMediaServer}
         onClose={() => setShowMediaServer(false)}
         title={t("media_server.title")}
-        size="lg"
       >
         <Suspense fallback={
           <div className="flex items-center justify-center py-12">

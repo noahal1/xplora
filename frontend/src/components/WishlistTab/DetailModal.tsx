@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { MovieSearchResult, MovieDetail } from "../../types";
+import type { MediaSearchResult, ExternalDetail } from "../../types";
 import { Badge } from "../ui/badge";
 import { Modal } from "../Modal";
 import { ProgressiveImage } from "../ProgressiveImage";
@@ -8,8 +8,8 @@ import { Film } from "lucide-react";
 
 interface DetailModalProps {
   open: boolean;
-  movie: MovieSearchResult | null;
-  detailData: MovieDetail | null;
+  movie: MediaSearchResult | null;
+  detailData: ExternalDetail | null;
   loading: boolean;
   error: string;
   onClose: () => void;

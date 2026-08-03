@@ -542,7 +542,7 @@ export function TopRatedTab() {
         <div className="animate-in fade-in duration-500">
           <DomeGallery
             movies={movies}
-            onMovieClick={(m) => setDetailMovie(m)}
+            onMovieClick={(m) => setDetailMovie(m as MediaDetail)}
           />
         </div>
       )}

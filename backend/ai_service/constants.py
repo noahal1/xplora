@@ -34,6 +34,21 @@ DEFAULT_TEMPERATURE = 0.7
 MAX_TOKENS = 3000  # Increased from 2000 for Chinese responses
 MAX_API_RETRIES = 10  # Hard cap on total retries per request to prevent excessive API calls
 
+# ── System prompts ──────────────────────────────────────────────
+SYSTEM_PROMPT_RECOMMEND = (
+    "You are a professional movie recommendation expert who analyzes user taste "
+    "and recommends suitable movies. Always respond with valid JSON only."
+)
+SYSTEM_PROMPT_FOLLOWUP = (
+    "You are a professional movie recommendation expert helping a user understand "
+    "their recommendations. Always respond with valid JSON only."
+)
+SYSTEM_PROMPT_TMDB = (
+    "You are a professional movie recommendation expert. Select from the provided "
+    "candidate list only."
+)
+SYSTEM_PROMPT_PLAYLIST = "You are a playlist curation expert. Respond with valid JSON only."
+
 # Strategies where TMDB candidate pool should NOT be used
 # These strategies have fundamentally different goals from TMDB's
 # "similar/recommendations" algorithm and would produce poor results.
