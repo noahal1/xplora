@@ -175,6 +175,28 @@ def _item_matches(item: PlaylistItemRecord, tmdb_id: Optional[str], title: Optio
     return False
 
 
+def playlist_items_contain_item(
+    items: list[PlaylistItemRecord],
+    media_id: Optional[int] = None,
+    tmdb_id: Optional[str] = None,
+    title: Optional[str] = None,
+    year: Optional[int] = None,
+) -> bool:
+    """Whether any of the given playlist items matches a candidate item.
+
+    Matches by a direct ``media_id`` reference first, then by the same
+    rules as :func:`add_item` dedup (tmdb_id, or title+year). Used to
+    flag playlists that already contain an item in the add-to-playlist
+    modal, so it can show "已添加" instead of an add button.
+    """
+    for i in items:
+        if media_id is not None and i.media_id is not None and i.media_id == media_id:
+            return True
+        if _item_matches(i, tmdb_id, title, year):
+            return True
+    return False
+
+
 def add_item(
     user_id: int,
     playlist_id: int,

@@ -314,6 +314,8 @@ export interface Playlist {
   updated_at: string;
   item_count?: number;
   items?: PlaylistItem[];
+  /** Whether the playlist already contains the queried item (list endpoint with item_* params). */
+  item_included?: boolean;
 }
 
 /** Public read-only view of a shared playlist (no internal IDs) */

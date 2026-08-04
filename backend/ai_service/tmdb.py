@@ -192,6 +192,7 @@ class TMDCMixin:
         taste_analysis: Optional[dict] = None,
         user_tmdb_ids: Optional[list[tuple[str, str]]] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
+        lang: Optional[str] = None,
     ) -> list[MediaRecommendation]:
         """Hybrid recommendation: TMDB candidate pool + AI curation.
 
@@ -226,6 +227,7 @@ class TMDCMixin:
             movies, count, strategy, strategy_params,
             taste_analysis=taste_analysis,
             candidates=tmdb_candidates,
+            lang=lang,
         )
 
         try:

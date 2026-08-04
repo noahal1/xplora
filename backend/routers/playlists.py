@@ -1,6 +1,7 @@
 """Playlist (片单) endpoints — authenticated CRUD + public read-only share view."""
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
@@ -20,6 +21,7 @@ from crud import (
     enable_share,
     disable_share,
     list_items,
+    playlist_items_contain_item,
     add_playlist_item,
     update_playlist_item,
     delete_playlist_item,
@@ -264,13 +266,37 @@ async def complete_playlist_endpoint(
 async def get_playlists(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
+    item_media_id: Optional[int] = None,
+    item_tmdb_id: Optional[str] = None,
+    item_title: Optional[str] = None,
+    item_year: Optional[int] = None,
 ):
-    """List all playlists for the current user (with item counts + covers)."""
+    """List all playlists for the current user (with item counts + covers).
+
+    When any ``item_*`` query param is provided, each playlist is also
+    flagged with ``item_included`` = True if it already contains that item
+    (matched by media_id, tmdb_id, or title+year) — lets the
+    add-to-playlist modal show "已添加" instead of an add button.
+    """
     playlists = list_playlists(current_user["id"], db)
+    check_item = (
+        item_media_id is not None
+        or bool(item_tmdb_id)
+        or bool(item_title and item_title.strip())
+    )
     result = []
     for p in playlists:
         data = _playlist_to_dict(p)
-        data["item_count"] = len(list_items(p.id, db))
+        items = list_items(p.id, db)
+        data["item_count"] = len(items)
+        if check_item:
+            data["item_included"] = playlist_items_contain_item(
+                items,
+                media_id=item_media_id,
+                tmdb_id=item_tmdb_id,
+                title=item_title,
+                year=item_year,
+            )
         result.append(data)
     return {"playlists": result, "total": len(result)}
 

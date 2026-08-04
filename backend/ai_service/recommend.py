@@ -33,6 +33,7 @@ class RecommendMixin:
         taste_analysis: Optional[dict],
         previous_feedback: Optional[dict],
         call_ai,
+        lang: Optional[str] = None,
     ) -> tuple[list, int]:
         """Shared retry loop for the pure-AI recommendation path.
 
@@ -63,6 +64,7 @@ class RecommendMixin:
                 retry_attempt=attempt,
                 previous_feedback=previous_feedback,
                 filtered_titles_info=filtered_titles_info,
+                lang=lang,
             )
 
             new_recs = call_ai(prompt, attempt)
@@ -107,6 +109,7 @@ class RecommendMixin:
         taste_analysis: Optional[dict] = None,
         previous_feedback: Optional[dict] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
+        lang: Optional[str] = None,
     ) -> list[MediaRecommendation]:
         """Generate movie recommendations (non-streaming) with dynamic retry.
 
@@ -129,6 +132,7 @@ class RecommendMixin:
                     taste_analysis=taste_analysis,
                     user_tmdb_ids=user_tmdb_ids,
                     excluded_tmdb_ids=excluded_tmdb_ids,
+                    lang=lang,
                 )
             except Exception as e:
                 logger.warning(
@@ -181,7 +185,7 @@ class RecommendMixin:
         all_recs, _ = self._retry_loop(
             movies, count, strategy, strategy_params,
             all_excluded, taste_analysis, previous_feedback,
-            _sync_call_ai,
+            _sync_call_ai, lang=lang,
         )
 
         all_recs = self._resolve_metadata(all_recs)
@@ -199,6 +203,7 @@ class RecommendMixin:
         watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
+        lang: Optional[str] = None,
     ):
         """Generator that yields SSE-formatted events for follow-up conversation.
 
@@ -230,6 +235,7 @@ class RecommendMixin:
                 watched_titles=all_excluded,
                 taste_analysis=taste_analysis,
                 exclude_titles=all_excluded,
+                lang=lang,
             )
 
             try:
@@ -335,6 +341,7 @@ class RecommendMixin:
         taste_analysis: Optional[dict] = None,
         previous_feedback: Optional[dict] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
+        lang: Optional[str] = None,
     ):
         """Generator that yields SSE-formatted events as recommendations are streamed.
 
@@ -365,6 +372,7 @@ class RecommendMixin:
                     taste_analysis=taste_analysis,
                     user_tmdb_ids=user_tmdb_ids,
                     excluded_tmdb_ids=excluded_tmdb_ids,
+                    lang=lang,
                 )
                 # Yield start event
                 start_data = json.dumps({"model": self.model_type, "source_count": len(movies)})
@@ -410,6 +418,7 @@ class RecommendMixin:
                     taste_analysis=taste_analysis,
                     previous_feedback=previous_feedback,
                     excluded_tmdb_ids=excluded_tmdb_ids,
+                    lang=lang,
                 )
                 return
 
@@ -440,6 +449,7 @@ class RecommendMixin:
                 retry_attempt=attempt,
                 previous_feedback=previous_feedback,
                 filtered_titles_info=filtered_titles_info,
+                lang=lang,
             )
 
             # SSE stream from AI

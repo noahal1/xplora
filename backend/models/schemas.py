@@ -105,6 +105,7 @@ class RecommendationRequest(SQLModel):
     strategy_params: Optional[StrategyParams] = Field(
         None, description="Optional parameters for the strategy"
     )
+    lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
 
 
 class MediaRecommendation(SQLModel):
@@ -154,6 +155,7 @@ class FollowUpRequest(SQLModel):
         default=3, ge=1, le=10,
         description="Number of new recommendations if requested",
     )
+    lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
 
 
 # ============================================

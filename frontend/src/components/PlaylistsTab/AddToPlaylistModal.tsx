@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Loader2, ListTodo, Sparkles, Wand2, Clapperboard } from "lucide-react";
+import { Plus, Loader2, ListTodo, Sparkles, Wand2, Clapperboard, Check } from "lucide-react";
 import type { Playlist } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
@@ -42,18 +42,30 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
   const [aiSuggestions, setAiSuggestions] = useState<Array<{ playlist_id: number; name: string; reason: string; confidence: number }>>([]);
   const [aiPeople, setAiPeople] = useState<Array<{ name: string; role: string; playlist_name: string }>>([]);
 
-  // Load playlists when the modal opens
+  // Load playlists when the modal opens — also ask the backend to flag
+  // which playlists already contain this item (so we can show "已添加").
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
     setPlaylists([]);
-    api.listPlaylists()
+    api.listPlaylists({
+      item_media_id: item?.media_id ?? null,
+      item_tmdb_id: item?.tmdb_id ?? null,
+      item_title: item?.title ?? null,
+      item_year: item?.year ?? null,
+    })
       .then((data) => { if (!cancelled) setPlaylists(data.playlists); })
       .catch((err) => { if (!cancelled) showToast(t("playlists.load_failed", { message: getErrMsg(err) }), "error"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [open, showToast, t]);
+  }, [open, item?.media_id, item?.tmdb_id, item?.title, item?.year, showToast, t]);
+
+  // Playlist ids that already contain the target item
+  const includedIds = useMemo(
+    () => new Set(playlists.filter((p) => p.item_included).map((p) => p.id)),
+    [playlists]
+  );
 
   const handleAdd = useCallback(async (playlistId: number, name: string) => {
     if (!item || adding) return;
@@ -237,25 +249,27 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
             {aiSuggestions.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[10px] text-muted-foreground">{t("playlists.ai_categorize_suggest")}</p>
-                {aiSuggestions.map((s) => (
-                  <button
-                    key={s.playlist_id}
-                    disabled={adding}
-                    onClick={() => handleAdd(s.playlist_id, s.name)}
-                    className="w-full flex items-center gap-2 p-2 rounded-lg border border-primary/25 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all text-left disabled:opacity-60"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {s.name}
-                        <span className="ml-1.5 text-[10px] text-primary tabular-nums">
-                          {Math.round(s.confidence * 100)}%
-                        </span>
-                      </p>
-                      {s.reason && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{s.reason}</p>}
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-primary shrink-0"><Plus size={11} />{t("wishlist.add")}</span>
-                  </button>
-                ))}
+                {aiSuggestions
+                  .filter((s) => !includedIds.has(s.playlist_id))
+                  .map((s) => (
+                    <button
+                      key={s.playlist_id}
+                      disabled={adding}
+                      onClick={() => handleAdd(s.playlist_id, s.name)}
+                      className="w-full flex items-center gap-2 p-2 rounded-lg border border-primary/25 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all text-left disabled:opacity-60"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {s.name}
+                          <span className="ml-1.5 text-[10px] text-primary tabular-nums">
+                            {Math.round(s.confidence * 100)}%
+                          </span>
+                        </p>
+                        {s.reason && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{s.reason}</p>}
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-[11px] text-primary shrink-0"><Plus size={11} />{t("wishlist.add")}</span>
+                    </button>
+                  ))}
               </div>
             )}
           </div>
@@ -276,27 +290,36 @@ export function AddToPlaylistModal({ open, onClose, item, onAdded }: AddToPlayli
             items={playlists}
             rowHeight={60}
             keyFn={(p) => `pl-${p.id}`}
-            renderRow={(p) => (
-              <button
-                disabled={adding}
-                onClick={() => handleAdd(p.id, p.name)}
-                className="w-full h-[calc(100%-4px)] mb-1 flex items-center gap-2.5 p-2 rounded-lg border border-border hover:border-primary/40 hover:bg-accent/20 transition-all text-left disabled:opacity-60"
-              >
-                <div className="w-7 h-10 rounded overflow-hidden shrink-0 border border-border-subtle">
-                  {p.cover_url ? (
-                    <img src={p.cover_url} alt="" className="w-full h-full object-cover" loading="lazy"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            renderRow={(p) => {
+              const included = includedIds.has(p.id);
+              return (
+                <button
+                  disabled={adding || included}
+                  onClick={() => handleAdd(p.id, p.name)}
+                  className={`w-full h-[calc(100%-4px)] mb-1 flex items-center gap-2.5 p-2 rounded-lg border transition-all text-left disabled:opacity-60 ${included
+                    ? "border-border/60 opacity-60 cursor-default"
+                    : "border-border hover:border-primary/40 hover:bg-accent/20"}`}
+                >
+                  <div className="w-7 h-10 rounded overflow-hidden shrink-0 border border-border-subtle">
+                    {p.cover_url ? (
+                      <img src={p.cover_url} alt="" className="w-full h-full object-cover" loading="lazy"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><ListTodo size={11} className="text-muted-foreground/40" /></div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{p.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{t("playlists.item_count", { count: p.item_count ?? 0 })}</p>
+                  </div>
+                  {included ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0"><Check size={11} />{t("playlists.added")}</span>
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center"><ListTodo size={11} className="text-muted-foreground/40" /></div>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0"><Plus size={11} />{t("wishlist.add")}</span>
                   )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{p.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{t("playlists.item_count", { count: p.item_count ?? 0 })}</p>
-                </div>
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0"><Plus size={11} />{t("wishlist.add")}</span>
-              </button>
-            )}
+                </button>
+              );
+            }}
           />
         )}
 

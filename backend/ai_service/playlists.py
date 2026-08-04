@@ -5,7 +5,13 @@ import re
 
 from models import MediaRecommendation
 
-from .constants import SYSTEM_PROMPT_PLAYLIST, logger
+from .constants import (
+    PLAYLIST_JSON_SCHEMA_CATEGORIZE,
+    PLAYLIST_JSON_SCHEMA_COMPLETE,
+    PLAYLIST_JSON_SCHEMA_NAMES,
+    build_playlist_system_prompt,
+    logger,
+)
 
 
 class PlaylistMixin:
@@ -117,7 +123,7 @@ class PlaylistMixin:
         try:
             response = self._create_chat(
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_PLAYLIST},
+                    {"role": "system", "content": build_playlist_system_prompt(PLAYLIST_JSON_SCHEMA_NAMES)},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.7,
@@ -263,7 +269,7 @@ class PlaylistMixin:
         try:
             response = self._create_chat(
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_PLAYLIST},
+                    {"role": "system", "content": build_playlist_system_prompt(PLAYLIST_JSON_SCHEMA_CATEGORIZE)},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
@@ -395,7 +401,7 @@ class PlaylistMixin:
         try:
             response = self._create_chat(
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_PLAYLIST},
+                    {"role": "system", "content": build_playlist_system_prompt(PLAYLIST_JSON_SCHEMA_COMPLETE)},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,

@@ -35,19 +35,58 @@ MAX_TOKENS = 3000  # Increased from 2000 for Chinese responses
 MAX_API_RETRIES = 10  # Hard cap on total retries per request to prevent excessive API calls
 
 # ── System prompts ──────────────────────────────────────────────
+# The exact JSON output schema is embedded in each system prompt so
+# json_object mode reliably follows the shape (the schema must appear in
+# the prompt, and system-prompt placement is more robust than user-only).
+
+RECOMMEND_JSON_SCHEMA = (
+    '{"recommendations": [{"title": "...", "year": 2024, '
+    '"genre": "Sci-Fi / Action", "reason": "...", "confidence": 0.85}]}'
+)
+
 SYSTEM_PROMPT_RECOMMEND = (
     "You are a professional movie recommendation expert who analyzes user taste "
-    "and recommends suitable movies. Always respond with valid JSON only."
+    "and recommends suitable movies. Always respond with valid JSON only, "
+    "without markdown formatting or code blocks, in exactly this format:\n"
+    + RECOMMEND_JSON_SCHEMA
 )
 SYSTEM_PROMPT_FOLLOWUP = (
     "You are a professional movie recommendation expert helping a user understand "
-    "their recommendations. Always respond with valid JSON only."
+    "their recommendations. Always respond with valid JSON only, without markdown "
+    "formatting or code blocks, in one of these two formats:\n"
+    '1. {"type": "recommendations", "message": "...", "recommendations": '
+    '[{"title": "...", "year": 2024, "genre": "...", "reason": "...", "confidence": 0.85}]}\n'
+    '2. {"type": "text", "message": "..."}'
 )
 SYSTEM_PROMPT_TMDB = (
     "You are a professional movie recommendation expert. Select from the provided "
-    "candidate list only."
+    "candidate list only. Always respond with valid JSON only, without markdown "
+    "formatting or code blocks, in exactly this format:\n"
+    + RECOMMEND_JSON_SCHEMA
 )
-SYSTEM_PROMPT_PLAYLIST = "You are a playlist curation expert. Respond with valid JSON only."
+
+# Playlist system prompt factory — the output schema differs per call
+# (name generation vs categorization vs completion plan), so each call
+# site builds its system prompt with the exact schema for that call.
+def build_playlist_system_prompt(schema: str) -> str:
+    """Build the playlist system prompt with the exact JSON output schema."""
+    return (
+        "You are a playlist curation expert. Always respond with valid JSON only, "
+        "without markdown formatting or code blocks, matching this exact schema:\n"
+        + schema
+    )
+
+PLAYLIST_JSON_SCHEMA_NAMES = (
+    '{"names": ["...", "..."], "people": [{"name": "...", "role": "director", '
+    '"playlist_name": "..."}]}'
+)
+PLAYLIST_JSON_SCHEMA_CATEGORIZE = (
+    '{"suggestions": [{"playlist_id": 1, "reason": "...", "confidence": 0.9}]}'
+)
+PLAYLIST_JSON_SCHEMA_COMPLETE = (
+    '{"suggestions": [{"title": "...", "year": 2024, "genre": "...", '
+    '"reason": "...", "confidence": 0.9}]}'
+)
 
 # Strategies where TMDB candidate pool should NOT be used
 # These strategies have fundamentally different goals from TMDB's

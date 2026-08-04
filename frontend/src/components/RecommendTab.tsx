@@ -18,7 +18,9 @@ import { AddToPlaylistModal, type PlaylistTargetItem } from "./PlaylistsTab/AddT
 
 
 export function RecommendTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // UI language hint sent to the backend so AI reasons/titles match the UI
+  const uiLang = i18n.language && i18n.language.toLowerCase().startsWith("en") ? "en" : "zh";
   const { showToast } = useToast();
   const toastRef = useRef(showToast);
   toastRef.current = showToast;
@@ -266,6 +268,7 @@ export function RecommendTab() {
         count: recCount,
         strategy,
         strategy_params: sp || undefined,
+        lang: uiLang,
         signal: controller.signal,
       });
 
@@ -317,7 +320,7 @@ export function RecommendTab() {
       cancelledByUserRef.current = false;
       setIsLoading(false);
     }
-  }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, showToast, t]);
+  }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, uiLang, showToast, t]);
 
   // ── Cancel loading handler ──
   const handleCancel = useCallback(() => {
@@ -360,6 +363,7 @@ export function RecommendTab() {
           question: text,
           model: selectedModel,
           count: Math.min(3, recCount),
+          lang: uiLang,
         }),
         signal: controller.signal,
       });
@@ -432,7 +436,7 @@ export function RecommendTab() {
       clearTimeout(timeoutId);
       setIsChatProcessing(false);
     }
-  }, [filteredMovies, recommendations, chatMessages, selectedModel, recCount, isChatProcessing, showToast, t]);
+  }, [filteredMovies, recommendations, chatMessages, selectedModel, recCount, isChatProcessing, uiLang, showToast, t]);
 
   const closeDetail = useCallback(() => {
     setDetailRec(null);

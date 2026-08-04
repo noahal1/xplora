@@ -350,7 +350,7 @@ def _build_previous_feedback(
 # letting save_session create its own session.
 
 
-def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None, watched_titles=None, previous_feedback=None, excluded_tmdb_ids=None):
+def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None, watched_titles=None, previous_feedback=None, excluded_tmdb_ids=None, lang=None):
     """SSE generator that auto-saves recommendations to DB on completion."""
     service = AIService(api_key=api_key, model_type=model, user_id=user_id)
     taste_analysis = service._analyze_user_taste(movies)
@@ -362,6 +362,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
         taste_analysis=taste_analysis,
         previous_feedback=previous_feedback,
         excluded_tmdb_ids=excluded_tmdb_ids,
+        lang=lang,
     )
     recommendations_cache: list[dict] = []
 
@@ -410,7 +411,7 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
                 logger.warning("Error saving session: %s", e)
 
 
-def _followup_stream_with_persistence(movies, count, model, api_key, user_id, watched_titles=None, excluded_tmdb_ids=None, previous_recommendations=None, conversation=None, question=""):
+def _followup_stream_with_persistence(movies, count, model, api_key, user_id, watched_titles=None, excluded_tmdb_ids=None, previous_recommendations=None, conversation=None, question="", lang=None):
     """SSE generator that auto-saves follow-up recommendations to DB on completion."""
     service = AIService(api_key=api_key, model_type=model, user_id=user_id)
     taste_analysis = service._analyze_user_taste(movies)
@@ -424,6 +425,7 @@ def _followup_stream_with_persistence(movies, count, model, api_key, user_id, wa
         watched_titles=watched,
         taste_analysis=taste_analysis,
         excluded_tmdb_ids=excluded_tmdb_ids,
+        lang=lang,
     )
     recommendations_cache: list[dict] = []
 
@@ -539,6 +541,7 @@ async def recommend(
             taste_analysis=taste_analysis,
             previous_feedback=previous_feedback,
             excluded_tmdb_ids=excluded_tmdb_ids,
+            lang=request.lang,
         )
         # Auto-save recommendations to DB (same as the streaming endpoint does)
         if recommendations:
@@ -615,6 +618,7 @@ async def recommend_stream(
             watched_titles=excluded_titles,
             previous_feedback=previous_feedback,
             excluded_tmdb_ids=excluded_tmdb_ids,
+            lang=request.lang,
         ),
         media_type="text/event-stream",
         headers={
@@ -648,6 +652,7 @@ async def followup_stream(
             previous_recommendations=request.previous_recommendations,
             conversation=request.conversation,
             question=request.question,
+            lang=request.lang,
         ),
         media_type="text/event-stream",
         headers={

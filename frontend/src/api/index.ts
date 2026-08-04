@@ -373,6 +373,7 @@ export async function getRecommendations(params: {
   count: number;
   strategy: string;
   strategy_params?: Record<string, unknown>;
+  lang?: string;
   signal?: AbortSignal;
 }): Promise<{
   recommendations: Recommendation[];
@@ -388,6 +389,7 @@ export async function getRecommendations(params: {
       count: params.count,
       strategy: params.strategy,
       strategy_params: params.strategy_params,
+      lang: params.lang,
     }),
     signal: params.signal,
   });
@@ -544,9 +546,25 @@ import type { Playlist, PlaylistItem, PublicPlaylist } from "../types";
 
 // ── Playlist (片单) API ──────────────────────────────────────────
 
-/** List all playlists for the current user */
-export async function listPlaylists(): Promise<{ playlists: Playlist[]; total: number }> {
-  return fetchJSON(`${API_BASE}/playlists`, { headers: getAuthHeaders() });
+/** List all playlists for the current user.
+ *
+ * Optional ``item_*`` params make the backend flag each playlist with
+ * ``item_included`` when it already contains that media item — used by the
+ * add-to-playlist modal to show "已添加" instead of an add button.
+ */
+export async function listPlaylists(params?: {
+  item_media_id?: number | null;
+  item_tmdb_id?: string | null;
+  item_title?: string | null;
+  item_year?: number | null;
+}): Promise<{ playlists: Playlist[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params?.item_media_id != null) qs.set("item_media_id", String(params.item_media_id));
+  if (params?.item_tmdb_id) qs.set("item_tmdb_id", params.item_tmdb_id);
+  if (params?.item_title) qs.set("item_title", params.item_title);
+  if (params?.item_year != null) qs.set("item_year", String(params.item_year));
+  const query = qs.toString();
+  return fetchJSON(`${API_BASE}/playlists${query ? `?${query}` : ""}`, { headers: getAuthHeaders() });
 }
 
 /** Create a new playlist */
