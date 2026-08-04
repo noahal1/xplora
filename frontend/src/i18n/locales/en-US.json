@@ -147,6 +147,8 @@
     "on_server": "On Server",
     "not_on_server": "Not on Server",
     "play_on_server": "Play on Media Server",
+    "refresh_server_status": "Refresh Availability",
+    "refreshing_server_status": "Refreshing...",
     "source_auto": "Auto",
     "source_tmdb": "TMDB"
   },

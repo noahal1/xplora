@@ -149,6 +149,8 @@
     "on_server": "已下载",
     "not_on_server": "未下载",
     "play_on_server": "在媒体服务器上播放",
+    "refresh_server_status": "刷新入库标识",
+    "refreshing_server_status": "刷新中...",
     "movie_count": "共 {{count}} 部电影"
   },
   "wishlist_mark_modal": {

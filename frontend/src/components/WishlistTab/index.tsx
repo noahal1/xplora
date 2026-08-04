@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { RefreshCw } from "lucide-react";
 import type { WishlistItem, SortField } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
@@ -99,37 +100,56 @@ export function WishlistTab() {
   const [serverMatches, setServerMatches] = useState<Record<string, ServerMatch>>({});
   const [serverAvailable, setServerAvailable] = useState(false);
   const [serverBaseUrl, setServerBaseUrl] = useState("");
+  const [serverRefreshing, setServerRefreshing] = useState(false);
+  const [serverRefreshNonce, setServerRefreshNonce] = useState(0);
+  const serverRef = useRef<{ id: number } | null>(null);
 
-  // Check if any media servers are configured and fetch availability
+  // Detect configured media servers once on mount
   useEffect(() => {
     let cancelled = false;
-    api.listMediaServers().then(async (servers) => {
+    api.listMediaServers().then((servers) => {
       if (cancelled || servers.length === 0) return;
-      setServerAvailable(true);
-      // Use the first active server
       const server = servers[0];
+      serverRef.current = { id: server.id };
+      setServerAvailable(true);
       const scheme = server.use_ssl ? "https" : "http";
       setServerBaseUrl(`${scheme}://${server.host}:${server.port}`);
-      const wishlistTitles = items.map((item) => item.title);
-      if (wishlistTitles.length === 0) return;
-      try {
-        const data = await api.batchSearchMediaServer(server.id, wishlistTitles);
-        if (!cancelled) {
-          const matches: Record<string, ServerMatch> = {};
-          for (const [title, result] of Object.entries(data.results)) {
-            matches[title] = {
-              found: result.found,
-              itemId: result.id,
-            };
-          }
-          setServerMatches(matches);
-        }
-      } catch {
-        // Silently ignore — server might be offline
-      }
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [items.map((i) => i.title).join(",")]);
+  }, []);
+
+  // Fetch availability for the current page items.
+  // Re-runs when the page/filters change, and on manual refresh (nonce bump).
+  useEffect(() => {
+    if (!serverAvailable) return;
+    const serverId = serverRef.current?.id;
+    if (!serverId) return;
+    const wishlistTitles = items.map((item) => item.title);
+    if (wishlistTitles.length === 0) return;
+    let cancelled = false;
+    api.batchSearchMediaServer(serverId, wishlistTitles)
+      .then((data) => {
+        if (cancelled) return;
+        const matches: Record<string, ServerMatch> = {};
+        for (const [title, result] of Object.entries(data.results)) {
+          matches[title] = {
+            found: result.found,
+            itemId: result.id,
+          };
+        }
+        setServerMatches(matches);
+      })
+      .catch(() => {
+        // Silently ignore — server might be offline
+      })
+      .finally(() => {
+        if (!cancelled) setServerRefreshing(false);
+      });
+    // Reset the refreshing flag when this request is superseded (page change,
+    // manual re-click, or items becoming empty) — otherwise the spinner could
+    // stay stuck because the cancelled request never resets it.
+    return () => { cancelled = true; setServerRefreshing(false); };
+  }, [items.map((i) => i.title).join(","), serverAvailable, serverRefreshNonce]);
 
   // === PT Search modal ===
   const [searchPTItem, setSearchPTItem] = useState<WishlistEntry | null>(null);
@@ -238,6 +258,17 @@ export function WishlistTab() {
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 <span className="hidden sm:inline">{t("wishlist.manual_add")}</span>
               </button>
+              {serverAvailable && (
+                <button
+                  onClick={() => { setServerRefreshing(true); setServerRefreshNonce((n) => n + 1); }}
+                  disabled={serverRefreshing}
+                  className="btn btn-ghost btn-xs shrink-0"
+                  title={serverRefreshing ? t("wishlist.refreshing_server_status") : t("wishlist.refresh_server_status")}
+                >
+                  <RefreshCw size={12} className={serverRefreshing ? "animate-stream-spin" : ""} />
+                  <span className="hidden sm:inline">{t("wishlist.refresh_server_status")}</span>
+                </button>
+              )}
               <span className="badge font-mono text-xs shrink-0">{t("wishlist.movie_count", { count: total })}</span>
             </div>
           </div>
