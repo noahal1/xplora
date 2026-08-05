@@ -148,14 +148,20 @@ class TMDCMixin:
             else:
                 agg[tid] = dict(c)
 
-        # Multi-dimensional scoring: combine co-occurrence, TMDB rating, and recency
+        # Multi-dimensional scoring: combine co-occurrence, TMDB rating, popularity, and recency
         # Normalize each signal to 0-1, then weighted combination
         max_co_score = max((c["score"] for c in agg.values()), default=1)
+        max_vote_count = max((c.get("vote_count", 0) for c in agg.values()), default=1)
         for c in agg.values():
             co_score = c["score"] / max_co_score  # normalized co-occurrence (0-1)
 
             vote_avg = c.get("vote_average") or 0
             rating_score = min(vote_avg / 10.0, 1.0)  # TMDB rating (0-1)
+
+            # Popularity signal: log-scaled vote_count to reward well-known movies
+            vc = c.get("vote_count", 0) or 0
+            popularity_score = min(vc / max_vote_count, 1.0) if max_vote_count > 0 else 0.5
+            popularity_score = min(popularity_score ** 0.3, 1.0)  # Diminishing returns — 1000 votes ≈ 1.0, 100 votes ≈ 0.5
 
             year = c.get("year")
             if year and current_year:
@@ -165,16 +171,34 @@ class TMDCMixin:
             else:
                 recency_score = 0.5
 
-            # Weights: co-occurrence is the strongest signal
+            # Weights: co-occurrence + popularity are strongest signals
             c["_combined_score"] = (
-                0.50 * co_score
-                + 0.30 * rating_score
-                + 0.20 * recency_score
+                0.40 * co_score
+                + 0.25 * rating_score
+                + 0.20 * popularity_score
+                + 0.15 * recency_score
             )
 
         # Sort by combined score descending
         ranked = sorted(agg.values(), key=lambda x: -x["_combined_score"])
-        result = ranked[:top_n]
+
+        # ── Filter out extremely obscure movies (low vote_count) ──
+        # Movies with very few TMDB votes are likely obscure and hard to find.
+        # Keep at least top_n * 2 candidates before filtering to ensure
+        # enough quality candidates for the AI to choose from.
+        MIN_VOTE_COUNT = 50  # Movies with fewer than 50 votes are considered obscure
+        filtered = [
+            c for c in ranked
+            if (c.get("vote_count") or 0) >= MIN_VOTE_COUNT
+            or len(ranked) - len([x for x in ranked if (x.get("vote_count") or 0) >= MIN_VOTE_COUNT]) < 5
+            # Always keep at least 5 low-vote candidates to avoid running out
+        ]
+        result = filtered[:top_n]
+
+        logger.info(
+            "TMDB candidates: %d raw → %d after vote_count≥%d filter → %d final",
+            len(ranked), len(filtered), MIN_VOTE_COUNT, len(result),
+        )
 
         # ── Store in cache ────────────────────────────────────────────
         _tmdb_candidate_cache[cache_key] = (now, result)

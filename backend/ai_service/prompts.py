@@ -116,6 +116,16 @@ class PromptMixin:
         # ── Branch: hybrid mode (TMDB candidates) vs pure AI ────────
         is_hybrid = candidates is not None
 
+        # ── Popularity constraint ───────────────────────────────
+        # Prevents the AI from recommending extremely obscure movies
+        # that the user has likely never heard of
+        popularity_note = (
+            "\n\nIMPORTANT: Do NOT recommend extremely obscure or unknown movies. "
+            "Recommend movies that are reasonably well-known and have a broad audience appeal. "
+            "Avoid movies with very few ratings/reviews on TMDB or IMDB. "
+            "The user wants to discover good movies, not obscure ones they can't find."
+        )
+
         if is_hybrid:
             # ── Hybrid mode: candidate-based prompt ──────────────────
             candidates_sample = candidates[:30]
@@ -141,7 +151,7 @@ These are movies that fans of the user's favorite films also enjoy:
 {candidates_list}{playlist_section}
 
 ## Strategy Instruction
-{strategy_instruction}{injection_note}
+{strategy_instruction}{injection_note}{popularity_note}
 
 ## Additional Requirements
 1. ONLY select from the candidate list above — do NOT recommend movies outside this list
@@ -247,7 +257,7 @@ Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-
 
 {strategy_instruction}
 
-{playlist_section}{injection_note}
+{playlist_section}{injection_note}{popularity_note}
 ## Additional Requirements
 1. Each recommendation MUST include a personalized reason that references the user's specific taste (genres they rate highly, preferred eras, etc.)
 2. Confidence score (0-1) should reflect how well the movie matches the user's demonstrated taste
@@ -274,42 +284,61 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         """Get strategy-specific instructions for the AI prompt."""
         params = params or {}
 
+        # ── Genre filter (target_genre) — applies to ALL strategies ──
+        # When the user selects a genre filter on the frontend, it's passed as
+        # target_genre so the AI knows to recommend only that type of movie.
+        target_genre = params.get("target_genre", "")
+        genre_suffix = (
+            f"IMPORTANT: The user has requested recommendations specifically in the "
+            f"\"{target_genre}\" genre(s). ONLY recommend movies that belong to "
+            f"\"{target_genre}\". Do NOT recommend movies outside this genre. "
+            if target_genre
+            else ""
+        )
+
         strategy_prompts = {
             "taste": (
                 f"Based on the user's taste patterns above, recommend {count} movies they would likely enjoy. "
                 f"Focus on matching genres they rate highly, directors/styles they prefer, and eras they watch most. "
-                f"Prioritize films that closely align with their demonstrated preferences."
+                f"Prioritize films that closely align with their demonstrated preferences.\n"
+                + genre_suffix
             ),
             "classics": (
                 f"Recommend {count} classic must-watch movies that every film enthusiast should see. "
                 f"Focus on critically acclaimed, culturally significant, and timeless films. "
                 f"Balance the user's existing taste with canonical cinematic masterpieces they may have missed. "
-                f"Prioritize movies that bridge their current taste with essential film history."
+                f"Prioritize movies that bridge their current taste with essential film history.\n"
+                + genre_suffix
             ),
             "mood": (
                 f"Based on the movies the user has watched, recommend {count} movies that match "
                 + (f"the following mood or feeling: \"{params.get('mood', '')}\". " if params.get('mood') else "a specific mood. ")
                 + f"Consider the emotional tone, atmosphere, and pacing. "
-                + f"Use the user's taste analysis to find movies that match both their preferences and the requested mood."
+                + f"Use the user's taste analysis to find movies that match both their preferences and the requested mood.\n"
+                + genre_suffix
             ),
             "era": (
                 f"Recommend {count} movies specifically from a particular time period. "
                 + (f"Focus on movies from {params.get('year_start', '')} to {params.get('year_end', '')}. " if params.get('year_start') or params.get('year_end') else "Focus on a specific era. ")
-                + f"Consider how the user's demonstrated taste translates to films from this period."
+                + f"Consider how the user's demonstrated taste translates to films from this period.\n"
+                + genre_suffix
             ),
             "gems": (
-                f"Recommend {count} underrated hidden gems and lesser-known movies. "
-                f"Avoid mainstream blockbusters and well-known titles. "
-                f"Focus on overlooked indie films, cult classics, foreign cinema, and hidden treasures "
-                f"that align with the user's demonstrated taste preferences. "
-                f"These should feel like discoveries, not obvious picks."
+                f"Recommend {count} highly-rated movies that the user hasn't watched yet. "
+                f"Focus on movies with strong ratings (TMDB 7+) that are reasonably well-known "
+                f"but may have been overlooked by the user. "
+                f"Think of these as 'hidden gems' — not obscure indie films, but excellent movies "
+                f"that every film lover should watch. "
+                f"Avoid extremely obscure or unknown titles. \n"
+                + genre_suffix
             ),
             "playlist": (
                 f"Fill out the user's playlist 「{params.get('playlist_name', '')}」. "
                 + (f"Playlist description: {params.get('playlist_description', '')}. " if params.get("playlist_description") else "")
                 + f"Recommend {count} movies/shows that BEST complete this playlist's theme. "
                 + f"Do NOT recommend anything already in the playlist (its existing items are listed in the 目标片单 section). "
-                + f"Each reason should explain why the title belongs in this specific playlist."
+                + f"Each reason should explain why the title belongs in this specific playlist.\n"
+                + genre_suffix
             ),
             "explore": (
                 f"Recommend {count} movies that explore NEW genres and styles OUTSIDE the user's usual preferences. "

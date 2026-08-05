@@ -206,7 +206,7 @@
     "strategy_playlist_placeholder": "Select a playlist to fill...",
     "strategy_playlist_hint": "AI analyzes the playlist's theme and recommends titles that fit it",
     "strategy_playlist_required": "Select a playlist first",
-    "strategy_gems": "Hidden Gems",
+    "strategy_gems": "Top Gems",
     "strategy_explore": "Explore New",
     "strategy_mood_placeholder": "Describe your current mood...",
     "cancel_generating": "Cancel",

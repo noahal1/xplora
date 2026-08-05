@@ -9,6 +9,7 @@ import FadeContent from "./FadeContent";
 import { Sparkles } from "lucide-react";
 import { isAbortError, getErrMsg, titleMatches, titleInSet } from "../lib/utils";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
+import { getGenreAliases } from "../utils/genre";
 import { ChatPanel } from "./tabs/recommend/ChatPanel";
 import { StrategySelector } from "./tabs/recommend/StrategySelector";
 import { SessionHistory } from "./tabs/recommend/SessionHistory";
@@ -216,6 +217,10 @@ export function RecommendTab() {
     if (mediaTypeFilter && mediaTypeFilter !== "all") {
       params.media_type = mediaTypeFilter;
     }
+    // Pass genre filter as target_genre so the AI knows which genre to recommend
+    if (genreFilter.size > 0) {
+      params.target_genre = Array.from(genreFilter).join(" / ");
+    }
     switch (strategy) {
       case "mood":
         if (strategyMood) params.mood = strategyMood;
@@ -225,15 +230,28 @@ export function RecommendTab() {
         break;
     }
     return Object.keys(params).length > 0 ? params : undefined;
-  }, [strategy, strategyMood, strategyPlaylistId, mediaTypeFilter]);
+  }, [strategy, strategyMood, strategyPlaylistId, mediaTypeFilter, genreFilter]);
 
   // Derive unique genre tags from watched movies
   const uniqueGenres = useGenreExtractor(movies);
 
+  // Match movies against the selected genre pills using alias-aware comparison,
+  // so a Chinese pill ("动作") also matches items stored in English ("Action")
+  // and vice-versa. Each side is normalized to its alias set and any overlap
+  // counts as a match.
   const filteredMovies = useMemo(() => {
     let result = mediaTypeFilter === "all" ? movies : movies.filter((m) => m.media_type === mediaTypeFilter);
     if (genreFilter.size > 0) {
-      result = result.filter((m) => m.genre && Array.from(genreFilter).some((g) => m.genre!.toLowerCase().includes(g.toLowerCase())));
+      const filterAliases = Array.from(genreFilter).map((g) => getGenreAliases(g));
+      result = result.filter((m) => {
+        if (!m.genre) return false;
+        // Split stored genre string on " / " (or bare "/") into individual genres
+        const storedGenres = m.genre.split("/").map((s) => s.trim()).filter(Boolean);
+        return storedGenres.some((sg) => {
+          const sgAliases = getGenreAliases(sg);
+          return filterAliases.some((fa) => [...fa].some((a) => sgAliases.has(a)));
+        });
+      });
     }
     return result;
   }, [movies, mediaTypeFilter, genreFilter]);

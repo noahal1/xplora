@@ -1,30 +1,5 @@
 import { useMemo } from "react";
-import { GENRE_EN_TO_ZH } from "../utils/genre";
-
-// Build reverse map: Chinese → English
-const ZH_TO_EN: Record<string, string> = {};
-for (const [en, zh] of Object.entries(GENRE_EN_TO_ZH)) {
-  ZH_TO_EN[zh] = en;
-}
-
-/**
- * Get all alias strings (lowercased) for a genre — the genre itself,
- * its Chinese translation (if it's an English genre), and its English
- * equivalent (if it's a Chinese genre).
- *
- * Example: "Action" → {"action", "动作"},  "动作" → {"动作", "action"}
- */
-function getGenreAliases(g: string): Set<string> {
-  const lower = g.toLowerCase();
-  const aliases = new Set([lower]);
-  // Chinese translation of an English genre
-  const zh = GENRE_EN_TO_ZH[g];
-  if (zh) aliases.add(zh.toLowerCase());
-  // English equivalent of a Chinese genre
-  const en = ZH_TO_EN[g];
-  if (en) aliases.add(en.toLowerCase());
-  return aliases;
-}
+import { getGenreAliases, GENRE_EN_TO_ZH, LEGACY_ALIASES } from "../utils/genre";
 
 /**
  * Extracts sorted unique genre strings from an array of items that have a
@@ -70,8 +45,9 @@ export function useGenreExtractor(
             seen.add(alias);
           }
 
-          // Prefer Chinese display name when available (e.g. "动作" not "Action")
-          const display = GENRE_EN_TO_ZH[normalized] || normalized;
+          // Prefer Chinese display name when available (e.g. "动作" not "Action"),
+          // then legacy variant canonicalization (e.g. "纪录" → "纪录片")
+          const display = GENRE_EN_TO_ZH[normalized] || LEGACY_ALIASES[normalized] || normalized;
           result.push(display);
         }
       }

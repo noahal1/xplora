@@ -82,7 +82,7 @@ export function SessionHistory({
               {sessions.map((s) => (
                 <div
                   key={s.id}
-                  className="card card-lift p-3 flex items-center justify-between cursor-pointer"
+                  className="card card-lift p-3 flex items-center justify-between cursor-pointer group"
                   onClick={() => onViewSession(s.id)}
                 >
                   <div className="flex items-center gap-3">
