@@ -22,14 +22,12 @@ export function CountryFilter({
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const gapPx = isMobile ? 4 : 6;
-  const moreBtnWidthPx = 72;
   const hasPrefixLabel = !isMobile;
   const prefixCount = hasPrefixLabel ? (selected.size > 0 ? 2 : 1) : (selected.size > 0 ? 1 : 0);
 
   const [visibleCount, measureRef] = useAutoFitCount(
     containerRef,
     gapPx,
-    moreBtnWidthPx,
     prefixCount,
   );
 
@@ -122,6 +120,11 @@ export function CountryFilter({
             {t(`countries.${c}`, c)}
           </span>
         ))}
+        {/* More-button mirror — widest possible content (+total) so the
+            measured width never under-shoots the visible button */}
+        <span className="pill text-muted-foreground/60 gap-0.5 shrink-0 whitespace-nowrap">
+          <span className="text-[10px]">▼</span> +{countries.length} {t("manage.genre_more")}
+        </span>
       </div>
     </div>
   );

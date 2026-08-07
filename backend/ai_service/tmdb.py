@@ -207,6 +207,129 @@ class TMDCMixin:
         return result
 
 
+    def get_local_recommendations(
+        self,
+        movies: list[MediaRating],
+        count: int = 5,
+        strategy: str = "taste",
+        strategy_params: Optional[dict] = None,
+        taste_analysis: Optional[dict] = None,
+        user_tmdb_ids: Optional[list[tuple[str, str]]] = None,
+        excluded_tmdb_ids: Optional[set[str]] = None,
+        lang: Optional[str] = None,
+    ) -> list[MediaRecommendation]:
+        """Pure TMDB recommendations — no AI call required.
+
+        Fallback used when no AI API key is configured: builds the same
+        scored candidate pool as the hybrid path, then ranks it with
+        strategy-aware rules and attaches human-readable reasons.
+
+        Raises ``ValueError`` with a user-friendly message when TMDB is
+        not configured or the candidate pool is empty.
+        """
+        from config_manager import get_api_key as get_config_api_key
+
+        tmdb_key = get_config_api_key("tmdb")
+        if not tmdb_key:
+            raise ValueError(
+                "未配置任何 AI API Key，且未配置 TMDB API Key，无法生成推荐。"
+                "请在设置页面配置 TMDB Key 后使用本地推荐，或配置任意 AI Key。"
+            )
+
+        candidates = self._build_tmdb_candidates(
+            movies, user_tmdb_ids or [], excluded_tmdb_ids,
+        )
+        if not candidates:
+            raise ValueError(
+                "未能从 TMDB 获取到候选推荐。请先对片库执行元数据刮削，"
+                "或配置 AI API Key 后重试。"
+            )
+
+        # ── Strategy-aware ranking ───────────────────────────────────
+        params = strategy_params or {}
+        ranked = list(candidates)
+
+        if strategy == "era":
+            start = params.get("year_start")
+            end = params.get("year_end")
+            if start or end:
+                ranked = [
+                    c for c in ranked
+                    if (not start or (c.get("year") or 0) >= start)
+                    and (not end or (c.get("year") or 0) <= end)
+                ]
+        elif strategy == "classics":
+            # Prefer well-known, highly-rated titles
+            ranked.sort(key=lambda c: -(c.get("vote_average") or 0))
+        elif strategy == "gems":
+            # Hidden gems: solid rating but less mainstream popularity
+            def _gem_score(c: dict) -> float:
+                rating = c.get("vote_average") or 0
+                votes = c.get("vote_count") or 0
+                return rating * 2.0 - min(votes / 10000.0, 1.0)
+            ranked.sort(key=_gem_score, reverse=True)
+        elif strategy == "explore":
+            # Prefer candidates outside the user's top genres
+            user_genres = {
+                g["genre"].lower()
+                for g in (taste_analysis or {}).get("top_genres", [])
+            }
+            if user_genres:
+                def _explore_score(c: dict) -> float:
+                    base = c.get("_combined_score", 0.5)
+                    c_genres = {g.strip().lower() for g in (c.get("genre") or "").split("/")}
+                    overlap = len(c_genres & user_genres)
+                    return base - 0.25 * overlap
+                ranked.sort(key=_explore_score, reverse=True)
+        else:
+            # taste / mood / playlist: combined score already computed
+            ranked.sort(key=lambda c: -(c.get("_combined_score") or 0))
+
+        if not ranked:
+            raise ValueError("没有符合当前筛选条件的候选推荐，请调整策略或筛选条件")
+
+        # ── Build MediaRecommendation objects ─────────────────────────
+        recs: list[MediaRecommendation] = []
+        seen: set[str] = set()
+        for c in ranked:
+            title = c.get("title", "")
+            if not title or title.lower() in seen:
+                continue
+            seen.add(title.lower())
+            recs.append(MediaRecommendation(
+                title=title,
+                year=c.get("year"),
+                genre=c.get("genre"),
+                reason=self._build_local_reason(c, strategy, lang),
+                confidence=round(min((c.get("_combined_score") or 0.5) + 0.3, 0.95), 2),
+                media_type=c.get("media_type", "movie"),
+                poster_url=c.get("poster_url"),
+                tmdb_id=c.get("tmdb_id"),
+            ))
+            if len(recs) >= count:
+                break
+
+        # Final safety filter against watched titles (by fuzzy title match)
+        recs = self._filter_watched(recs, [m.title for m in movies if m.title])
+        return recs[:count]
+
+    def _build_local_reason(self, candidate: dict, strategy: str, lang: Optional[str]) -> str:
+        """Build a short human-readable reason for a local TMDB pick."""
+        en = lang == "en"
+        sources = candidate.get("source_titles") or []
+        source_count = len(sources)
+        base = {
+            "taste": "Matches your viewing taste" if en else "符合你的观影口味",
+            "classics": "A critically acclaimed classic" if en else "广受好评的经典佳作",
+            "mood": "Fits the mood you described" if en else "符合你描述的心情",
+            "gems": "An underrated hidden gem" if en else "被低估的口碑遗珠",
+            "explore": "A fresh pick outside your usual genres" if en else "跳出你常看类型的新鲜选择",
+            "playlist": "Fits the playlist theme" if en else "契合片单主题",
+        }.get(strategy, "Recommended based on your library" if en else "基于你的片库推荐")
+        if source_count > 1:
+            base += f" (×{source_count})" if en else f"（{source_count} 部影片关联）"
+        return base
+
     def _get_tmdb_hybrid_recommendations(
         self,
         movies: list[MediaRating],

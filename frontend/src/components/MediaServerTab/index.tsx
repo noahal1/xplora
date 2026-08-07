@@ -19,6 +19,7 @@ import type { MediaServer, ServerFormData, VerifyResult, MediaLibrary, LibraryIt
 import { Modal } from "../Modal";
 import FadeContent from "../FadeContent";
 import { getErrMsg } from "../../lib/utils";
+import { formatLocaleDateTime } from "../../utils/date";
 import { Server, Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Network, Library, AlertTriangle, Download } from "lucide-react";
 import { MoviePilotConfig } from "./MoviePilotConfig";
 
@@ -168,16 +169,24 @@ export function MediaServerTab() {
 
   // ── Save ───────────────────────────────────────────────────────
 
+  /** Default port per server type (empty input → default). */
+  const DEFAULT_PORTS: Record<string, number> = {
+    jellyfin: 8096,
+    emby: 8096,
+    feiniu: 8005,
+    plex: 32400,
+  };
+
   /** Normalise port before sending to API — empty string → default per type */
   const resolvePort = (f: ServerFormData) =>
-    f.port === "" ? (f.server_type === "feiniu" ? 8005 : 8096) : f.port;
+    f.port === "" || f.port === 0 ? (DEFAULT_PORTS[f.server_type] ?? 8096) : f.port;
 
   const handleSave = async () => {
     if (!form.name || !form.host) {
       showToast(t("media_server.fill_required"), "error");
       return;
     }
-    if (form.server_type === "jellyfin" && !form.api_key) {
+    if (form.server_type !== "feiniu" && !form.api_key) {
       showToast(t("media_server.fill_host_and_key"), "error");
       return;
     }
@@ -418,7 +427,7 @@ export function MediaServerTab() {
                 </p>
                 {mpConfig.last_connected && (
                   <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                    {t("common.watched")}: {new Date(mpConfig.last_connected).toLocaleString()}
+                    {t("common.watched")}: {formatLocaleDateTime(mpConfig.last_connected) || "—"}
                   </p>
                 )}
               </div>
@@ -463,7 +472,7 @@ export function MediaServerTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-medium truncate">{server.name}</h3>
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                        {server.server_type === "jellyfin" ? t("media_server.server_type_jellyfin") : server.server_type}
+                        {t(`media_server.server_type_${server.server_type}`, { defaultValue: server.server_type })}
                       </span>
                       <StatusBadge server={server} />
                     </div>
@@ -472,7 +481,7 @@ export function MediaServerTab() {
                     </p>
                     {server.last_connected && (
                       <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                        {t("common.watched")}: {new Date(server.last_connected).toLocaleString()}
+                        {t("common.watched")}: {formatLocaleDateTime(server.last_connected) || "—"}
                       </p>
                     )}
                     {server.last_synced && (
@@ -480,7 +489,7 @@ export function MediaServerTab() {
                         <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                           <path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 0 1 9-9"/>
                         </svg>
-                        {t("media_server.last_synced")}: {new Date(server.last_synced).toLocaleString()}
+                        {t("media_server.last_synced")}: {formatLocaleDateTime(server.last_synced) || "—"}
                       </p>
                     )}
                   </div>
@@ -713,14 +722,12 @@ export function MediaServerTab() {
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5">{t("media_server.server_type")}</label>
             <div className="flex gap-2">
-              {["jellyfin", "feiniu"].map((type) => (
+              {["jellyfin", "emby", "plex", "feiniu"].map((type) => (
                 <button
                   key={type}
                   onClick={() => {
-                    // Keep the current port if the user already customised it
-                    const port = form.port === "" || form.port === 0
-                      ? (type === "feiniu" ? 8005 : 8096)
-                      : form.port;
+                    // Reset port to the type's default
+                    const port = DEFAULT_PORTS[type] ?? 8096;
                     setForm({ ...form, server_type: type, api_key: "", username: "", password: "", port });
                   }}
                   className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all ${
@@ -729,8 +736,7 @@ export function MediaServerTab() {
                       : "bg-accent/50 text-muted-foreground border border-border hover:border-primary/20"
                   }`}
                 >
-                  {type === "jellyfin" ? t("media_server.server_type_jellyfin") :
-                   type === "feiniu" ? t("media_server.server_type_feiniu") : type}
+                  {t(`media_server.server_type_${type}`)}
                 </button>
               ))}
             </div>
@@ -762,7 +768,7 @@ export function MediaServerTab() {
                   });
                 }}
                 className="input-field w-full h-9 text-sm no-spinner"
-                placeholder={form.server_type === "feiniu" ? "8005" : "8096"}
+                placeholder={String(DEFAULT_PORTS[form.server_type] ?? 8096)}
               />
             </div>
             <div className="flex items-end pb-1.5">
@@ -803,7 +809,7 @@ export function MediaServerTab() {
               </div>
             </>
           ) : (
-            /* Jellyfin: API Key */
+            /* Jellyfin / Emby / Plex: API Key / Token */
             <div>
               <label className="block text-xs text-muted-foreground mb-1.5">{t("media_server.api_key")}</label>
               <input
@@ -839,7 +845,7 @@ export function MediaServerTab() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
             <button
               onClick={handleVerify}
-              disabled={verifying || !form.host || (form.server_type === "jellyfin" && !form.api_key) || (form.server_type === "feiniu" && (!form.username || !form.password))}
+              disabled={verifying || !form.host || (form.server_type !== "feiniu" && !form.api_key) || (form.server_type === "feiniu" && (!form.username || !form.password))}
               className="btn btn-ghost btn-sm sm:flex-1 gap-1.5"
             >
               {verifying ? (
@@ -858,7 +864,7 @@ export function MediaServerTab() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !form.name || !form.host || (form.server_type === "jellyfin" && !form.api_key)}
+                disabled={saving || !form.name || !form.host || (form.server_type !== "feiniu" && !form.api_key)}
                 className="btn btn-primary btn-sm flex-1 sm:flex-none gap-1.5"
               >
                 {saving ? (

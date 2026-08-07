@@ -1,17 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { getMPTorrents } from "../../api";
+import { getMPTorrents, pauseMPTorrent, resumeMPTorrent, deleteMPTorrent } from "../../api";
 import type { MoviePilotTorrent } from "../../types";
 import FadeContent from "../FadeContent";
-import { formatBytes, formatSpeed, formatProgress, getStatusLabel, getStatusColor, getStatusBg } from "../../lib/utils";
-import { Download, Upload, HardDrive, AlertTriangle, RefreshCw } from "lucide-react";
+import { Modal } from "../Modal";
+import { useToast } from "../../context/ToastContext";
+import { getErrMsg, formatBytes, formatSpeed, formatProgress, formatEta, formatRatio, getStatusLabel, getStatusColor, getStatusBg } from "../../lib/utils";
+import { Download, Upload, HardDrive, AlertTriangle, RefreshCw, Pause, Play, Trash2, Clock, ArrowUp, ArrowDown, TrendingUp } from "lucide-react";
 
 export function DownloadQueue() {
   const { t } = useTranslation();
+  const { showToast } = useToast();
 
   const [torrents, setTorrents] = useState<MoviePilotTorrent[]>([]);
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  // hash → "pausing" | "resuming" | "deleting" — in-flight control action
+  const [acting, setActing] = useState<Record<string, string>>({});
+  // hash of the torrent awaiting delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<MoviePilotTorrent | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadTorrents = useCallback(async () => {
     setLoading(true);
@@ -32,6 +40,46 @@ export function DownloadQueue() {
     const interval = setInterval(loadTorrents, 10000);
     return () => clearInterval(interval);
   }, [loadTorrents]);
+
+  // ── Control actions ──
+
+  const runAction = useCallback(async (tor: MoviePilotTorrent, action: "pause" | "resume") => {
+    setActing((prev) => ({ ...prev, [tor.hash]: action }));
+    try {
+      const res = action === "pause"
+        ? await pauseMPTorrent(tor.hash)
+        : await resumeMPTorrent(tor.hash);
+      if (res.success) {
+        showToast(t(action === "pause" ? "moviepilot.action_paused" : "moviepilot.action_resumed"), "success");
+      } else {
+        showToast(t("moviepilot.action_failed", { message: res.message || t("moviepilot.unknown_error") }), "error");
+      }
+      loadTorrents();
+    } catch (err) {
+      showToast(t("moviepilot.action_failed", { message: getErrMsg(err) }), "error");
+    } finally {
+      setActing((prev) => { const next = { ...prev }; delete next[tor.hash]; return next; });
+    }
+  }, [loadTorrents, showToast, t]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await deleteMPTorrent(deleteTarget.hash);
+      if (res.success) {
+        showToast(t("moviepilot.action_deleted"), "success");
+      } else {
+        showToast(t("moviepilot.action_failed", { message: res.message || t("moviepilot.unknown_error") }), "error");
+      }
+      setDeleteTarget(null);
+      loadTorrents();
+    } catch (err) {
+      showToast(t("moviepilot.action_failed", { message: getErrMsg(err) }), "error");
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, loadTorrents, showToast, t]);
 
   // ── Render ──
 
@@ -131,17 +179,37 @@ export function DownloadQueue() {
                   <div key={tor.hash} className="p-3 rounded-lg border border-border hover:bg-accent/30 transition-colors">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{tor.name}</p>
+                        <p className="text-sm font-medium truncate" title={tor.name}>{tor.name}</p>
                         <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground tabular-nums flex-wrap">
                           <span>{formatProgress(tor.progress)}</span>
                           <span>{formatBytes(tor.downloaded)} / {formatBytes(tor.size)}</span>
-                          <span>{t("moviepilot.dl_speed")}: {formatSpeed(tor.dlspeed)}</span>
-                          <span>{t("moviepilot.ul_speed")}: {formatSpeed(tor.ulspeed)}</span>
+                          <span className="inline-flex items-center gap-1"><ArrowDown size={10} className="text-blue-500" />{formatSpeed(tor.dlspeed)}</span>
+                          <span className="inline-flex items-center gap-1"><ArrowUp size={10} className="text-green-500" />{formatSpeed(tor.ulspeed)}</span>
+                          <span className="inline-flex items-center gap-1"><Clock size={10} />{t("moviepilot.eta")} {formatEta(tor.eta)}</span>
+                          <span className="inline-flex items-center gap-1"><TrendingUp size={10} />{t("moviepilot.ratio")} {formatRatio(tor.ratio)}</span>
                         </div>
                       </div>
-                      <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
-                        {formatProgress(tor.progress)}
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => runAction(tor, "pause")}
+                          disabled={!!acting[tor.hash]}
+                          className="btn btn-ghost btn-xs p-1"
+                          title={t("moviepilot.pause")}
+                        >
+                          {acting[tor.hash] === "pausing" ? <RefreshCw size={12} className="animate-stream-spin" /> : <Pause size={12} />}
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(tor)}
+                          disabled={!!acting[tor.hash]}
+                          className="btn btn-ghost btn-xs p-1 text-destructive hover:text-destructive"
+                          title={t("common.delete")}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                        <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
+                          {formatProgress(tor.progress)}
+                        </span>
+                      </div>
                     </div>
                     {/* Progress bar */}
                     <div className="mt-2 h-1.5 rounded-full bg-accent/30 overflow-hidden">
@@ -170,21 +238,44 @@ export function DownloadQueue() {
                       <th className="px-3 py-2 text-left font-medium text-[10px] text-muted-foreground bg-bg-canvas border-b border-border">{t("moviepilot.name")}</th>
                       <th className="px-3 py-2 text-right font-medium text-[10px] text-muted-foreground bg-bg-canvas border-b border-border">{t("moviepilot.size")}</th>
                       <th className="px-3 py-2 text-right font-medium text-[10px] text-muted-foreground bg-bg-canvas border-b border-border">{t("moviepilot.ul_speed")}</th>
+                      <th className="px-3 py-2 text-right font-medium text-[10px] text-muted-foreground bg-bg-canvas border-b border-border">{t("moviepilot.ratio")}</th>
                       <th className="px-3 py-2 text-right font-medium text-[10px] text-muted-foreground bg-bg-canvas border-b border-border">{t("moviepilot.seeders")}</th>
                       <th className="px-3 py-2 text-right font-medium text-[10px] text-muted-foreground bg-bg-canvas border-b border-border">{t("moviepilot.status")}</th>
+                      <th className="px-2 py-2 text-right font-medium text-[10px] text-muted-foreground bg-bg-canvas border-b border-border">{t("manage.col_actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {seedingList.map((tor) => (
                       <tr key={tor.hash} className="hover:bg-accent/30 transition-colors">
-                        <td className="px-3 py-2 text-xs truncate max-w-[200px]">{tor.name}</td>
+                        <td className="px-3 py-2 text-xs truncate max-w-[200px]" title={tor.name}>{tor.name}</td>
                         <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{formatBytes(tor.size)}</td>
                         <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{formatSpeed(tor.ulspeed)}</td>
+                        <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{formatRatio(tor.ratio)}</td>
                         <td className="px-3 py-2 text-[10px] tabular-nums text-right text-muted-foreground">{tor.seeders}</td>
                         <td className="px-3 py-2 text-right">
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
                             {getStatusLabel(tor.status, t)}
                           </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => runAction(tor, "pause")}
+                              disabled={!!acting[tor.hash]}
+                              className="btn btn-ghost btn-xs p-1"
+                              title={t("moviepilot.pause")}
+                            >
+                              {acting[tor.hash] === "pausing" ? <RefreshCw size={12} className="animate-stream-spin" /> : <Pause size={12} />}
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(tor)}
+                              disabled={!!acting[tor.hash]}
+                              className="btn btn-ghost btn-xs p-1 text-destructive hover:text-destructive"
+                              title={t("common.delete")}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -205,11 +296,38 @@ export function DownloadQueue() {
                       <span className={`text-xs ${getStatusColor(tor.status)}`}>
                         {tor.status === "error" ? <AlertTriangle size={12} /> : <Download size={12} />}
                       </span>
-                      <span className="text-xs truncate">{tor.name}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs truncate" title={tor.name}>{tor.name}</p>
+                        {tor.status === "paused" && (
+                          <p className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
+                            {formatBytes(tor.size)} · {formatProgress(tor.progress)} · {t("moviepilot.ratio")} {formatRatio(tor.ratio)}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
-                      {getStatusLabel(tor.status, t)}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {tor.status === "paused" && (
+                        <button
+                          onClick={() => runAction(tor, "resume")}
+                          disabled={!!acting[tor.hash]}
+                          className="btn btn-ghost btn-xs p-1"
+                          title={t("moviepilot.resume")}
+                        >
+                          {acting[tor.hash] === "resuming" ? <RefreshCw size={12} className="animate-stream-spin" /> : <Play size={12} />}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDeleteTarget(tor)}
+                        disabled={!!acting[tor.hash]}
+                        className="btn btn-ghost btn-xs p-1 text-destructive hover:text-destructive"
+                        title={t("common.delete")}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                      <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} ${getStatusBg(tor.status)}`}>
+                        {getStatusLabel(tor.status, t)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -217,6 +335,45 @@ export function DownloadQueue() {
           )}
         </>
       )}
+
+      {/* ── Delete confirmation modal ── */}
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => { if (!deleting) setDeleteTarget(null); }}
+        title={t("moviepilot.delete_torrent_title")}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {t("moviepilot.delete_torrent_desc", { name: deleteTarget?.name || "" })}
+          </p>
+          {deleteTarget && (
+            <div className="p-3 rounded-lg border border-border bg-accent/20">
+              <p className="text-xs font-medium truncate">{deleteTarget.name}</p>
+              <p className="text-[10px] text-muted-foreground tabular-nums mt-1">
+                {formatBytes(deleteTarget.size)} · {formatProgress(deleteTarget.progress)} · {t("moviepilot.ratio")} {formatRatio(deleteTarget.ratio)}
+              </p>
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              className="btn btn-ghost btn-sm"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="btn btn-sm bg-destructive text-white"
+              style={{ borderColor: "transparent" }}
+            >
+              {deleting ? <RefreshCw size={12} className="animate-stream-spin" /> : <Trash2 size={12} />}
+              {t("common.delete")}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </FadeContent>
   );
 }

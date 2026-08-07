@@ -5,7 +5,7 @@ import type { MPSearchResult } from "../../types";
 import { Modal } from "../Modal";
 import { useToast } from "../../context/ToastContext";
 import { getErrMsg, formatBytes } from "../../lib/utils";
-import { Search, Download, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Filter, Subtitles, Globe } from "lucide-react";
+import { Search, Download, ExternalLink, Loader2, AlertTriangle, CheckCircle2, Filter, Subtitles, Globe, Calendar, ArrowUpDown } from "lucide-react";
 
 interface PTSearchModalProps {
   open: boolean;
@@ -76,6 +76,12 @@ function hasChineseSubtitle(title: string): boolean {
   return /中字|简中|繁中|简繁|双语|双字|\bCHS\b|\bCHT\b/i.test(title);
 }
 
+/** Show just the date part of a MP publish timestamp (e.g. "2024-01-05"). */
+function formatPubDate(pub?: string): string {
+  if (!pub) return "";
+  return pub.slice(0, 10);
+}
+
 function PromotionBadge({ promo }: { promo: PromoInfo }) {
   return (
     <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${promo.color}`}>
@@ -126,6 +132,41 @@ const FILTER_OPTIONS: FilterOption[] = [
   },
 ];
 
+/* ── Sort config ────────────────────────────────────────────────── */
+
+type SortMode = "default" | "seeders" | "size" | "date";
+
+interface SortOption {
+  value: SortMode;
+  labelKey: string;
+}
+
+const SORT_OPTIONS: SortOption[] = [
+  { value: "default", labelKey: "默认" },
+  { value: "seeders", labelKey: "做种" },
+  { value: "size", labelKey: "大小" },
+  { value: "date", labelKey: "时间" },
+];
+
+/** Apply the active sort mode to a result list. */
+function sortResults(list: MPSearchResult[], mode: SortMode): MPSearchResult[] {
+  const copy = [...list];
+  switch (mode) {
+    case "seeders":
+      copy.sort((a, b) => (b.seeders || 0) - (a.seeders || 0));
+      break;
+    case "size":
+      copy.sort((a, b) => (b.size || 0) - (a.size || 0));
+      break;
+    case "date":
+      copy.sort((a, b) => (b.pub_date || "").localeCompare(a.pub_date || ""));
+      break;
+    default:
+      break;
+  }
+  return copy;
+}
+
 /* ── Site filter button style ───────────────────────────────────── */
 
 function siteBtnClass(site: string, active: boolean): string {
@@ -149,9 +190,18 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
   const [results, setResults] = useState<MPSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [downloadingHash, setDownloadingHash] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [promoFilter, setPromoFilter] = useState<PromoFilter>("all");
   const [siteFilter, setSiteFilter] = useState<string>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("default");
+  const [seedersOnly, setSeedersOnly] = useState(false);
+
+  // ── Download confirm modal ──
+  const [confirmTarget, setConfirmTarget] = useState<MPSearchResult | null>(null);
+  const [savePath, setSavePath] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  // URLs already sent to MoviePilot in this session — prevent duplicate clicks
+  const [addedSet, setAddedSet] = useState<Set<string>>(new Set());
 
   // ── Extract unique site names ──
 
@@ -163,14 +213,21 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
     return Array.from(sites).sort();
   }, [results]);
 
-  // ── Filtered results (site + promo) ──
+  // ── Filtered + sorted results ──
 
   const filteredResults = useMemo(
     () => results.filter((r) => {
       if (siteFilter !== "all" && r.site !== siteFilter) return false;
-      return matchesFilter(r, promoFilter);
+      if (!matchesFilter(r, promoFilter)) return false;
+      if (seedersOnly && (r.seeders || 0) <= 0) return false;
+      return true;
     }),
-    [results, promoFilter, siteFilter],
+    [results, promoFilter, siteFilter, seedersOnly],
+  );
+
+  const sortedResults = useMemo(
+    () => sortResults(filteredResults, sortMode),
+    [filteredResults, sortMode],
   );
 
   // ── Search ──
@@ -179,18 +236,27 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
     if (!q.trim()) return;
     setLoading(true);
     setSearched(false);
+    setSearchError(null);
     setPromoFilter("all");
     setSiteFilter("all");
+    setSortMode("default");
+    setSeedersOnly(false);
     try {
       const data = await searchMPTorrents(q);
       setResults(data.results);
       setSearched(true);
+      if (data.error) {
+        setSearchError(data.error);
+      }
     } catch (err) {
-      showToast(t("moviepilot.verify_failed", { message: getErrMsg(err) }), "error");
+      setResults([]);
+      setSearched(true);
+      // Banner already shows the "搜索失败" title — store the raw message only
+      setSearchError(getErrMsg(err));
     } finally {
       setLoading(false);
     }
-  }, [showToast, t]);
+  }, []);
 
   useEffect(() => {
     if (open && searchQuery) {
@@ -203,29 +269,37 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
     if (!open) {
       setResults([]);
       setSearched(false);
-      setDownloadingHash(null);
+      setSearchError(null);
       setPromoFilter("all");
       setSiteFilter("all");
+      setSortMode("default");
+      setSeedersOnly(false);
+      setConfirmTarget(null);
+      setSavePath("");
+      setAddedSet(new Set());
     }
   }, [open]);
 
-  // ── Download ──
+  // ── Download confirm flow ──
 
-  const handleDownload = async (result: MPSearchResult) => {
-    setDownloadingHash(result.download_url);
+  const handleConfirmDownload = async () => {
+    if (!confirmTarget) return;
+    setDownloading(true);
     try {
-      const res = await downloadMPTorrent(result.title, result.download_url);
+      const res = await downloadMPTorrent(confirmTarget.title, confirmTarget.download_url, savePath.trim() || undefined);
       if (res.success) {
         showToast(t("moviepilot.download_success"), "success");
+        setAddedSet((prev) => new Set(prev).add(confirmTarget.download_url));
+        setConfirmTarget(null);
+        setSavePath("");
       } else {
-        // Show the actual MoviePilot error message so the user can diagnose
         const detailMsg = res.message || t("moviepilot.unknown_error");
         showToast(t("moviepilot.download_failed", { message: detailMsg }), "error");
       }
     } catch (err) {
       showToast(t("moviepilot.download_failed", { message: getErrMsg(err) }), "error");
     } finally {
-      setDownloadingHash(null);
+      setDownloading(false);
     }
   };
 
@@ -282,8 +356,20 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
           </button>
         </div>
 
+        {/* Search error banner */}
+        {searched && searchError && (
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-red-500/20 bg-red-500/5 text-sm text-red-600 dark:text-red-400">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-medium">{t("moviepilot.search_failed_title")}</p>
+              <p className="text-xs mt-0.5 break-words">{searchError}</p>
+              <p className="text-[10px] text-red-500/60 mt-1">{t("moviepilot.no_results_hint")}</p>
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
-        {searched && results.length > 0 && (
+        {searched && !searchError && results.length > 0 && (
           <div className="space-y-2">
             {/* Promotion & subtitle filter pills */}
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -304,6 +390,38 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
                   </button>
                 );
               })}
+            </div>
+
+            {/* Sort + seeders-only */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <ArrowUpDown size={12} className="text-muted-foreground/50 shrink-0" />
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSortMode(opt.value)}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                    sortMode === opt.value
+                      ? "bg-primary/15 text-primary shadow-sm"
+                      : "bg-accent/50 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                >
+                  {opt.labelKey}
+                </button>
+              ))}
+              <span className="mx-1 w-px h-3.5 bg-border" />
+              <button
+                onClick={() => setSeedersOnly((v) => !v)}
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                  seedersOnly
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                    : "bg-accent/50 text-muted-foreground hover:bg-accent hover:text-foreground"
+                }`}
+              >
+                {t("moviepilot.only_seeders")}
+              </button>
+              <span className="ml-auto text-[10px] text-muted-foreground tabular-nums shrink-0">
+                {t("moviepilot.result_count", { count: sortedResults.length })}
+              </span>
             </div>
 
             {/* Site filter pills (only show when multiple sites) */}
@@ -330,7 +448,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
           <div className="flex items-center justify-center py-8">
             <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
           </div>
-        ) : searched && results.length === 0 ? (
+        ) : searched && searchError ? null : searched && results.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <AlertTriangle size={24} className="text-muted-foreground/30 mb-2" />
             <p className="text-sm text-muted-foreground">
@@ -347,7 +465,7 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
               {siteFilter !== "all" ? `当前站点「${siteFilter}」下没有匹配的种子` : "筛选项下没有结果"}
             </p>
             <button
-              onClick={() => { setPromoFilter("all"); setSiteFilter("all"); }}
+              onClick={() => { setPromoFilter("all"); setSiteFilter("all"); setSeedersOnly(false); setSortMode("default"); }}
               className="text-xs text-primary underline mt-1"
             >
               清除全部筛选
@@ -355,9 +473,11 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
           </div>
         ) : (
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {filteredResults.map((r, idx) => {
+            {sortedResults.map((r, idx) => {
               const promos = getPromotions(r);
               const hasSub = hasChineseSubtitle(r.title);
+              const pubDate = formatPubDate(r.pub_date);
+              const alreadyAdded = addedSet.has(r.download_url);
               return (
                 <div
                   key={idx}
@@ -380,6 +500,12 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
                         <span className="text-[10px] text-muted-foreground tabular-nums">
                           {formatBytes(r.size)}
                         </span>
+                        {pubDate && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground tabular-nums">
+                            <Calendar size={10} />
+                            {pubDate}
+                          </span>
+                        )}
                         {hasSub && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/15 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20">
                             <Subtitles size={10} />
@@ -412,16 +538,21 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
                         </a>
                       )}
                       <button
-                        onClick={() => handleDownload(r)}
-                        disabled={downloadingHash === r.download_url}
+                        onClick={() => { setConfirmTarget(r); setSavePath(""); }}
+                        disabled={alreadyAdded}
                         className="btn btn-primary btn-xs gap-1"
                       >
-                        {downloadingHash === r.download_url ? (
-                          <Loader2 size={12} className="animate-spin" />
+                        {alreadyAdded ? (
+                          <>
+                            <CheckCircle2 size={12} />
+                            {t("moviepilot.already_added")}
+                          </>
                         ) : (
-                          <Download size={12} />
+                          <>
+                            <Download size={12} />
+                            {t("moviepilot.download")}
+                          </>
                         )}
-                        {t("moviepilot.download")}
                       </button>
                     </div>
                   </div>
@@ -431,6 +562,75 @@ export function PTSearchModal({ open, onClose, searchQuery }: PTSearchModalProps
           </div>
         )}
       </div>
+
+      {/* ── Download confirm modal ── */}
+      <Modal
+        open={confirmTarget !== null}
+        onClose={() => { if (!downloading) { setConfirmTarget(null); setSavePath(""); } }}
+        title={t("moviepilot.confirm_download")}
+      >
+        {confirmTarget && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t("moviepilot.confirm_download_desc")}
+            </p>
+
+            {/* Torrent summary */}
+            <div className="p-3 rounded-lg border border-border bg-accent/20">
+              <p className="text-sm font-medium line-clamp-2 break-words">{confirmTarget.title}</p>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                  {confirmTarget.site || "未知"}
+                </span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  {formatBytes(confirmTarget.size)}
+                </span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">↑ {confirmTarget.seeders}</span>
+                {getPromotions(confirmTarget).map((p, i) => (
+                  <PromotionBadge key={i} promo={p} />
+                ))}
+              </div>
+            </div>
+
+            {/* Optional save path */}
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1.5">
+                {t("moviepilot.save_path")}
+              </label>
+              <input
+                type="text"
+                value={savePath}
+                onChange={(e) => setSavePath(e.target.value)}
+                placeholder={t("moviepilot.save_path_placeholder")}
+                className="input-field w-full h-9 text-sm"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => { setConfirmTarget(null); setSavePath(""); }}
+                disabled={downloading}
+                className="btn btn-ghost btn-sm"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={handleConfirmDownload}
+                disabled={downloading || !confirmTarget.download_url}
+                className="btn btn-primary btn-sm gap-1.5"
+              >
+                {downloading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Download size={14} />
+                )}
+                {downloading ? t("moviepilot.downloading_torrent") : t("moviepilot.confirm_download")}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </Modal>
   );
 }

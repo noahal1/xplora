@@ -22,7 +22,7 @@ export function Logo({ className = "h-8 w-auto" }: LogoProps) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
-  const src = theme === "light" ? logoSrcDark : logoSrc;
+  const src = theme === "dark" ? logoSrc : logoSrcDark;
 
   return (
     <div className={`relative inline-flex ${className}`} style={{ aspectRatio: "120 / 32" }}>

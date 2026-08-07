@@ -6,20 +6,26 @@ import { useState, useRef, useLayoutEffect, useCallback, useEffect } from "react
  * measurement div) and calculates how many pills can fit in the available
  * container width — leaving room for a "more" toggle button.
  *
+ * The LAST child of the measurement div must be the "more" button, styled
+ * exactly like the visible one (with its widest possible content, e.g.
+ * "+{total} 更多"). Its real width is measured rather than estimated, so the
+ * row never overflows and the button never wraps to a second line.
+ *
  * Usage:
  * ```tsx
  * const containerRef = useRef<HTMLDivElement>(null);
- * const [visibleCount, measureRef] = useAutoFitCount(containerRef, gapPx, moreBtnWidth, prefixCount);
+ * const [visibleCount, measureRef] = useAutoFitCount(containerRef, gapPx, prefixCount);
  *
  * // containerRef → wraps the visible row
- * // measureRef  → attach to an off-screen div that renders EVERYTHING (label + all-btn + all pills)
- * // prefixCount → how many children of the measurement div are NOT pills (label + optional all-btn)
+ * // measureRef  → attach to an off-screen div that renders EVERYTHING
+ * //               (label + all-btn + all pills + more-btn, in this order)
+ * // prefixCount → how many children of the measurement div are NOT pills
+ * //               (label + optional all-btn)
  * ```
  */
 export function useAutoFitCount(
   containerRef: React.RefObject<HTMLDivElement | null>,
   gapPx: number,
-  moreBtnWidthPx: number,
   prefixCount: number,
 ): [number, React.RefObject<HTMLDivElement | null>] {
   const measureRef = useRef<HTMLDivElement>(null);
@@ -31,7 +37,8 @@ export function useAutoFitCount(
     const el = measureRef.current;
     if (!el) return;
     const children = Array.from(el.children) as HTMLElement[];
-    if (children.length <= prefixCount) return; // nothing to measure beyond prefixes
+    // Need at least: prefixes + one pill + the trailing more button
+    if (children.length <= prefixCount + 1) return;
     itemWidthsRef.current = children.map((c) => c.offsetWidth);
   }, [prefixCount]);
 
@@ -41,24 +48,27 @@ export function useAutoFitCount(
     if (!container) return;
 
     const widths = itemWidthsRef.current;
-    const totalPills = widths.length - prefixCount;
+    // The LAST child of the measurement div is the more button — use its
+    // real measured width instead of a hard-coded estimate.
+    const moreBtnWidth = widths[widths.length - 1] ?? 0;
+    const totalPills = widths.length - prefixCount - 1;
     if (totalPills <= 0) return;
 
     const containerWidth = container.clientWidth;
 
-    // Account for prefix elements (label + all-btn)
+    // Account for prefix elements (label + all-btn), with gaps between them
     let usedWidth = 0;
     for (let i = 0; i < prefixCount && i < widths.length; i++) {
       usedWidth += widths[i] + (i > 0 ? gapPx : 0);
     }
 
-    // Now count how many pills can fit after the prefix + "more" button
+    // Now count how many pills can fit after the prefix, reserving the
+    // trailing gap + the real more-button width
     let count = 0;
-    for (let i = prefixCount; i < widths.length; i++) {
+    for (let i = prefixCount; i < widths.length - 1; i++) {
       const withGap = count > 0 ? gapPx : 0;
       const itemTotal = usedWidth + withGap + widths[i];
-      const needsMore = i < widths.length - 1;
-      const remaining = containerWidth - itemTotal - (needsMore ? moreBtnWidthPx : 0);
+      const remaining = containerWidth - itemTotal - gapPx - moreBtnWidth;
 
       if (remaining >= 0) {
         usedWidth = itemTotal;
@@ -74,7 +84,7 @@ export function useAutoFitCount(
     } else {
       setVisibleCount(Math.max(1, count));
     }
-  }, [containerRef, gapPx, moreBtnWidthPx, prefixCount]);
+  }, [containerRef, gapPx, prefixCount]);
 
   // Measure after every render (useLayoutEffect to avoid flicker)
   useLayoutEffect(() => {

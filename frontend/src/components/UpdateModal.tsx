@@ -21,20 +21,6 @@ interface Props {
   updateInfo: UpdateInfo;
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "";
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
 export function UpdateModal({ open, onClose, updateInfo }: Props) {
   const { t, i18n } = useTranslation();
   const { showToast } = useToast();

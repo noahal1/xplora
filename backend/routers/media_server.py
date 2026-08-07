@@ -24,6 +24,7 @@ from crud.media_servers import (
     update_last_synced,
 )
 from crud import log_operation, save_media as crud_save_media
+from helpers import iso_utc
 from media_server.factory import get_connector
 
 router = APIRouter(prefix="/api/media-servers", tags=["media-servers"])
@@ -42,14 +43,14 @@ def _strip_media_server(record) -> dict:
         "port": record.port,
         "use_ssl": record.use_ssl,
         "is_active": record.is_active,
-        "last_connected": record.last_connected.isoformat() if record.last_connected else None,
-        "created_at": record.created_at.isoformat(),
+        "last_connected": iso_utc(record.last_connected, None),
+        "created_at": iso_utc(record.created_at),
         # NOTE: api_key is intentionally excluded — client must re-supply
         # it when editing (stored encrypted on server, never sent back).
         "has_api_key": bool(record.api_key),
         "has_username": bool(record.username),
         "has_server_user_id": bool(record.server_user_id),
-        "last_synced": record.last_synced.isoformat() if record.last_synced else None,
+        "last_synced": iso_utc(record.last_synced, None),
     }
 
 
@@ -111,7 +112,7 @@ async def verify_connection(
 
     if not server_type:
         raise HTTPException(status_code=400, detail="请指定服务器类型")
-    if server_type not in ("jellyfin", "feiniu"):
+    if server_type not in ("jellyfin", "feiniu", "emby", "plex"):
         raise HTTPException(status_code=400, detail=f"不支持的服务器类型: {server_type}")
     if not host:
         raise HTTPException(status_code=400, detail="请填写服务器地址")
@@ -139,9 +140,9 @@ async def verify_connection(
             "_token": token,
         }
 
-    # Jellyfin: directly test with api_key
+    # Jellyfin / Emby / Plex: directly test with api_key
     if not api_key:
-        raise HTTPException(status_code=400, detail="请填写 API Key")
+        raise HTTPException(status_code=400, detail="请填写 API Key / Token")
 
     try:
         connector = get_connector(server_type, host, port, api_key, use_ssl)
@@ -201,7 +202,7 @@ async def add_server(
         raise HTTPException(status_code=400, detail="请填写服务器名称")
     if not server_type:
         raise HTTPException(status_code=400, detail="请指定服务器类型")
-    if server_type not in ("jellyfin", "feiniu"):
+    if server_type not in ("jellyfin", "feiniu", "emby", "plex"):
         raise HTTPException(status_code=400, detail=f"不支持的服务器类型: {server_type}")
     if not host:
         raise HTTPException(status_code=400, detail="请填写服务器地址")
@@ -482,13 +483,10 @@ async def import_watched_from_server(
 
     # Get connector (pass cached user_id for FeiNiu)
     server_user_id = getattr(record, "server_user_id", None)
-    if record.server_type == "feiniu":
-        connector = JellyfinConnector(record.host, record.port, record.api_key, record.use_ssl, user_id=server_user_id)
-    else:
-        try:
-            connector = get_connector(record.server_type, record.host, record.port, record.api_key, record.use_ssl, user_id=server_user_id)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    try:
+        connector = get_connector(record.server_type, record.host, record.port, record.api_key, record.use_ssl, user_id=server_user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Fetch watched items from media server
     watched_items = await connector.get_watched_items()

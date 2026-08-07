@@ -8,6 +8,7 @@ from sqlmodel import Session
 from auth import require_admin
 from crud import get_operation_logs
 from database import get_db
+from helpers import iso_utc
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 
@@ -37,7 +38,7 @@ async def list_logs(
                 "username": r.username,
                 "action": r.action,
                 "detail": r.detail,
-                "created_at": r.created_at.isoformat(),
+                "created_at": iso_utc(r.created_at),
             }
             for r in records
         ],

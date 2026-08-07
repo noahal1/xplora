@@ -822,7 +822,7 @@ export function AdminDiagnosticsPage() {
       {/* ── AI Infer Confirmation Modal ───────────────────────── */}
       {aiInferConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
-          <div className="w-full max-w-md rounded-xl bg-bg-card border border-border shadow-xl p-5 space-y-4">
+          <div className="w-full max-w-md rounded-xl bg-popover border border-border shadow-xl p-5 space-y-4">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
                 <BrainCircuit size={16} className="text-violet-600 dark:text-violet-400" />
@@ -830,7 +830,7 @@ export function AdminDiagnosticsPage() {
               <div>
                 <h3 className="text-sm font-semibold">AI 推断结果确认</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  「{aiInferConfirm.title}」的 AI 推断结果与现有数据不同
+                  请确认是否应用「{aiInferConfirm.title}」的 AI 推断结果
                 </p>
               </div>
             </div>

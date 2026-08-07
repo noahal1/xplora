@@ -13,8 +13,10 @@ from sqlmodel import Session, select
 from auth import get_current_user
 from deps import get_user_db
 from database import get_user_session
-from helpers import parse_movie_data, get_api_key
+from helpers import parse_movie_data
+from config_manager import get_api_key as get_config_api_key
 from ai_service import AIService
+from ai_service.constants import MODEL_CONFIGS
 from crud import save_session as db_save_session, get_sessions as db_get_sessions
 from models import (
     RecommendationRequest,
@@ -27,8 +29,33 @@ from models import (
 
 router = APIRouter(prefix="/api/recommend", tags=["recommend"])
 
+# ``model_used`` value for the no-AI-key local (TMDB-only) path
+LOCAL_MODEL = "local"
+
 
 # ── Helpers ─────────────────────────────────────────────────────────
+
+
+def _resolve_model(request_model: str) -> tuple[str, str]:
+    """Resolve which model + API key to actually use.
+
+    - ``local`` → local TMDB-only recommendations (no AI key needed)
+    - ``ollama`` → local key-less model (placeholder key)
+    - configured model → (model, key)
+    - requested model without a key → falls back to local TMDB recs
+      (the frontend prefers ``model_used`` from the response)
+    """
+    if request_model == LOCAL_MODEL:
+        return LOCAL_MODEL, ""
+    config = MODEL_CONFIGS.get(request_model)
+    if not config:
+        return LOCAL_MODEL, ""
+    if config.get("requires_key") is False:
+        return request_model, config.get("placeholder_key", "ollama")
+    key = get_config_api_key(request_model)
+    if key:
+        return request_model, key
+    return LOCAL_MODEL, ""
 
 
 def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
@@ -411,6 +438,77 @@ def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="t
                 logger.warning("Error saving session: %s", e)
 
 
+def _stream_local_with_persistence(movies, count, model, user_id, strategy="taste", strategy_params=None, watched_titles=None, excluded_tmdb_ids=None, lang=None):
+    """SSE generator for the no-AI local (TMDB-only) recommendation path."""
+    service = AIService(api_key="", model_type="deepseek", user_id=user_id)
+    taste_analysis = service._analyze_user_taste(movies)
+    try:
+        recs = service.get_local_recommendations(
+            movies, count, strategy, strategy_params,
+            taste_analysis=taste_analysis,
+            user_tmdb_ids=(strategy_params or {}).get("user_tmdb_ids"),
+            excluded_tmdb_ids=excluded_tmdb_ids,
+            lang=lang,
+        )
+    except ValueError as e:
+        yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+        return
+
+    start_data = json.dumps({"model": LOCAL_MODEL, "source_count": len(movies)})
+    yield f"event: start\ndata: {start_data}\n\n"
+
+    for rec in recs:
+        rec_data = json.dumps({
+            "title": rec.title,
+            "year": rec.year,
+            "genre": rec.genre,
+            "reason": rec.reason,
+            "confidence": rec.confidence,
+            "poster_url": rec.poster_url,
+            "tmdb_id": rec.tmdb_id,
+            "media_type": rec.media_type,
+        }, ensure_ascii=False)
+        yield f"event: recommendation\ndata: {rec_data}\n\n"
+
+    done_data = json.dumps({
+        "model_used": LOCAL_MODEL,
+        "source_count": len(movies),
+        "total": len(recs),
+        "filtered_count": 0,
+    })
+    yield f"event: done\ndata: {done_data}\n\n"
+
+    # Persist the session so history shows the local recommendations
+    if recs:
+        try:
+            rec_models = [
+                MediaRecommendation(
+                    title=r.title,
+                    year=r.year,
+                    genre=r.genre,
+                    reason=r.reason,
+                    confidence=r.confidence,
+                    tmdb_id=r.tmdb_id,
+                    media_type=r.media_type,
+                )
+                for r in recs
+            ]
+            user_session = get_user_session(user_id)
+            try:
+                db_save_session(
+                    model=LOCAL_MODEL,
+                    source_count=len(movies),
+                    movies=movies,
+                    recommendations=rec_models,
+                    user_id=user_id,
+                    db=user_session,
+                )
+            finally:
+                user_session.close()
+        except Exception as e:
+            logger.warning("Error saving local session: %s", e)
+
+
 def _followup_stream_with_persistence(movies, count, model, api_key, user_id, watched_titles=None, excluded_tmdb_ids=None, previous_recommendations=None, conversation=None, question="", lang=None):
     """SSE generator that auto-saves follow-up recommendations to DB on completion."""
     service = AIService(api_key=api_key, model_type=model, user_id=user_id)
@@ -491,9 +589,9 @@ async def recommend(
 ):
     """Generate movie recommendations based on watched movies and ratings."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
-    api_key = get_api_key(request.model)
+    model, api_key = _resolve_model(request.model)
     try:
-        service = AIService(api_key=api_key, model_type=request.model, user_id=current_user["id"])
+        service = AIService(api_key=api_key, model_type=model if model != LOCAL_MODEL else "deepseek", user_id=current_user["id"])
         # Single DB query: titles + TMDB IDs + source movies — all in one
         mt_filter = (request.strategy_params or {}).media_type if request.strategy_params else None
         library = _load_user_library(db, current_user["id"], media_type=mt_filter)
@@ -534,20 +632,31 @@ async def recommend(
                 strategy_params_dict = {}
             strategy_params_dict["user_tmdb_ids"] = user_source_items
 
-        recommendations = service.get_recommendations(
-            movies, request.count, request.strategy,
-            strategy_params_dict,
-            watched_titles=excluded_titles,
-            taste_analysis=taste_analysis,
-            previous_feedback=previous_feedback,
-            excluded_tmdb_ids=excluded_tmdb_ids,
-            lang=request.lang,
-        )
+        # ── Local (no-AI) path ────────────────────────────────────────
+        if model == LOCAL_MODEL:
+            recommendations = service.get_local_recommendations(
+                movies, request.count, request.strategy,
+                strategy_params_dict,
+                taste_analysis=taste_analysis,
+                user_tmdb_ids=strategy_params_dict.get("user_tmdb_ids") if strategy_params_dict else None,
+                excluded_tmdb_ids=excluded_tmdb_ids,
+                lang=request.lang,
+            )
+        else:
+            recommendations = service.get_recommendations(
+                movies, request.count, request.strategy,
+                strategy_params_dict,
+                watched_titles=excluded_titles,
+                taste_analysis=taste_analysis,
+                previous_feedback=previous_feedback,
+                excluded_tmdb_ids=excluded_tmdb_ids,
+                lang=request.lang,
+            )
         # Auto-save recommendations to DB (same as the streaming endpoint does)
         if recommendations:
             try:
                 db_save_session(
-                    model=request.model,
+                    model=model,
                     source_count=len(movies),
                     movies=movies,
                     recommendations=recommendations,
@@ -558,7 +667,7 @@ async def recommend(
                 logger.warning("Error saving session (sync): %s", e)
         return RecommendationResponse(
             recommendations=recommendations,
-            model_used=request.model,
+            model_used=model,
             source_count=len(movies),
         )
     except ValueError as e:
@@ -575,7 +684,7 @@ async def recommend_stream(
 ):
     """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
-    api_key = get_api_key(request.model)
+    model, api_key = _resolve_model(request.model)
     # Single DB query: titles + TMDB IDs + source movies — all in one
     mt_filter = (request.strategy_params or {}).media_type if request.strategy_params else None
     library = _load_user_library(db, current_user["id"], media_type=mt_filter)
@@ -610,9 +719,28 @@ async def recommend_stream(
             strategy_params_dict = {}
         strategy_params_dict["user_tmdb_ids"] = user_source_items
 
+    # ── Local (no-AI) path uses its own SSE generator ────────────────
+    if model == LOCAL_MODEL:
+        return StreamingResponse(
+            _stream_local_with_persistence(
+                movies, request.count, LOCAL_MODEL, current_user["id"],
+                strategy=request.strategy,
+                strategy_params=strategy_params_dict,
+                watched_titles=excluded_titles,
+                excluded_tmdb_ids=excluded_tmdb_ids,
+                lang=request.lang,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     return StreamingResponse(
         _stream_with_persistence(
-            movies, request.count, request.model, api_key, current_user["id"],
+            movies, request.count, model, api_key, current_user["id"],
             strategy=request.strategy,
             strategy_params=strategy_params_dict,
             watched_titles=excluded_titles,
@@ -637,7 +765,32 @@ async def followup_stream(
 ):
     """SSE streaming endpoint for follow-up conversation. Auto-saves to DB."""
     movies = parse_movie_data([m.model_dump() for m in request.movies])
-    api_key = get_api_key(request.model)
+    model, api_key = _resolve_model(request.model)
+
+    # Local mode has no conversational AI — return a friendly notice
+    if model == LOCAL_MODEL:
+        msg = (
+            "本地推荐模式不支持追问对话。请配置 AI API Key（DeepSeek / OpenAI / Claude / Gemini）后使用。"
+            if not request.lang == "en" else
+            "Local recommendation mode doesn't support follow-up chat. Configure an AI API key (DeepSeek / OpenAI / Claude / Gemini) to use it."
+        )
+
+        def _local_followup():
+            start = json.dumps({"model": LOCAL_MODEL})
+            yield f"event: start\ndata: {start}\n\n"
+            result = json.dumps({"type": "text", "message": msg}, ensure_ascii=False)
+            yield f"event: result\ndata: {result}\n\n"
+
+        return StreamingResponse(
+            _local_followup(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     # Single DB query: titles + TMDB IDs — all in one (already filtered by initial recommendation)
     library = _load_user_library(db, current_user["id"])
     return StreamingResponse(

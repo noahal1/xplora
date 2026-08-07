@@ -93,7 +93,7 @@ class RecommendationRequest(SQLModel):
     movies: list[MediaRating]
     model: str = Field(
         default="deepseek",
-        description="AI model to use: 'deepseek' or 'openai'",
+        description="AI model to use: deepseek / openai / claude / gemini / zhipu / ollama / local",
     )
     count: int = Field(
         default=5, ge=1, le=20, description="Number of recommendations to generate"
@@ -215,7 +215,7 @@ class PlaylistAINameRequest(SQLModel):
     overview: Optional[str] = Field(None, max_length=2000, description="Brief synopsis")
     media_type: Optional[str] = Field(None, description="'movie' or 'tv'")
     model: str = Field(
-        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
+        default="deepseek", description="AI model to use: deepseek / openai / claude / gemini / zhipu / ollama / local"
     )
     lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
 
@@ -228,7 +228,7 @@ class PlaylistCategorizeRequest(SQLModel):
     overview: Optional[str] = Field(None, max_length=2000, description="Brief synopsis")
     media_type: Optional[str] = Field(None, description="'movie' or 'tv'")
     model: str = Field(
-        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
+        default="deepseek", description="AI model to use: deepseek / openai / claude / gemini / zhipu / ollama / local"
     )
     lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
 
@@ -236,7 +236,7 @@ class PlaylistCategorizeRequest(SQLModel):
 class PlaylistCompleteRequest(SQLModel):
     """Generate an AI 'completion plan' — items a playlist is missing."""
     model: str = Field(
-        default="deepseek", description="AI model to use: 'deepseek' or 'openai'"
+        default="deepseek", description="AI model to use: deepseek / openai / claude / gemini / zhipu / ollama / local"
     )
     lang: Optional[str] = Field(None, description="Target language hint: 'zh' or 'en'")
     count: int = Field(

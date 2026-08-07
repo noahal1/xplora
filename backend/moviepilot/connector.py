@@ -24,6 +24,14 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class MoviePilotError(Exception):
+    """Raised when MoviePilot is unreachable or returns an HTTP error.
+
+    Carries a user-friendly message so the API layer can surface the real
+    reason (instead of silently treating failures as empty results).
+    """
+
+
 # ── Retry helper ───────────────────────────────────────────────────
 # MoviePilot connections can be intermittently flaky (TCP handshake
 # timeouts, DNS glitches), so we retry transient RequestError failures.
@@ -48,6 +56,30 @@ async def _retry_on_request_error(fn):
 
 
 # ── Helpers ────────────────────────────────────────────────────────
+
+
+def _dedupe_results(results: list[dict]) -> list[dict]:
+    """Deduplicate search results by download URL (fallback to site+title).
+
+    PT sites often mirror the same release across multiple trackers, so the
+    same torrent can appear several times. Keeps the entry with the most
+    seeders (ties broken by free promo) so the list stays compact.
+    """
+    best: dict[object, dict] = {}
+    for r in results:
+        url = (r.get("download_url") or "").strip()
+        # Prefer the download URL as the dedupe key; fall back to (site, title)
+        # when the URL is empty. Both are hashable, so no collisions possible.
+        key: object = url if url else (r.get("site") or "", r.get("title") or "")
+        cur = best.get(key)
+        if cur is None:
+            best[key] = r
+            continue
+        cur_seeders = cur.get("seeders") or 0
+        new_seeders = r.get("seeders") or 0
+        if new_seeders > cur_seeders or (new_seeders == cur_seeders and r.get("is_free") and not cur.get("is_free")):
+            best[key] = r
+    return list(best.values())
 
 
 def _parse_mp_speed(speed_str: str) -> int:
@@ -143,8 +175,13 @@ class MoviePilotConnector:
 
     # ── HTTP helpers ──────────────────────────────────────────────
 
-    async def _get(self, path: str, params: dict | None = None) -> dict | list | None:
-        """Send an authenticated GET request with automatic retry on transient errors."""
+    async def _get(self, path: str, params: dict | None = None) -> dict | list:
+        """Send an authenticated GET request with automatic retry on transient errors.
+
+        Raises ``MoviePilotError`` when the request fails (HTTP error or
+        connection failure after retries) so callers can surface the real
+        reason instead of silently treating it as an empty result.
+        """
         url = self._build_url(path)
         merged_params: dict[str, str] = {"token": self.api_token}
         if params:
@@ -160,10 +197,12 @@ class MoviePilotConnector:
             return await _retry_on_request_error(_do_get)
         except httpx.HTTPStatusError as e:
             logger.warning("MP HTTP error %s: %s — %s", e.response.status_code, url, e.response.text[:200])
-            return None
+            raise MoviePilotError(
+                f"MoviePilot 请求失败 (HTTP {e.response.status_code}): {e.response.text[:200]}"
+            ) from e
         except httpx.RequestError as e:
             logger.warning("MP request failed after %s retries: %s — %s", _MAX_RETRIES, url, e)
-            return None
+            raise MoviePilotError("无法连接 MoviePilot，请检查地址、端口和 API Token") from e
 
     async def _post(self, path: str, json_data: dict | None = None) -> dict | None:
         """Send an authenticated POST request with automatic retry on transient errors.
@@ -230,15 +269,24 @@ class MoviePilotConnector:
         Uses GET /api/v1/download/ as a health check — it requires
         authentication and returns a list (possibly empty).
         """
-        data = await self._get("/api/v1/download/")
-        if data is None:
-            return {"online": False, "message": "无法连接 MoviePilot，请检查地址、端口和 API Token"}
+        try:
+            data = await self._get("/api/v1/download/")
+        except MoviePilotError as e:
+            return {"online": False, "message": str(e)}
 
         if isinstance(data, list):
             return {
                 "online": True,
                 "message": "MoviePilot 连接成功",
                 "torrent_count": len(data),
+            }
+
+        # Some MoviePilot versions wrap the list in {"success": true, "data": [...]}
+        if isinstance(data, dict) and data.get("success") and isinstance(data.get("data"), list):
+            return {
+                "online": True,
+                "message": "MoviePilot 连接成功",
+                "torrent_count": len(data["data"]),
             }
 
         return {"online": False, "message": "MoviePilot 返回了意外的数据格式"}
@@ -278,9 +326,6 @@ class MoviePilotConnector:
             return []
 
         data = await self._get("/api/v1/search/title", params={"keyword": keyword.strip()})
-        if data is None:
-            logger.debug("MP search returned None (HTTP error)")
-            return []
 
         # The API wraps results in {"success": true, "data": [...]}
         raw_items = []
@@ -330,7 +375,7 @@ class MoviePilotConnector:
                 "downloadvolumefactor": dvf,
             })
 
-        return results
+        return self._dedupe_results(results)
 
     async def download(self, title: str, url: str, save_path: str = "") -> dict:
         """Send a torrent to MoviePilot's downloader (qBittorrent).
@@ -408,26 +453,129 @@ class MoviePilotConnector:
         GET /api/v1/download/
 
         Returns a list of torrents with fields normalised to match the
-        ``MoviePilotTorrent`` frontend type.
+        ``MoviePilotTorrent`` frontend type (progress is 0-1, speeds are
+        bytes/s, sizes are bytes).
         """
-        data = await self._get("/api/v1/download/")
-        if data is None:
+        try:
+            data = await self._get("/api/v1/download/")
+        except MoviePilotError:
+            # The download queue is polled frequently — treat failures as empty
+            # so the UI keeps its current state instead of erroring out.
             return []
 
+        # Some versions wrap the list in {"success": true, "data": [...]}
+        if isinstance(data, dict) and isinstance(data.get("data"), list):
+            data = data["data"]
         torrents = data if isinstance(data, list) else []
         return [
             {
                 "hash": t.get("hash", ""),
                 "name": t.get("name", ""),
-                "status": t.get("state", "unknown"),  # downloading/seeding/paused/error
-                "progress": t.get("progress", 0.0) / 100.0,  # API returns 0-100 → normalise to 0-1
-                "size": t.get("size", 0),
-                "downloaded": int(t.get("progress", 0) * t.get("size", 0) / 100.0),  # derive from progress
+                "status": self._normalize_torrent_state(t.get("state", "unknown")),
+                "progress": float(t.get("progress", 0.0) or 0.0) / 100.0,  # API returns 0-100 → normalise to 0-1
+                "size": int(t.get("size") or 0),
+                "downloaded": int(t.get("downloaded") or 0) or int((t.get("progress") or 0) * (t.get("size") or 0) / 100.0),
+                "uploaded": int(t.get("uploaded") or 0),
                 "dlspeed": _parse_mp_speed(t.get("dlspeed", "0B")),  # bytes/s
                 "ulspeed": _parse_mp_speed(t.get("ulspeed", "0B")),  # bytes/s
-                "seeders": 0,  # not provided by this API version
-                "save_path": t.get("save_path", ""),
+                "eta": int(t.get("eta") or 0),  # seconds remaining
+                "ratio": float(t.get("ratio") or 0.0),
+                "seeders": int(t.get("seeders") or t.get("num_seeds") or 0),
+                "leechers": int(t.get("leechers") or t.get("num_leechs") or 0),
+                "save_path": t.get("save_path") or t.get("download_path") or "",
             }
             for t in torrents
             if t.get("hash")
         ]
+
+    @staticmethod
+    def _normalize_torrent_state(state: str) -> str:
+        """Map a qBittorrent/Transmission state string to a compact status.
+
+        MoviePilot passes through downloader-specific state names, e.g.
+        ``stalledDL``/``queuedDL``/``metaDL``/``checkingDL`` (still downloading),
+        ``uploading``/``stalledUP``/``forcedUP`` (seeding), ``pausedDL``/
+        ``stoppedDL`` (paused). Normalise them so the frontend only has to
+        deal with four states: downloading / seeding / paused / error.
+        """
+        s = (state or "").strip().lower()
+        if "error" in s or "missing" in s:
+            return "error"
+        if s in ("paused", "pauseddl", "pausedup", "stopped", "stoppeddl", "stoppedup"):
+            return "paused"
+        if s in ("uploading", "seeding", "stalledup", "forcedup", "activeup", "queuedup", "checkingup"):
+            return "seeding"
+        if s in ("downloading", "stalleddl", "queueddl", "metadl", "checkingdl", "forceddl", "allocating", "moving"):
+            return "downloading"
+        # Any remaining *up state means upload/seed related
+        if s.endswith("up"):
+            return "seeding"
+        if s.startswith("download") or s.startswith("queued") or s.startswith("meta") or s.startswith("checking"):
+            return "downloading"
+        return "unknown"
+
+    async def pause(self, hash_string: str) -> dict:
+        """Pause a download task.
+
+        GET /api/v1/download/stop/{hashString}
+
+        Returns {"success": bool, "message": "..."}.
+        """
+        return await self._torrent_control(f"/api/v1/download/stop/{hash_string}")
+
+    async def resume(self, hash_string: str) -> dict:
+        """Resume a paused download task.
+
+        GET /api/v1/download/start/{hashString}
+
+        Returns {"success": bool, "message": "..."}.
+        """
+        return await self._torrent_control(f"/api/v1/download/start/{hash_string}")
+
+    async def delete(self, hash_string: str) -> dict:
+        """Remove a download task (without deleting the downloaded files).
+
+        DELETE /api/v1/download/{hashString}
+
+        Returns {"success": bool, "message": "..."}.
+        """
+        url = self._build_url(f"/api/v1/download/{hash_string}")
+        params = {"token": self.api_token}
+
+        async def _do_delete():
+            client = _get_client()
+            resp = await client.delete(url, params=params)
+            resp.raise_for_status()
+            return resp.json()
+
+        try:
+            data = await _retry_on_request_error(_do_delete)
+        except httpx.HTTPStatusError as e:
+            logger.warning("MP delete error %s: %s — %s", e.response.status_code, url, e.response.text[:300])
+            return {"success": False, "message": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
+        except httpx.RequestError as e:
+            logger.warning("MP delete failed after %s retries: %s — %s", _MAX_RETRIES, url, e)
+            return {"success": False, "message": "无法连接 MoviePilot，请检查地址、端口和 API Token"}
+
+        return self._parse_control_response(data)
+
+    async def _torrent_control(self, path: str) -> dict:
+        """Shared helper for GET-based torrent control endpoints (start/stop)."""
+        try:
+            data = await self._get(path)
+        except MoviePilotError as e:
+            return {"success": False, "message": str(e)}
+        return self._parse_control_response(data)
+
+    @staticmethod
+    def _parse_control_response(data) -> dict:
+        """Parse a MoviePilot control endpoint response.
+
+        Control endpoints return ``{"success": bool, "message": "...", "data": ...}``.
+        """
+        if isinstance(data, dict):
+            return {
+                "success": bool(data.get("success", False)),
+                "message": data.get("message") or ("操作成功" if data.get("success") else "操作失败"),
+            }
+        return {"success": False, "message": "MoviePilot 返回了意外的数据格式"}

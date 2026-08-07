@@ -14,6 +14,7 @@ from crud import (
     log_operation,
 )
 from database import get_db, init_user_database, delete_user_database
+from helpers import iso_utc
 from models import (
     LoginRequest,
     LoginResponse,
@@ -63,7 +64,7 @@ async def admin_create_user(
             id=user.id,
             username=user.username,
             is_admin=user.is_admin,
-            created_at=user.created_at.isoformat(),
+            created_at=iso_utc(user.created_at),
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -82,7 +83,7 @@ async def admin_list_users(
                 id=u.id,
                 username=u.username,
                 is_admin=u.is_admin,
-                created_at=u.created_at.isoformat(),
+                created_at=iso_utc(u.created_at),
             )
             for u in users
         ]

@@ -14,7 +14,10 @@
     "go": "前往",
     "watched": "已看",
     "up": "上移",
-    "down": "下移"
+    "down": "下移",
+    "open": "打开",
+    "refresh": "刷新",
+    "retry": "重试"
   },
   "header": {
     "switch_to_light": "切换到亮色主题",
@@ -32,7 +35,8 @@
     "manage": "管理",
     "stats": "数据",
     "top_rated": "排行榜",
-    "history": "历史"
+    "history": "历史",
+    "discover": "发现"
   },
   "watched": {
     "title": "我看过的",
@@ -466,7 +470,13 @@
     "refresh": "刷新状态",
     "refreshing": "刷新中...",
     "health_failed": "健康检查失败",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "zhipu_guide_title": "免费获取 GLM-4-Flash API Key",
+    "zhipu_guide_step1": "打开 open.bigmodel.cn，用手机号注册登录（无需绑卡）",
+    "zhipu_guide_step2": "进入控制台 → API Keys → 创建 API Key",
+    "zhipu_guide_step3": "复制 Key 粘贴到上方输入框，点击保存",
+    "zhipu_guide_open": "打开智谱开放平台",
+    "zhipu_guide_free": "永久免费 · GLM-4-Flash"
   },
   "stars": {
     "label": "{{value}} 分"
@@ -643,10 +653,10 @@
   "media_server": {
     "tab_title": "媒体服务器",
     "title": "媒体服务器",
-    "subtitle": "连接 Jellyfin / 飞牛影视 媒体服务器",
+    "subtitle": "连接 Jellyfin / Emby / Plex / 飞牛影视 媒体服务器",
     "add_server": "添加服务器",
     "no_servers": "还没有添加媒体服务器",
-    "no_servers_hint": "添加你的 Jellyfin 或飞牛影视服务器，管理媒体库",
+    "no_servers_hint": "添加 Jellyfin、Emby、Plex 或飞牛影视服务器来管理媒体库",
     "server_type": "服务器类型",
     "server_name": "服务器名称",
     "server_name_placeholder": "例如：我的飞牛",
@@ -654,7 +664,7 @@
     "host_placeholder": "例如：192.168.1.100",
     "port": "端口",
     "api_key": "API Key",
-    "api_key_placeholder": "填写 Jellyfin API Key",
+    "api_key_placeholder": "输入 API Key / Token",
     "use_ssl": "使用 HTTPS",
     "verify": "测试连接",
     "verifying": "测试中...",
@@ -703,7 +713,9 @@
     "sync_library": "同步媒体库",
     "last_synced": "上次同步",
     "load_failed": "加载服务器列表失败",
-    "save_failed": "保存失败"
+    "save_failed": "保存失败",
+    "server_type_emby": "Emby",
+    "server_type_plex": "Plex"
   },
   "moviepilot": {
     "tab_title": "PT 下载",
@@ -746,12 +758,24 @@
     "seeders": "做种数",
     "status": "状态",
     "name": "名称",
+    "eta": "剩余",
+    "ratio": "分享率",
+    "pause": "暂停",
+    "resume": "继续",
+    "action_paused": "已暂停下载任务",
+    "action_resumed": "已恢复下载任务",
+    "action_deleted": "已删除下载任务",
+    "action_failed": "操作失败：{{message}}",
+    "delete_torrent_title": "删除下载任务",
+    "delete_torrent_desc": "确定要删除「{{name}}」吗？下载的文件会保留，仅移除下载任务。",
     "fill_required": "请填写完整信息",
     "overview": "概览",
     "search_pt": "搜索 PT",
     "search_title": "搜索 PT 站点",
     "search_placeholder": "在 PT 站点搜索种子...",
     "searching": "搜索中...",
+    "search_failed": "搜索失败：{{message}}",
+    "search_failed_title": "搜索失败",
     "no_results": "没有找到匹配「{{query}}」的种子",
     "no_results_hint": "试试其他关键词或检查 MoviePilot 连接",
     "site": "站点",
@@ -764,6 +788,9 @@
     "confirm_download_desc": "将该种子发送到 MoviePilot 下载？",
     "save_path": "保存路径",
     "save_path_placeholder": "可选：/downloads/movies",
+    "only_seeders": "仅看有做种",
+    "result_count": "共 {{count}} 个结果",
+    "already_added": "已添加",
     "unknown_error": "未知错误，请检查 MoviePilot 日志或 qBittorrent 连接状态",
     "other": "其他"
   },
@@ -878,5 +905,24 @@
     "available": "新版本已就绪，刷新以应用更新",
     "update": "立即更新",
     "dismiss": "稍后"
+  },
+  "discover": {
+    "title": "发现",
+    "subtitle": "热门趋势、正在热映与即将上映 — 一键加入想看",
+    "section_trending": "热门趋势",
+    "section_now_playing": "正在热映",
+    "section_upcoming": "即将上映",
+    "section_popular": "人气榜",
+    "section_top_rated": "高分榜",
+    "type_all": "全部",
+    "type_movie": "电影",
+    "type_tv": "剧集",
+    "window_day": "今日",
+    "window_week": "本周",
+    "result_count": "共 {{count}} 部",
+    "empty": "暂无内容，试试其他分类",
+    "add": "想看",
+    "added": "已添加",
+    "load_more": "加载更多"
   }
 }

@@ -17,6 +17,7 @@ import { SearchInput } from "../SearchInput";
 import FadeContent from "../FadeContent";
 import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server, BrainCircuit } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
+import { localDateToISO } from "../../utils/date";
 import { useSort } from "../../hooks/useSort";
 import { isAbortError, getErrMsg } from "../../lib/utils";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
@@ -355,7 +356,9 @@ export function ManageTab() {
         break;
       }
 
-      case "created_at": updatedFields.created_at = value || undefined; break;
+      // The date input shows the LOCAL date; persist it as local midnight so
+      // it round-trips back to the same day in any timezone.
+      case "created_at": updatedFields.created_at = value ? localDateToISO(value) : undefined; break;
     }
     const currentVal = movie[field as keyof MediaDetail];
     const updatedVal = updatedFields[field as keyof InlineEditFields];
@@ -789,7 +792,7 @@ export function ManageTab() {
         open={aiInferConfirm !== null}
         onClose={handleAiInferDismiss}
         title={`AI 推断结果确认`}
-        description={aiInferConfirm ? `「${aiInferConfirm.title}」的 AI 推断结果与现有数据不同，请选择是否覆盖` : ""}
+        description={aiInferConfirm ? `请确认是否应用「${aiInferConfirm.title}」的 AI 推断结果` : ""}
         footer={
           <div className="flex items-center gap-2 w-full justify-end">
             <button className="btn btn-ghost btn-sm" onClick={handleAiInferDismiss}>

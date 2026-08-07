@@ -13,7 +13,8 @@ from crud.moviepilot import (
     delete_mp_connection,
 )
 from crud import log_operation
-from moviepilot.connector import MoviePilotConnector
+from helpers import iso_utc
+from moviepilot.connector import MoviePilotConnector, MoviePilotError
 
 router = APIRouter(prefix="/api/moviepilot", tags=["moviepilot"])
 
@@ -30,8 +31,8 @@ def _strip_mp_config(record) -> dict:
         "port": record.port,
         "use_ssl": record.use_ssl,
         "is_active": record.is_active,
-        "last_connected": record.last_connected.isoformat() if record.last_connected else None,
-        "created_at": record.created_at.isoformat(),
+        "last_connected": iso_utc(record.last_connected, None),
+        "created_at": iso_utc(record.created_at),
         "has_api_token": bool(record.api_token),
     }
 
@@ -186,13 +187,21 @@ async def search_torrents(
     """Search torrents across all PT sites via MoviePilot.
 
     Query param ``q`` is the search keyword (title + year).
+
+    Returns ``{"results": [...], "error": null}`` on success, or
+    ``{"results": [], "error": "..."}`` with a user-friendly message when
+    MoviePilot is unreachable / returns an HTTP error — so the frontend can
+    distinguish "no torrents found" from "search failed".
     """
     if not q.strip():
-        return {"results": []}
+        return {"results": [], "error": None}
 
     connector = _get_connector_from_db(current_user["id"], db)
-    results = await connector.search(q)
-    return {"results": results}
+    try:
+        results = await connector.search(q)
+        return {"results": results, "error": None}
+    except MoviePilotError as e:
+        return {"results": [], "error": str(e)}
 
 
 @router.post("/download")
@@ -242,3 +251,60 @@ async def list_torrents(
     connector = _get_connector_from_db(current_user["id"], db)
     torrents = await connector.get_torrents()
     return {"torrents": torrents}
+
+
+@router.post("/torrents/{hash_string}/pause")
+async def pause_torrent(
+    hash_string: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Pause a download task."""
+    if not hash_string.strip():
+        raise HTTPException(status_code=400, detail="缺少种子 hash")
+    connector = _get_connector_from_db(current_user["id"], db)
+    result = await connector.pause(hash_string.strip())
+    log_operation(
+        current_user["id"], current_user["username"],
+        "mp_pause", f"暂停下载任务: {hash_string[:12]}",
+        db=db,
+    )
+    return result
+
+
+@router.post("/torrents/{hash_string}/resume")
+async def resume_torrent(
+    hash_string: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Resume a paused download task."""
+    if not hash_string.strip():
+        raise HTTPException(status_code=400, detail="缺少种子 hash")
+    connector = _get_connector_from_db(current_user["id"], db)
+    result = await connector.resume(hash_string.strip())
+    log_operation(
+        current_user["id"], current_user["username"],
+        "mp_resume", f"继续下载任务: {hash_string[:12]}",
+        db=db,
+    )
+    return result
+
+
+@router.delete("/torrents/{hash_string}")
+async def delete_torrent(
+    hash_string: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+):
+    """Remove a download task (files kept)."""
+    if not hash_string.strip():
+        raise HTTPException(status_code=400, detail="缺少种子 hash")
+    connector = _get_connector_from_db(current_user["id"], db)
+    result = await connector.delete(hash_string.strip())
+    log_operation(
+        current_user["id"], current_user["username"],
+        "mp_delete", f"删除下载任务: {hash_string[:12]}",
+        db=db,
+    )
+    return result

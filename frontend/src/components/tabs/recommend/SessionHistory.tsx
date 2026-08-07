@@ -1,11 +1,12 @@
 import type { TFunction } from "i18next";
-import { History, Brain, Bot, Clock, ChevronRight, Trash2, Film, Percent } from "lucide-react";
+import { History, Clock, ChevronRight, Trash2, Film, Percent } from "lucide-react";
 import type { DBSession, DBSessionDetail, Recommendation } from "../../../types";
 import FadeContent from "../../FadeContent";
 import { Modal } from "../../Modal";
 import { formatDateTime } from "../../../utils/date";
 import { translateGenres } from "../../../utils/genre";
 import CountUp from "../../CountUp";
+import { ModelIcon, ModelBadge, getModelLabel } from "../../../lib/models";
 
 interface SessionHistoryProps {
   sessions: DBSession[];
@@ -93,16 +94,12 @@ export function SessionHistory({
                         border: `1px solid ${s.model === "deepseek" ? "var(--primary-20)" : "rgba(16, 185, 129, 0.2)"}`,
                       }}
                     >
-                      {s.model === "deepseek" ? (
-                        <Brain size={14} className="text-primary" />
-                      ) : (
-                        <Bot size={14} style={{ color: "#10b981" }} />
-                      )}
+                      <ModelIcon model={s.model} size={14} className={s.model === "deepseek" ? "text-primary" : "text-emerald-500"} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-[510]">
-                          {s.model === "deepseek" ? "DeepSeek" : "OpenAI"}
+                          {getModelLabel(s.model)}
                         </span>
                         <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
                         <span className="text-xs text-muted-foreground">
@@ -152,7 +149,7 @@ export function SessionHistory({
             </button>
             <div className="flex items-center gap-2 ml-2 flex-wrap">
               <span className="text-sm font-medium">
-                {selectedSession.model === "deepseek" ? <><Brain size={14} className="inline mr-1" />DeepSeek</> : <><Bot size={14} className="inline mr-1" />OpenAI</>}
+                <ModelBadge model={selectedSession.model} />
               </span>
               <span className="w-1 h-1 rounded-full" style={{ background: "var(--fg-dim)" }} />
               <span className="text-xs text-muted-foreground">

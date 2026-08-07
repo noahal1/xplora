@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../types";
 import type { TVSeriesGroup } from "../../utils/groupTVSeries";
 import { formatSeasonLabel } from "../../utils/groupTVSeries";
+import { formatDate } from "../../utils/date";
 import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import {
@@ -78,8 +79,8 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
   const dateRange =
     dates.length > 0
       ? dates.length === 1
-        ? dates[0].slice(0, 10)
-        : `${dates[0].slice(0, 10)}…`
+        ? formatDate(dates[0])
+        : `${formatDate(dates[0])}…`
       : "—";
   const genre = firstSeason.genre;
   const hasEnrichError = group.seasons.some((s) => s.scrape_error && !s.poster_url);
@@ -302,7 +303,7 @@ export const TVSeriesManageRow = memo(function TVSeriesManageRow({
             onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}
             tdClassName="!py-1">
             <span className="text-muted-foreground text-[10px] whitespace-nowrap tabular-nums">
-              {season.created_at ? season.created_at.slice(0, 10) : "—"}
+              {season.created_at ? formatDate(season.created_at) : "—"}
             </span>
           </TableEditableCell>
 

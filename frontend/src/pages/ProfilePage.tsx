@@ -32,9 +32,12 @@ interface UpdateInfo {
   error: string | null;
 }
 
-const API_KEY_META: Record<string, { label: string; docs: string; placeholder: string }> = {
+const API_KEY_META: Record<string, { label: string; docs: string; placeholder: string; guide?: boolean }> = {
   deepseek: { label: "DeepSeek AI", docs: "https://platform.deepseek.com/", placeholder: "sk-" },
   openai: { label: "OpenAI", docs: "https://platform.openai.com/", placeholder: "sk-proj-" },
+  claude: { label: "Claude (Anthropic)", docs: "https://console.anthropic.com/", placeholder: "sk-ant-" },
+  gemini: { label: "Gemini (Google)", docs: "https://aistudio.google.com/", placeholder: "AIza" },
+  zhipu: { label: "Zhipu GLM (Free)", docs: "https://open.bigmodel.cn/", placeholder: "", guide: true },
   tmdb: { label: "TMDB", docs: "https://www.themoviedb.org/settings/api", placeholder: "" },
 };
 
@@ -396,7 +399,7 @@ export function ProfilePage() {
 
         {health && (
           <div className="space-y-2">
-            {Object.entries(API_KEY_META).map(([key, { label, docs, placeholder }]) => {
+            {Object.entries(API_KEY_META).map(([key, { label, docs, placeholder, guide }]) => {
               const configured = health.api_keys?.[key];
               const isEditing = keyConfigOpen;
               return (
@@ -441,6 +444,45 @@ export function ProfilePage() {
                           </a>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Free-key setup guide (e.g. Zhipu GLM) shown to admins when not configured */}
+                  {guide && !configured && user?.is_admin && (
+                    <div className="mt-2.5 pt-2.5 border-t border-border/60">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <p className="text-[11px] font-medium text-foreground flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                          </svg>
+                          {t("profile.zhipu_guide_title")}
+                        </p>
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-green/10 text-green shrink-0">
+                          {t("profile.zhipu_guide_free")}
+                        </span>
+                      </div>
+                      <ol className="space-y-1 text-[11px] text-muted-foreground mb-2">
+                        {[1, 2, 3].map((n) => (
+                          <li key={n} className="flex items-start gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-accent text-foreground/70 text-[9px] font-medium flex items-center justify-center shrink-0 mt-px">
+                              {n}
+                            </span>
+                            <span>{t(`profile.zhipu_guide_step${n}`)}</span>
+                          </li>
+                        ))}
+                      </ol>
+                      <a
+                        href={docs}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 h-7 px-3 rounded-lg text-[11px] font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+                      >
+                        {t("profile.zhipu_guide_open")}
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                      </a>
                     </div>
                   )}
                 </div>

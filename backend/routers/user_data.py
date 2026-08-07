@@ -11,6 +11,7 @@ from __version__ import VERSION
 from auth import get_current_user
 from deps import get_user_db
 from crud import log_operation, save_media, save_wishlist_items
+from helpers import iso_utc
 from models import MediaRating, WishlistItem
 from scraper import async_background_enrich_movies
 
@@ -37,7 +38,7 @@ async def export_my_data(
             "id": s.id,
             "model": s.model,
             "source_count": s.source_count,
-            "created_at": s.created_at.isoformat(),
+            "created_at": iso_utc(s.created_at),
             "recommendations": [
                 {"title": r.title, "year": r.year, "genre": r.genre, "reason": r.reason, "confidence": r.confidence}
                 for r in recs
@@ -56,7 +57,7 @@ async def export_my_data(
                 "year": m.year,
                 "genre": m.genre,
                 "status": m.status,
-                "created_at": m.created_at.isoformat(),
+                "created_at": iso_utc(m.created_at),
             }
             for m in movies
         ],
@@ -68,8 +69,8 @@ async def export_my_data(
                 "description": p.description,
                 "cover_url": p.cover_url,
                 "share_token": p.share_token,
-                "created_at": p.created_at.isoformat(),
-                "updated_at": p.updated_at.isoformat(),
+                "created_at": iso_utc(p.created_at),
+                "updated_at": iso_utc(p.updated_at),
                 "items": [
                     {
                         "title": it.title,

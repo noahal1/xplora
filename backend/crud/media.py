@@ -1,14 +1,14 @@
 """Media item CRUD operations (user-scoped)."""
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
 
 from sqlalchemy import func as sa_func
 from sqlmodel import Session, select, delete as sa_delete
 
 from database import get_session
-from helpers import NORMALIZE_GENRE, REVERSE_GENRE_MAP
+from helpers import NORMALIZE_GENRE, REVERSE_GENRE_MAP, iso_utc
 from models import MediaItemRecord, MediaRating, WishlistItem
 
 
@@ -939,12 +939,17 @@ def _media_to_dict(r: MediaItemRecord) -> dict:
         "pinned": r.pinned,
         "hidden_from_top": r.hidden_from_top,
         "sort_order": r.sort_order,
-        "created_at": r.created_at.isoformat() if r.created_at else "",
+        "created_at": iso_utc(r.created_at),
     }
 
 
-def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
+def get_media_stats(user_id: int, tz_offset: int = 0, db: Optional[Session] = None) -> dict:
     """Return aggregated statistics for a user's media library.
+
+    ``tz_offset`` is the client's UTC offset in minutes (e.g. ``480`` for
+    UTC+8). It is only used to bucket the monthly trend by the user's local
+    month instead of UTC, so items added in the early hours of a month
+    don't leak into the previous month's bucket.
 
     Returns a dict with:
     - total_watched / total_wishlist / total
@@ -1037,10 +1042,12 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
             for t, c in type_counter.most_common()
         ]
 
-        # ── Monthly trend (by created_at) ─────────────────────
+        # ── Monthly trend (by created_at, bucketed in the client's
+        #    local timezone so month boundaries match what the user sees) ──
         month_counter: Counter = Counter()
         for r in records:
-            key = r.created_at.strftime("%Y-%m")
+            local_created = r.created_at + timedelta(minutes=tz_offset)
+            key = local_created.strftime("%Y-%m")
             month_counter[key] += 1
         monthly_trend = [
             {"month": m, "count": c}
@@ -1090,7 +1097,7 @@ def get_media_stats(user_id: int, db: Optional[Session] = None) -> dict:
                 {
                     "title": r.title,
                     "status": r.status,
-                    "created_at": r.created_at.isoformat(),
+                    "created_at": iso_utc(r.created_at),
                 }
                 for r in recent
             ],

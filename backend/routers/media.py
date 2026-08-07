@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from auth import get_current_user
 from deps import get_user_db
-from helpers import parse_movie_data, NORMALIZE_GENRE, NORMALIZE_COUNTRY
+from helpers import parse_movie_data, NORMALIZE_GENRE, NORMALIZE_COUNTRY, iso_utc
 from models import (
     MediaData,
     MediaRating,
@@ -55,11 +55,12 @@ router = APIRouter(prefix="/api", tags=["media"])
 
 @router.get("/media/stats")
 async def media_stats(
+    tz_offset: int = Query(0, description="Client UTC offset in minutes (e.g. 480 for UTC+8), used for monthly trend bucketing"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
     """Return aggregated statistics for the current user's media library."""
-    return get_media_stats(current_user["id"], db=db)
+    return get_media_stats(current_user["id"], tz_offset=tz_offset, db=db)
 
 
 # ── Top Rated ────────────────────────────────────────────────────────
@@ -328,7 +329,7 @@ async def list_media(
                 "season_number": r.season_number,
                 "episode_count": r.episode_count,
                 "series_poster_url": r.series_poster_url,
-                "created_at": r.created_at.isoformat(),
+                "created_at": iso_utc(r.created_at),
             }
             for r in records
         ],
@@ -848,9 +849,11 @@ async def ai_infer_single(
 
     1. **Infer only** (no ``apply`` in body):
        - Always calls AI regardless of existing data
-       - If AI result differs from existing → returns ``needs_review: true``
-         with both existing + AI values (no DB write)
-       - If fields are missing → auto-applies AI result (backward-compatible)
+       - If AI suggests any change — a conflict with existing data OR a
+         missing-field fill — returns ``needs_review: true`` with both
+         existing + AI values (no DB write); nothing is applied silently
+       - If AI returned nothing or its suggestion already matches the
+         existing data → ``needs_review: false``
 
     2. **Apply confirmed fields** (``{"apply": {"genre": "...", "country": "..."}}``):
        - Directly writes the specified fields without calling AI
@@ -911,23 +914,27 @@ async def ai_infer_single(
     ai_genre = result.get("genre")
     ai_country = result.get("country")
 
-    # Check if existing data differs from AI suggestion
-    # Normalize both sides so Chinese ↔ English doesn't trigger a false diff
+    # Decide whether the AI suggestion would change anything.
+    # Normalize both sides so Chinese ↔ English doesn't trigger a false diff.
     normalized_existing_genre = _normalize_genre_str(existing_genre) if existing_genre else None
-    genre_differs = (
+    genre_conflict = (
         existing_genre and ai_genre
         and existing_genre != ai_genre
         and normalized_existing_genre != ai_genre
     )
     normalized_existing_country = _normalize_country_str(existing_country)
-    country_differs = (
+    country_conflict = (
         existing_country and ai_country
         and existing_country != ai_country
         and normalized_existing_country != ai_country
     )
+    genre_fill = not existing_genre and bool(ai_genre)
+    country_fill = not existing_country and bool(ai_country)
 
-    if genre_differs or country_differs:
-        # Needs review — return both values, don't write
+    if genre_conflict or country_conflict or genre_fill or country_fill:
+        # Always confirm before writing ANY AI result — both conflicts and
+        # missing-field fills go through the review dialog so nothing is
+        # applied silently. No DB write happens here.
         return {
             "id": media_item.id,
             "title": media_item.title,
@@ -939,52 +946,23 @@ async def ai_infer_single(
             "ai_country": ai_country,
             "needs_review": True,
             "updated": False,
-            "message": "AI 推断结果与现有数据不同，请确认",
+            "message": "请确认 AI 推断结果",
         }
 
-    # Auto-apply for missing fields (no existing data to overwrite)
-    needs_genre = not existing_genre
-    needs_country = not existing_country
-    payload = {}
-    if needs_genre and ai_genre:
-        payload["genre"] = ai_genre
-    if needs_country and ai_country:
-        payload["country"] = ai_country
-
-    updated = False
-    if payload:
-        try:
-            updated_record = db_update_media(
-                media_id=media_id,
-                user_id=current_user["id"],
-                db=db,
-                **payload,
-            )
-            if updated_record:
-                updated = True
-                log_operation(
-                    current_user["id"], current_user["username"],
-                    "ai_infer_single",
-                    f"AI 推断: {media_item.title} → genre={payload.get('genre', '—')}, country={payload.get('country', '—')}",
-                    db=db,
-                )
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
-
-    final_genre = payload.get("genre") if needs_genre else existing_genre
-    final_country = payload.get("country") if needs_country else existing_country
+    # Nothing to change: AI returned no reliable result, or its suggestion
+    # already matches the existing data (possibly after normalization).
     return {
         "id": media_item.id,
         "title": media_item.title,
-        "genre": final_genre,
-        "country": final_country,
+        "genre": existing_genre,
+        "country": existing_country,
         "existing_genre": existing_genre,
         "existing_country": existing_country,
         "ai_genre": ai_genre,
         "ai_country": ai_country,
         "needs_review": False,
-        "updated": updated,
-        "message": "AI 推断完成" if updated else "AI 未能推断出可靠结果",
+        "updated": False,
+        "message": "AI 未能推断出可靠结果" if not (ai_genre or ai_country) else "现有数据与 AI 推断一致，无需更改",
     }
 
 
@@ -1084,7 +1062,7 @@ async def media_diagnostics(
             "season_number": r.season_number,
             "episode_count": r.episode_count,
             "series_poster_url": r.series_poster_url,
-            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "created_at": iso_utc(r.created_at),
         })
 
     # Sort: by missing count desc, then by title

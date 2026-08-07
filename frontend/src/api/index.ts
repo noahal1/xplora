@@ -246,35 +246,6 @@ export async function deleteSession(id: number): Promise<void> {
   await fetchJSON(`${API_BASE}/sessions/${id}`, { method: "DELETE", headers: getAuthHeaders() });
 }
 
-/** Export all data as downloadable JSON (admin only) */
-export async function exportAllData(): Promise<void> {
-  const token = localStorage.getItem("xplora-token");
-  const res = await fetch(`${API_BASE}/admin/export`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.status === 401) {
-    localStorage.removeItem("xplora-token");
-    window.location.href = "/login";
-    throw new Error("登录已过期");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "导出失败" }));
-    throw new Error(err.detail || "导出失败");
-  }
-  // Trigger file download
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  const disposition = res.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename="?([^";]+)"?/);
-  a.download = match ? match[1] : `xplora-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 /** Manually rematch a media item to a specific search result */
 export async function rematchMedia(
   mediaId: number,
@@ -300,12 +271,19 @@ export async function searchMedia(
   return fetchJSON(`${API_BASE}/media/search?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
-/** Get full media details from external source by ID */
+/** Get full media details from external source by ID.
+ *
+ * Pass ``media_type`` ("movie" | "tv") when known — the backend routes to
+ * TMDB ``/movie/{id}`` vs ``/tv/{id}`` based on it. Without it TV shows
+ * would be looked up in the movie namespace and fail (404 → 502).
+ */
 export async function getExternalDetail(
   source: string,
-  source_id: string
+  source_id: string,
+  media_type?: string
 ): Promise<ExternalDetail> {
   const qs = new URLSearchParams({ source, source_id });
+  if (media_type === "movie" || media_type === "tv") qs.set("media_type", media_type);
   return fetchJSON(`${API_BASE}/media/detail?${qs.toString()}`, { headers: getAuthHeaders() });
 }
 
@@ -505,9 +483,14 @@ export async function getHealth(): Promise<{
   return fetchJSON(`${API_BASE}/health`);
 }
 
-/** Fetch aggregated statistics for the current user's media library */
+/** Fetch aggregated statistics for the current user's media library.
+ *
+ * Sends the browser's UTC offset so the backend buckets the monthly trend
+ * by the user's local month instead of UTC.
+ */
 export async function fetchStats(): Promise<StatsData> {
-  return fetchJSON(`${API_BASE}/media/stats`, { headers: getAuthHeaders() });
+  const tzOffset = -new Date().getTimezoneOffset(); // minutes east of UTC, e.g. 480 for UTC+8
+  return fetchJSON(`${API_BASE}/media/stats?tz_offset=${tzOffset}`, { headers: getAuthHeaders() });
 }
 
 /** Fetch top rated movies with pin/hide status */
@@ -921,8 +904,13 @@ export async function testMPConnection(
   });
 }
 
-/** Search torrents via MoviePilot */
-export async function searchMPTorrents(q: string): Promise<{ results: MPSearchResult[] }> {
+/** Search torrents via MoviePilot.
+ *
+ * Returns ``results`` plus an optional ``error`` message — when MoviePilot is
+ * unreachable the backend returns ``{ results: [], error: "..." }`` so the
+ * caller can distinguish "no torrents found" from "search failed".
+ */
+export async function searchMPTorrents(q: string): Promise<{ results: MPSearchResult[]; error?: string | null }> {
   const qs = new URLSearchParams({ q });
   return fetchJSON(`${API_BASE}/moviepilot/search?${qs.toString()}`, { headers: getAuthHeaders() });
 }
@@ -943,6 +931,48 @@ export async function downloadMPTorrent(
 /** Get download queue from MoviePilot */
 export async function getMPTorrents(): Promise<{ torrents: MoviePilotTorrent[] }> {
   return fetchJSON(`${API_BASE}/moviepilot/torrents`, { headers: getAuthHeaders() });
+}
+
+/** Pause a download task in MoviePilot */
+export async function pauseMPTorrent(hash: string): Promise<{ success: boolean; message: string }> {
+  return fetchJSON(`${API_BASE}/moviepilot/torrents/${encodeURIComponent(hash)}/pause`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Resume a paused download task in MoviePilot */
+export async function resumeMPTorrent(hash: string): Promise<{ success: boolean; message: string }> {
+  return fetchJSON(`${API_BASE}/moviepilot/torrents/${encodeURIComponent(hash)}/resume`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+}
+
+/** Remove a download task from MoviePilot (downloaded files are kept) */
+export async function deleteMPTorrent(hash: string): Promise<{ success: boolean; message: string }> {
+  return fetchJSON(`${API_BASE}/moviepilot/torrents/${encodeURIComponent(hash)}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+// ── Discover (TMDB feeds) API ─────────────────────────────
+
+/** Fetch a TMDB discovery feed (trending / now_playing / upcoming / popular / top_rated). */
+export async function getDiscover(params: {
+  section?: string;
+  media_type?: string;
+  window?: string;
+  page?: number;
+  signal?: AbortSignal;
+}): Promise<{ section: string; results: MediaSearchResult[] }> {
+  const qs = new URLSearchParams();
+  if (params.section) qs.set("section", params.section);
+  if (params.media_type) qs.set("media_type", params.media_type);
+  if (params.window) qs.set("window", params.window);
+  if (params.page) qs.set("page", String(params.page));
+  return fetchJSON(`${API_BASE}/discover?${qs.toString()}`, { headers: getAuthHeaders(), signal: params.signal });
 }
 
 /** Change current user's password */

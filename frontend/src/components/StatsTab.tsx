@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { BarChart3, Star, RefreshCw, Calendar, TrendingUp, Clock } from "lucide-react";
 import { translateGenreName } from "../utils/genre";
+import { formatDate } from "../utils/date";
 import CountUp from "./CountUp";
 import FadeContent from "./FadeContent";
 import { getErrMsg } from "../lib/utils";
@@ -514,7 +515,7 @@ export function StatsTab() {
               >
                 <div className="space-y-0.5">
                   {s.recent_additions.slice(0, 7).map((item, i) => (
-                    <RecentRow key={i} status={item.status as "watched" | "wish"} title={item.title} date={item.created_at?.slice(0, 10) || ""} />
+                    <RecentRow key={i} status={item.status as "watched" | "wish"} title={item.title} date={item.created_at ? formatDate(item.created_at) : ""} />
                   ))}
                 </div>
               </ChartCard>

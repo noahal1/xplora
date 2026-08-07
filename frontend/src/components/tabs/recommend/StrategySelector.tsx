@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Star, Brain, Bot, Sparkles, Check, ListTodo } from "lucide-react";
+import { Star, Sparkles, Check, ListTodo } from "lucide-react";
 import type { TFunction } from "i18next";
 import { STRATEGIES } from "./strategies";
+import { MODEL_ORDER, MODEL_CATALOG, DEFAULT_MODELS, getModelShortLabel } from "../../../lib/models";
 import { MediaTypeFilter } from "../../MediaTypeFilter";
 import { GenreFilter } from "../../GenreFilter";
 import { SearchInput } from "../../SearchInput";
@@ -13,6 +14,8 @@ interface StrategySelectorProps {
   onStrategyChange: (id: string) => void;
   selectedModel: string;
   onModelChange: (model: string) => void;
+  /** Model ids that are available (configured AI keys + always-available local models). */
+  availableModels?: string[];
   recCount: number;
   onRecCountChange: (n: number) => void;
   strategyMood: string;
@@ -32,7 +35,7 @@ interface StrategySelectorProps {
 
 export function StrategySelector({
   strategy, onStrategyChange,
-  selectedModel, onModelChange,
+  selectedModel, onModelChange, availableModels,
   recCount, onRecCountChange,
   strategyMood, onMoodChange,
   strategyPlaylistId, onPlaylistChange,
@@ -238,25 +241,24 @@ export function StrategySelector({
       {/* ── Model + Count + Generate ─────────────────────── */}
       <div className="flex flex-col items-center gap-4 mb-2">
         {/* Model toggle */}
-        <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}>
-          {[
-            { value: "deepseek", icon: Brain },
-            { value: "openai", icon: Bot },
-          ].map((opt) => {
-            const Icon = opt.icon;
+        <div className="flex flex-wrap items-center justify-center gap-1 rounded-lg p-0.5" style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)" }}>
+          {(availableModels ?? MODEL_ORDER.filter((m) => DEFAULT_MODELS.includes(m))).map((modelId) => {
+            const meta = MODEL_CATALOG[modelId];
+            if (!meta) return null;
+            const Icon = meta.icon;
             return (
               <button
-                key={opt.value}
-                onClick={() => onModelChange(opt.value)}
+                key={modelId}
+                onClick={() => onModelChange(modelId)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
                 style={
-                  selectedModel === opt.value
+                  selectedModel === modelId
                     ? { background: "var(--seed-primary)", color: "#0f0f0f" }
                     : { color: "var(--fg-muted)" }
                 }
               >
                 <Icon size={13} />
-                <span>{opt.value === "deepseek" ? "DeepSeek" : "GPT-4o"}</span>
+                <span>{getModelShortLabel(modelId)}</span>
               </button>
             );
           })}

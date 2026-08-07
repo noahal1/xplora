@@ -93,7 +93,7 @@ export function WishlistSearchModal({ open, onClose, onAddSuccess, existingTitle
     setDetailError("");
     setDetailLoading(true);
     try {
-      const data = await api.getExternalDetail(result.source, result.source_id);
+      const data = await api.getExternalDetail(result.source, result.source_id, result.media_type);
       setDetailData(data);
     } catch (err: unknown) { setDetailError(getErrMsg(err)); }
     finally { setDetailLoading(false); }

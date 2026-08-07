@@ -93,11 +93,14 @@ docker compose up -d
 |------|------|------|
 | `DEEPSEEK_API_KEY` | 否\* | DeepSeek AI 密钥 |
 | `OPENAI_API_KEY` | 否\* | OpenAI AI 密钥 |
+| `CLAUDE_API_KEY` | 否\* | Anthropic Claude 密钥 |
+| `GEMINI_API_KEY` | 否\* | Google Gemini 密钥 |
+| `ZHIPU_API_KEY` | 否\* | 智谱 GLM-4-Flash（**永久免费**） |
 | `TMDB_API_KEY` | **推荐** | TMDB API 密钥（元数据、海报） |
 | `JWT_SECRET` | 否 | 自动生成；生产环境建议自定义 |
 | `DATABASE_URL` | 否 | 默认 SQLite；也支持 PostgreSQL |
 
-*\* AI 推荐功能至少需要配置一个 AI 密钥。*
+*\* AI 推荐功能至少需要配置一个 AI 密钥（或使用免密钥的 Ollama 本地模型 / 纯 TMDB 本地推荐）。*
 
 ### Interactive API Docs / 交互式 API 文档
 

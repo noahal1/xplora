@@ -10,6 +10,7 @@ from crud import (
     delete_session as db_delete_session,
 )
 from deps import get_user_db
+from helpers import iso_utc
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -32,7 +33,7 @@ async def list_sessions(
                 "model": s.model,
                 "source_count": s.source_count,
                 "recommendation_count": len(s.recommendations),
-                "created_at": s.created_at.isoformat(),
+                "created_at": iso_utc(s.created_at),
             }
             for s in sessions
         ],
@@ -56,7 +57,7 @@ async def get_session(
         "id": session.id,
         "model": session.model,
         "source_count": session.source_count,
-        "created_at": session.created_at.isoformat(),
+        "created_at": iso_utc(session.created_at),
         "recommendations": [
             {
                 "id": r.id,

@@ -7,11 +7,14 @@ import {
   deleteMPConfig,
   testMPConnection,
   getMPTorrents,
+  pauseMPTorrent,
+  resumeMPTorrent,
+  deleteMPTorrent,
 } from "../../api";
 import type { MoviePilotConfig as MPConfig, MoviePilotTorrent } from "../../types";
 import { Modal } from "../Modal";
 import FadeContent from "../FadeContent";
-import { getErrMsg, formatBytes, formatSpeed, formatProgress, getStatusLabel, getStatusColor } from "../../lib/utils";
+import { getErrMsg, formatBytes, formatSpeed, formatProgress, formatEta, formatRatio, getStatusLabel, getStatusColor } from "../../lib/utils";
 import {
   Download,
   CheckCircle2,
@@ -21,6 +24,10 @@ import {
   Upload,
   HardDrive,
   AlertTriangle,
+  Pause,
+  Play,
+  RefreshCw,
+  Clock,
 } from "lucide-react";
 
 // ── Component ─────────────────────────────────────────────────────
@@ -44,6 +51,11 @@ export function MoviePilotConfig() {
   // ── Torrent queue ──
   const [torrents, setTorrents] = useState<MoviePilotTorrent[]>([]);
   const [loadingTorrents, setLoadingTorrents] = useState(false);
+  // hash → "pause" | "resume" | "delete" — in-flight control action
+  const [actingTorrent, setActingTorrent] = useState<string | null>(null);
+  // torrent awaiting delete confirmation
+  const [deleteTorrentTarget, setDeleteTorrentTarget] = useState<MoviePilotTorrent | null>(null);
+  const [deletingTorrent, setDeletingTorrent] = useState(false);
 
   // ── Delete confirmation ──
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -95,6 +107,46 @@ export function MoviePilotConfig() {
       return () => clearInterval(interval);
     }
   }, [config?.configured, loadTorrents]);
+
+  // ── Torrent control actions ──
+
+  const controlTorrent = useCallback(async (tor: MoviePilotTorrent, action: "pause" | "resume") => {
+    setActingTorrent(tor.hash);
+    try {
+      const res = action === "pause"
+        ? await pauseMPTorrent(tor.hash)
+        : await resumeMPTorrent(tor.hash);
+      if (res.success) {
+        showToast(t(action === "pause" ? "moviepilot.action_paused" : "moviepilot.action_resumed"), "success");
+      } else {
+        showToast(t("moviepilot.action_failed", { message: res.message || t("moviepilot.unknown_error") }), "error");
+      }
+      loadTorrents();
+    } catch (err) {
+      showToast(t("moviepilot.action_failed", { message: getErrMsg(err) }), "error");
+    } finally {
+      setActingTorrent(null);
+    }
+  }, [loadTorrents, showToast, t]);
+
+  const confirmDeleteTorrent = useCallback(async () => {
+    if (!deleteTorrentTarget) return;
+    setDeletingTorrent(true);
+    try {
+      const res = await deleteMPTorrent(deleteTorrentTarget.hash);
+      if (res.success) {
+        showToast(t("moviepilot.action_deleted"), "success");
+      } else {
+        showToast(t("moviepilot.action_failed", { message: res.message || t("moviepilot.unknown_error") }), "error");
+      }
+      setDeleteTorrentTarget(null);
+      loadTorrents();
+    } catch (err) {
+      showToast(t("moviepilot.action_failed", { message: getErrMsg(err) }), "error");
+    } finally {
+      setDeletingTorrent(false);
+    }
+  }, [deleteTorrentTarget, loadTorrents, showToast, t]);
 
   // ── Verify ──
 
@@ -354,57 +406,137 @@ export function MoviePilotConfig() {
               </div>
 
               {/* Torrent list */}
-              {torrents.map((tor) => (
-                <div
-                  key={tor.hash}
-                  className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent/30 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className={`text-xs font-medium ${getStatusColor(tor.status)}`}>
-                      {tor.status === "downloading" ? <Download size={12} /> : <Upload size={12} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs truncate">{tor.name}</p>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                        {tor.status === "downloading" && (
-                          <>
-                            <span className="tabular-nums">{formatProgress(tor.progress)}</span>
-                            <span className="tabular-nums">
-                              {formatBytes(tor.downloaded)} / {formatBytes(tor.size)}
+              {torrents.map((tor) => {
+                const busy = actingTorrent === tor.hash;
+                return (
+                  <div
+                    key={tor.hash}
+                    className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent/30 transition-colors gap-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className={`text-xs font-medium ${getStatusColor(tor.status)}`}>
+                        {tor.status === "downloading" ? <Download size={12} /> : tor.status === "seeding" ? <Upload size={12} /> : <AlertTriangle size={12} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs truncate" title={tor.name}>{tor.name}</p>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
+                          {tor.status === "downloading" && (
+                            <>
+                              <span className="tabular-nums">{formatProgress(tor.progress)}</span>
+                              <span className="tabular-nums">
+                                {formatBytes(tor.downloaded)} / {formatBytes(tor.size)}
+                              </span>
+                              <span>{t("moviepilot.dl_speed")}: {formatSpeed(tor.dlspeed)}</span>
+                              <span>{t("moviepilot.ul_speed")}: {formatSpeed(tor.ulspeed)}</span>
+                              <span className="inline-flex items-center gap-1"><Clock size={10} />{t("moviepilot.eta")} {formatEta(tor.eta)}</span>
+                              <span>{t("moviepilot.ratio")}: {formatRatio(tor.ratio)}</span>
+                            </>
+                          )}
+                          {tor.status === "seeding" && (
+                            <>
+                              <span>{formatBytes(tor.size)}</span>
+                              <span>{t("moviepilot.ul_speed")}: {formatSpeed(tor.ulspeed)}</span>
+                              <span>{t("moviepilot.ratio")}: {formatRatio(tor.ratio)}</span>
+                              <span>{t("moviepilot.seeders")}: {tor.seeders}</span>
+                            </>
+                          )}
+                          {tor.status === "paused" && (
+                            <>
+                              <span>{formatBytes(tor.size)}</span>
+                              <span className="tabular-nums">{formatProgress(tor.progress)}</span>
+                              <span>{t("moviepilot.ratio")}: {formatRatio(tor.ratio)}</span>
+                            </>
+                          )}
+                          {tor.status === "error" && (
+                            <span className="flex items-center gap-1 text-red-500">
+                              <AlertTriangle size={10} />
+                              {t("moviepilot.error")}
                             </span>
-                            <span>{t("moviepilot.dl_speed")}: {formatSpeed(tor.dlspeed)}</span>
-                          </>
-                        )}
-                        {tor.status === "seeding" && (
-                          <>
-                            <span>{formatBytes(tor.size)}</span>
-                            <span>{t("moviepilot.ul_speed")}: {formatSpeed(tor.ulspeed)}</span>
-                            <span>{t("moviepilot.seeders")}: {tor.seeders}</span>
-                          </>
-                        )}
-                        {tor.status === "paused" && (
-                          <span>{formatBytes(tor.size)}</span>
-                        )}
-                        {tor.status === "error" && (
-                          <span className="flex items-center gap-1 text-red-500">
-                            <AlertTriangle size={10} />
-                            {t("moviepilot.error")}
-                          </span>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(tor.status === "downloading" || tor.status === "seeding") && (
+                        <button
+                          onClick={() => controlTorrent(tor, "pause")}
+                          disabled={busy}
+                          className="btn btn-ghost btn-xs p-1"
+                          title={t("moviepilot.pause")}
+                        >
+                          {busy ? <RefreshCw size={12} className="animate-stream-spin" /> : <Pause size={12} />}
+                        </button>
+                      )}
+                      {tor.status === "paused" && (
+                        <button
+                          onClick={() => controlTorrent(tor, "resume")}
+                          disabled={busy}
+                          className="btn btn-ghost btn-xs p-1"
+                          title={t("moviepilot.resume")}
+                        >
+                          {busy ? <RefreshCw size={12} className="animate-stream-spin" /> : <Play size={12} />}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDeleteTorrentTarget(tor)}
+                        disabled={busy}
+                        className="btn btn-ghost btn-xs p-1 text-destructive hover:text-destructive"
+                        title={t("common.delete")}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                      <span
+                        className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} bg-current/5`}
+                      >
+                        {getStatusLabel(tor.status, t)}
+                      </span>
+                    </div>
                   </div>
-                  <span
-                    className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${getStatusColor(tor.status)} bg-current/5`}
-                  >
-                    {getStatusLabel(tor.status, t)}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </FadeContent>
       )}
+
+      {/* ── Torrent Delete Confirmation Modal ── */}
+      <Modal
+        open={deleteTorrentTarget !== null}
+        onClose={() => { if (!deletingTorrent) setDeleteTorrentTarget(null); }}
+        title={t("moviepilot.delete_torrent_title")}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {t("moviepilot.delete_torrent_desc", { name: deleteTorrentTarget?.name || "" })}
+          </p>
+          {deleteTorrentTarget && (
+            <div className="p-3 rounded-lg border border-border bg-accent/20">
+              <p className="text-xs font-medium truncate">{deleteTorrentTarget.name}</p>
+              <p className="text-[10px] text-muted-foreground tabular-nums mt-1">
+                {formatBytes(deleteTorrentTarget.size)} · {formatProgress(deleteTorrentTarget.progress)} · {t("moviepilot.ratio")} {formatRatio(deleteTorrentTarget.ratio)}
+              </p>
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2.5">
+            <button
+              onClick={() => setDeleteTorrentTarget(null)}
+              disabled={deletingTorrent}
+              className="btn btn-ghost btn-sm"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              onClick={confirmDeleteTorrent}
+              disabled={deletingTorrent}
+              className="btn btn-sm bg-destructive text-white"
+              style={{ borderColor: "transparent" }}
+            >
+              {deletingTorrent ? <RefreshCw size={12} className="animate-stream-spin" /> : <Trash2 size={12} />}
+              {t("common.delete")}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Delete Confirmation Modal ── */}
       <Modal

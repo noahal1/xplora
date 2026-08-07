@@ -384,7 +384,7 @@ export function PlaylistsTab() {
         {/* Delete confirm — reachable from detail view */}
         {deleteTarget && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 max-sm:bg-black/70 animate-fade-in">
-            <FadeContent className="section-card w-full max-w-sm p-5">
+            <FadeContent className="bg-popover border border-border rounded-xl shadow-lg w-full max-w-sm p-5">
               <h3 className="text-base font-semibold">{t("playlists.delete")}</h3>
               <p className="text-sm text-muted-foreground mt-2">{t("playlists.delete_confirm", { name: deleteTarget.name })}</p>
               <p className="text-xs text-muted-foreground/70 mt-1">{t("playlists.delete_confirm_desc")}</p>
@@ -495,7 +495,7 @@ export function PlaylistsTab() {
       {/* Delete confirm (list view) */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 max-sm:bg-black/70 animate-fade-in">
-          <FadeContent className="section-card w-full max-w-sm p-5">
+          <FadeContent className="bg-popover border border-border rounded-xl shadow-lg w-full max-w-sm p-5">
             <h3 className="text-base font-semibold">{t("playlists.delete")}</h3>
             <p className="text-sm text-muted-foreground mt-2">{t("playlists.delete_confirm", { name: deleteTarget.name })}</p>
             <p className="text-xs text-muted-foreground/70 mt-1">{t("playlists.delete_confirm_desc")}</p>

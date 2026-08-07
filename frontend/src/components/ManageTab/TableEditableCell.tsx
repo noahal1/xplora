@@ -2,6 +2,7 @@ import { memo, useRef, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail } from "../../types";
 import { RatingSlider } from "../shared/RatingSlider";
+import { formatDate } from "../../utils/date";
 
 /* ── Reusable editable table cell component ────────────────────
 
@@ -65,7 +66,7 @@ export const TableEditableCell = memo(function TableEditableCell({ movie, field,
     switch (field) {
       case "title": value = movie.title; widthClass = "w-full min-w-[120px]"; break;
       case "year": inputType = "number"; widthClass = "w-[72px]"; value = movie.year != null ? movie.year.toString() : ""; break;
-      case "created_at": inputType = "date"; widthClass = "w-[110px]"; value = movie.created_at ? movie.created_at.slice(0, 10) : ""; break;
+      case "created_at": inputType = "date"; widthClass = "w-[110px]"; value = movie.created_at ? formatDate(movie.created_at) : ""; break;
     }
     return (
       <td className={`px-3 py-2 border-b border-border ${tdClassName || ''}`}>

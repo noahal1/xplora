@@ -4,6 +4,7 @@ import type { MediaDetail } from "../../types";
 import { Badge } from "../ui/badge";
 import { translateGenres } from "../../utils/genre";
 import { formatSeasonLabel } from "../../utils/groupTVSeries";
+import { formatDate } from "../../utils/date";
 import CountUp from "../CountUp";
 import { Film, AlertCircle, Star, Search, Sparkles, Loader2, Trash2, Check, Info, Heart, BrainCircuit } from "lucide-react";
 import { TableEditableCell } from "./TableEditableCell";
@@ -119,7 +120,7 @@ export const ManageTableRow = memo(function ManageTableRow({
       <TableEditableCell movie={movie} field="created_at" editingCell={editingCell} sliderValue={sliderValue}
         onStartEdit={onStartInlineEdit} onSaveEdit={onSaveInlineEdit} onCancelEdit={onCancelEdit}
         tdClassName="max-sm:hidden">
-        <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">{movie.created_at ? movie.created_at.slice(0, 10) : "—"}</span>
+        <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">{movie.created_at ? formatDate(movie.created_at) : "—"}</span>
       </TableEditableCell>
       <td className="px-1 max-sm:px-0.5 py-2.5 border-b border-border/60 text-center whitespace-nowrap">
         <div className="inline-flex items-center gap-px rounded-lg p-0.5 bg-accent/20 border border-border/30" style={{ borderRadius: "8px" }}>

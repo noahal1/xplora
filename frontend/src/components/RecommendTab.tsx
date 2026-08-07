@@ -10,6 +10,7 @@ import { Sparkles } from "lucide-react";
 import { isAbortError, getErrMsg, titleMatches, titleInSet } from "../lib/utils";
 import { useGenreExtractor } from "../hooks/useGenreExtractor";
 import { getGenreAliases } from "../utils/genre";
+import { MODEL_ORDER, DEFAULT_MODELS, getModelLabel, isLocalModel } from "../lib/models";
 import { ChatPanel } from "./tabs/recommend/ChatPanel";
 import { StrategySelector } from "./tabs/recommend/StrategySelector";
 import { SessionHistory } from "./tabs/recommend/SessionHistory";
@@ -35,6 +36,9 @@ export function RecommendTab() {
   const [loadingMovies, setLoadingMovies] = useState(true);
 
   const [selectedModel, setSelectedModel] = useState("deepseek");
+  // Models whose AI key is configured (from /api/health) — local models are always available
+  const [configuredModels, setConfiguredModels] = useState<Set<string>>(new Set());
+  const [healthLoaded, setHealthLoaded] = useState(false);
   const [recCount, setRecCount] = useState(5);
   const [strategy, setStrategy] = useState("taste");
   const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
@@ -117,6 +121,38 @@ export function RecommendTab() {
       setLoadingMovies(false);
     }
   }, []);
+
+  // Fetch health to know which AI models are configured
+  useEffect(() => {
+    api.getHealth()
+      .then((h) => {
+        const configured = new Set<string>();
+        for (const [id, ok] of Object.entries(h.api_keys)) {
+          if (ok) configured.add(id);
+        }
+        setConfiguredModels(configured);
+      })
+      .catch(() => {
+        // Health check failure is non-fatal — fall back to defaults
+      })
+      .finally(() => setHealthLoaded(true));
+  }, []);
+
+  // Available models: configured AI keys + always-available local models
+  const availableModels = useMemo(() => {
+    if (!healthLoaded) {
+      return MODEL_ORDER.filter((m) => DEFAULT_MODELS.includes(m));
+    }
+    return MODEL_ORDER.filter((m) => configuredModels.has(m) || isLocalModel(m));
+  }, [healthLoaded, configuredModels]);
+
+  // Keep the selected model valid when availability changes
+  useEffect(() => {
+    if (!healthLoaded) return;
+    if (!availableModels.includes(selectedModel)) {
+      setSelectedModel(availableModels[0] ?? "local");
+    }
+  }, [healthLoaded, availableModels, selectedModel]);
 
   useEffect(() => {
     loadMoviesFromDB();
@@ -271,8 +307,9 @@ export function RecommendTab() {
     setChatMessages([]);
     setShowChat(false);
     setAddingToWishlist({});
-    const modelNames: Record<string, string> = { deepseek: "DeepSeek", openai: "OpenAI (GPT-4o)" };
-    setModelUsed(modelNames[selectedModel] || selectedModel);
+    // Default to the selected model; overwritten with the actual model_used
+    // from the response when the backend auto-falls back (e.g. local).
+    setModelUsed(getModelLabel(selectedModel));
 
     const controller = new AbortController();
     cancelRef.current = controller;
@@ -291,6 +328,9 @@ export function RecommendTab() {
       });
 
       clearTimeout(timeoutId);
+
+      // Backend may auto-fall back to local (no AI key) — surface the real model used
+      if (data.model_used) setModelUsed(getModelLabel(data.model_used));
 
       // Enrich each recommendation with watched/wishlist info
       // Priority: TMDB ID exact match > title fuzzy match
@@ -479,7 +519,7 @@ export function RecommendTab() {
           : undefined;
         const match = yearMatch ?? matches[0];
         if (match?.source && match?.source_id) {
-          const data = await api.getExternalDetail(match.source, match.source_id);
+          const data = await api.getExternalDetail(match.source, match.source_id, match.media_type);
           if (cancelled) return;
           setDetailData(data);
         } else {
@@ -557,6 +597,7 @@ export function RecommendTab() {
             onStrategyChange={setStrategy}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
+            availableModels={availableModels}
             recCount={recCount}
             onRecCountChange={(n) => setRecCount(n)}
             strategyMood={strategyMood}

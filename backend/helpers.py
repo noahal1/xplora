@@ -1,9 +1,34 @@
 """Helper functions for API endpoints — movie parsing, rating normalization, etc."""
 
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import HTTPException
 
 from config_manager import get_api_key as get_config_api_key
 from models import MediaRating
+
+
+# ── Timestamp serialization ─────────────────────────────────────
+# SQLite stores datetimes without timezone info, so values read back
+# from the DB are naive — but they were always written as UTC. If we
+# serialized them directly, clients would misinterpret them (JS treats
+# timezone-less ISO strings as LOCAL time, shifting every displayed
+# timestamp by the local offset). This helper re-attaches the UTC
+# offset so every API response is self-describing.
+
+
+def iso_utc(dt: Optional[datetime], empty: Optional[str] = "") -> Optional[str]:
+    """Serialize a datetime as ISO 8601 with an explicit UTC offset.
+
+    Naive datetimes (read from SQLite) are assumed to be UTC and get
+    ``+00:00`` appended; ``None`` returns ``empty`` (default ``""``).
+    """
+    if dt is None:
+        return empty
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
 
 
 # ── Genre name normalisation ──────────────────────────────────
@@ -115,14 +140,22 @@ REVERSE_GENRE_MAP: dict[str, list[str]] = _build_reverse_genre_map()
 
 
 def get_api_key(model: str) -> str:
-    """Get the configured API key for a given model type."""
-    key_map = {"deepseek": "deepseek", "openai": "openai"}
-    key_name = key_map.get(model)
-    if not key_name:
+    """Get the configured API key for a given model type.
+
+    Supports every entry in ``ai_service.constants.MODEL_CONFIGS``.
+    Key-less local models (e.g. Ollama) return a placeholder so they
+    always work; configured-key models raise 503 when not configured.
+    """
+    from ai_service.constants import MODEL_CONFIGS
+
+    config = MODEL_CONFIGS.get(model)
+    if not config:
         raise HTTPException(status_code=400, detail=f"Unsupported model: {model}")
-    api_key = get_config_api_key(key_name)
+    if config.get("requires_key") is False:
+        return config.get("placeholder_key", "ollama")
+    api_key = get_config_api_key(model)
     if not api_key:
-        env_var = {"deepseek": "DEEPSEEK_API_KEY", "openai": "OPENAI_API_KEY"}[key_name]
+        env_var = config.get("env_key", model.upper())
         raise HTTPException(
             status_code=503,
             detail=f"{env_var} 未配置。请在设置页面或 .env 文件中配置。",

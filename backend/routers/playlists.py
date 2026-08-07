@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 from auth import get_current_user
 from deps import get_user_db
+from helpers import iso_utc
 from crud import (
     log_operation,
     create_playlist,
@@ -58,7 +59,7 @@ def _item_to_dict(item) -> dict:
         "country": item.country,
         "note": item.note,
         "sort_order": item.sort_order,
-        "created_at": item.created_at.isoformat() if item.created_at else "",
+        "created_at": iso_utc(item.created_at),
     }
 
 
@@ -69,8 +70,8 @@ def _playlist_to_dict(playlist) -> dict:
         "description": playlist.description,
         "cover_url": playlist.cover_url,
         "share_token": playlist.share_token,
-        "created_at": playlist.created_at.isoformat() if playlist.created_at else "",
-        "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else "",
+        "created_at": iso_utc(playlist.created_at),
+        "updated_at": iso_utc(playlist.updated_at),
     }
 
 
@@ -102,25 +103,31 @@ def _public_item_to_dict(item) -> dict:
 
 
 def _get_ai_service(model: str, user_id: int):
-    """Build an AIService, falling back to the other configured model.
+    """Build an AIService, falling back to another configured model.
 
-    Returns ``(service, resolved_model)``. Raises 503 when neither model
-    has an API key configured.
+    Returns ``(service, resolved_model)``. Raises 503 when no configured
+    model has an API key.
     """
     from helpers import get_api_key
     from config_manager import get_api_key as get_config_api_key
     from ai_service import AIService
+    from ai_service.constants import AI_MODEL_ORDER, MODEL_CONFIGS
 
-    model = model if model in ("deepseek", "openai") else "deepseek"
+    valid = {m for m in AI_MODEL_ORDER if m in MODEL_CONFIGS}
+    model = model if model in valid else "deepseek"
     try:
         api_key = get_api_key(model)
     except HTTPException:
-        # Requested model has no key — try the other configured model
-        fallback = "openai" if model == "deepseek" else "deepseek"
-        if not get_config_api_key(fallback):
+        # Requested model has no key — try the other configured models in order
+        for fallback in AI_MODEL_ORDER:
+            if fallback == model or fallback not in valid:
+                continue
+            if MODEL_CONFIGS[fallback].get("requires_key") is False or get_config_api_key(fallback):
+                model = fallback
+                api_key = get_api_key(fallback)
+                break
+        else:
             raise HTTPException(status_code=503, detail="未配置 AI API Key，请先在设置页面或 .env 文件中配置")
-        model = fallback
-        api_key = get_api_key(model)
 
     service = AIService(api_key=api_key, model_type=model, user_id=user_id)
     return service, model
@@ -578,7 +585,7 @@ async def get_shared_playlist(token: str):
             "name": playlist.name,
             "description": playlist.description,
             "cover_url": playlist.cover_url,
-            "created_at": playlist.created_at.isoformat() if playlist.created_at else "",
+            "created_at": iso_utc(playlist.created_at),
             "item_count": len(items),
             "items": [_public_item_to_dict(i) for i in items],
         }

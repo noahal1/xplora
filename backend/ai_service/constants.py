@@ -1,11 +1,22 @@
 """Shared constants, caches, and helpers for the AI service package."""
 
 import logging
+import os
 
 from models import MediaRecommendation
 
 
 # Model configuration
+#
+# All providers are accessed through the OpenAI SDK using OpenAI-compatible
+# endpoints (Anthropic, Google Gemini and Ollama all expose one), so a single
+# client abstraction covers every provider. ``requires_key: False`` marks
+# local key-less models (Ollama) — ``resolve_api_key()`` returns a placeholder
+# so client construction always succeeds.
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+
 MODEL_CONFIGS = {
     "deepseek": {
         "api_base": "https://api.deepseek.com",
@@ -17,7 +28,56 @@ MODEL_CONFIGS = {
         "model": "gpt-4o-mini",
         "env_key": "OPENAI_API_KEY",
     },
+    "claude": {
+        # Anthropic exposes an OpenAI-compatible endpoint at /v1
+        "api_base": "https://api.anthropic.com/v1/",
+        "model": "claude-sonnet-4-20250514",
+        "env_key": "CLAUDE_API_KEY",
+    },
+    "gemini": {
+        # Google's OpenAI-compatible endpoint
+        "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "model": "gemini-2.0-flash",
+        "env_key": "GEMINI_API_KEY",
+    },
+    "zhipu": {
+        # 智谱 BigModel — GLM-4-Flash is permanently free (OpenAI-compatible)
+        "api_base": "https://open.bigmodel.cn/api/paas/v4/",
+        "model": "glm-4-flash",
+        "env_key": "ZHIPU_API_KEY",
+    },
+    "ollama": {
+        # Local model — no API key required; base URL/model overridable via env
+        "api_base": OLLAMA_BASE_URL,
+        "model": OLLAMA_MODEL,
+        "env_key": "OLLAMA_API_KEY",
+        "requires_key": False,
+        "placeholder_key": "ollama",
+    },
 }
+
+# Order used when auto-picking the first configured AI model
+# zhipu (free GLM-4-Flash) is preferred over local Ollama but after the
+# paid cloud providers
+AI_MODEL_ORDER = ["deepseek", "openai", "claude", "gemini", "zhipu", "ollama"]
+
+
+def resolve_api_key(model_type: str) -> str:
+    """Return the API key for a model type.
+
+    Key-less local models (``requires_key: False``, e.g. Ollama) return a
+    placeholder so the client can be constructed without configuration.
+    Configured-key models return "" when no key is set (caller decides
+    whether to fall back to local recommendations).
+    """
+    from config_manager import get_api_key as get_config_api_key
+
+    config = MODEL_CONFIGS.get(model_type)
+    if not config:
+        return ""
+    if config.get("requires_key") is False:
+        return config.get("placeholder_key", "ollama")
+    return get_config_api_key(model_type)
 
 # Per-strategy temperature configuration
 # Lower = more deterministic/focused, Higher = more creative/diverse

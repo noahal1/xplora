@@ -26,6 +26,10 @@ CONFIG_FILE = os.getenv(
 API_KEY_NAMES: dict[str, str] = {
     "deepseek": "DEEPSEEK_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "claude": "CLAUDE_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "zhipu": "ZHIPU_API_KEY",  # 智谱 BigModel (GLM-4-Flash 免费)
+    "ollama": "OLLAMA_API_KEY",  # optional placeholder for local models
     "tmdb": "TMDB_API_KEY",
 }
 

@@ -23,6 +23,7 @@ const AdminDiagnosticsPage = lazy(() => import("./pages/AdminDiagnosticsPage").t
 const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 const WatchedTab = lazy(() => import("./components/WatchedTab").then((m) => ({ default: m.WatchedTab })));
 const WishlistTab = lazy(() => import("./components/WishlistTab").then((m) => ({ default: m.WishlistTab })));
+const DiscoverTab = lazy(() => import("./components/DiscoverTab").then((m) => ({ default: m.DiscoverTab })));
 const PlaylistsTab = lazy(() => import("./components/PlaylistsTab").then((m) => ({ default: m.PlaylistsTab })));
 const RecommendTab = lazy(() => import("./components/RecommendTab").then((m) => ({ default: m.RecommendTab })));
 const ManageTab = lazy(() => import("./components/ManageTab").then((m) => ({ default: m.ManageTab })));
@@ -50,7 +51,7 @@ function MainApp() {
   const isInitialMount = useRef(true);
 
   // Tab order for directional animation
-  const tabOrder = ["/watched", "/wishlist", "/playlists", "/recommend", "/stats", "/manage"];
+  const tabOrder = ["/watched", "/wishlist", "/discover", "/playlists", "/recommend", "/stats", "/manage"];
 
   // Determine navigation direction
   const prevPath = prevPathRef.current;
@@ -123,6 +124,7 @@ function MainApp() {
                   <Route path="/" element={<Navigate to="/watched" replace />} />
                   <Route path="/watched" element={<WatchedTab />} />
                   <Route path="/wishlist" element={<WishlistTab />} />
+                  <Route path="/discover" element={<DiscoverTab />} />
                   <Route path="/playlists" element={<PlaylistsTab />} />
                   <Route path="/recommend" element={<RecommendTab />} />
                   <Route path="/top-rated" element={<TopRatedTab />} />

@@ -15,6 +15,7 @@ from config_manager import (
     API_KEY_NAMES,
 )
 from crud import log_operation
+from helpers import iso_utc
 from database import get_db, get_user_session, USE_PER_USER_DBS
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -60,7 +61,7 @@ async def export_all_data(
                         "id": s.id,
                         "model": s.model,
                         "source_count": s.source_count,
-                        "created_at": s.created_at.isoformat(),
+                        "created_at": iso_utc(s.created_at),
                         "recommendations": [
                             {
                                 "title": r.title,
@@ -77,7 +78,7 @@ async def export_all_data(
                     "id": u.id,
                     "username": u.username,
                     "is_admin": u.is_admin,
-                    "created_at": u.created_at.isoformat(),
+                    "created_at": iso_utc(u.created_at),
                     "movies": [
                         {
                             "id": m.id,
@@ -85,7 +86,7 @@ async def export_all_data(
                             "rating": m.rating,
                             "year": m.year,
                             "genre": m.genre,
-                            "created_at": m.created_at.isoformat(),
+                            "created_at": iso_utc(m.created_at),
                         }
                         for m in user_movies
                     ],
@@ -111,7 +112,7 @@ async def export_all_data(
                     "id": s.id,
                     "model": s.model,
                     "source_count": s.source_count,
-                    "created_at": s.created_at.isoformat(),
+                    "created_at": iso_utc(s.created_at),
                     "recommendations": [
                         {
                             "title": r.title,
@@ -128,7 +129,7 @@ async def export_all_data(
                 "id": u.id,
                 "username": u.username,
                 "is_admin": u.is_admin,
-                "created_at": u.created_at.isoformat(),
+                "created_at": iso_utc(u.created_at),
                 "movies": [
                     {
                         "id": m.id,
@@ -136,7 +137,7 @@ async def export_all_data(
                         "rating": m.rating,
                         "year": m.year,
                         "genre": m.genre,
-                        "created_at": m.created_at.isoformat(),
+                        "created_at": iso_utc(m.created_at),
                     }
                     for m in user_movies
                 ],

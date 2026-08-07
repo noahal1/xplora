@@ -41,15 +41,23 @@ async def lifespan(app: FastAPI):
     if USE_PER_USER_DBS:
         print(f"  Per-user DBs: enabled (data/user_{{id}}.db)")
 
-    deepseek_key = os.getenv("DEEPSEEK_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
+    from ai_service.constants import AI_MODEL_ORDER, MODEL_CONFIGS
+    from config_manager import get_all_status as get_config_status
 
-    print(f"  DeepSeek API: {'[configured]' if deepseek_key else '[NOT set]'}")
-    print(f"  OpenAI API:   {'[configured]' if openai_key else '[NOT set]'}")
+    config_status = get_config_status()
+    any_ai = False
+    for model_type in AI_MODEL_ORDER:
+        config = MODEL_CONFIGS.get(model_type, {})
+        env_key = config.get("env_key", model_type.upper())
+        is_local = config.get("requires_key") is False
+        configured = is_local or config_status.get(model_type, False)
+        if config_status.get(model_type) or is_local:
+            any_ai = True
+        print(f"  {model_type.capitalize():8s} API: {'[configured]' if configured else '[NOT set]'} ({env_key})")
 
-    if not deepseek_key and not openai_key:
+    if not any_ai:
         print()
-        print("  [WARNING] No API keys found!")
+        print("  [WARNING] No AI API keys found!")
         print("  Please create a .env file from .env.example:")
         print("  Copy .env.example to .env and add your API keys")
         print()
@@ -92,6 +100,7 @@ from routers.updates import router as updates_router
 from routers.media_server import router as media_server_router
 from routers.moviepilot import router as moviepilot_router
 from routers.playlists import router as playlists_router
+from routers.discover import router as discover_router
 
 app.include_router(auth_router)
 app.include_router(media_router)
@@ -104,6 +113,7 @@ app.include_router(updates_router)
 app.include_router(media_server_router)
 app.include_router(moviepilot_router)
 app.include_router(playlists_router)
+app.include_router(discover_router)
 
 
 # ── Health check ────────────────────────────────────────────────────

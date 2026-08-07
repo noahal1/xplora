@@ -1,8 +1,26 @@
 /**
- * Genre English → Chinese translation mapping.
- * Covers all standard TMDB movie and TV genres.
+ * Genre bilingual helpers.
+ *
+ * Genres are stored in canonical English by the backend (the filters
+ * endpoint normalises Chinese/variant names to English). This module
+ * displays them in the CURRENT UI language:
+ *
+ *   - zh UI  → English name is translated to Chinese (GENRE_EN_TO_ZH)
+ *   - en UI  → canonical English is kept; Chinese names stored in legacy
+ *              data are mapped back to English (ZH_TO_EN)
+ *
+ * The reverse mapping is also used for alias matching (e.g. filtering),
+ * so selecting "Action" also matches items tagged "动作" and vice-versa.
  */
 
+import i18n from "../i18n/config";
+
+/** Whether the current UI language is English (en / en-US). */
+function isEnglishUI(): boolean {
+  return !!i18n && typeof i18n.language === "string" && i18n.language.toLowerCase().startsWith("en");
+}
+
+/** Genre English → Chinese translation mapping. */
 export const GENRE_EN_TO_ZH: Record<string, string> = {
   // Movie genres
   Action: "动作",
@@ -38,10 +56,13 @@ export const GENRE_EN_TO_ZH: Record<string, string> = {
   "War & Politics": "战争政治",
 };
 
-// Build reverse map: Chinese → English (used for alias matching)
+// Build reverse map: Chinese → English (used to display legacy Chinese
+// genre values in the English UI and for alias matching)
 const ZH_TO_EN: Record<string, string> = {};
 for (const [en, zh] of Object.entries(GENRE_EN_TO_ZH)) {
-  ZH_TO_EN[zh] = en;
+  if (!(zh in ZH_TO_EN)) {
+    ZH_TO_EN[zh] = en;
+  }
 }
 
 // Legacy genre variants stored by older imports that differ from the
@@ -78,8 +99,8 @@ export function getGenreAliases(g: string): Set<string> {
 }
 
 /**
- * Translate an English genre string (e.g. "Action / Drama / Sci-Fi")
- * to Chinese (e.g. "动作 / 剧情 / 科幻").
+ * Translate a genre string (e.g. "Action / Drama / Sci-Fi") to the
+ * current UI language (zh: "动作 / 剧情 / 科幻", en: unchanged canonical).
  * Unknown genres are passed through as-is.
  */
 export function translateGenres(genreStr: string | null | undefined): string {
@@ -90,7 +111,7 @@ export function translateGenres(genreStr: string | null | undefined): string {
     .map((g) => {
       const trimmed = g.trim();
       if (!trimmed) return "";
-      return GENRE_EN_TO_ZH[trimmed] || LEGACY_ALIASES[trimmed] || trimmed;
+      return translateGenreName(trimmed);
     })
     .filter((g) => {
       if (!g || seen.has(g.toLowerCase())) return false;
@@ -101,9 +122,14 @@ export function translateGenres(genreStr: string | null | undefined): string {
 }
 
 /**
- * Translate a single genre name (e.g. "Action" → "动作").
+ * Translate a single genre name to the current UI language.
  * Unknown genres are passed through as-is.
  */
 export function translateGenreName(name: string): string {
+  if (!name) return name;
+  if (isEnglishUI()) {
+    // English UI: keep canonical English; map legacy Chinese back to English
+    return ZH_TO_EN[LEGACY_ALIASES[name] || name] || name;
+  }
   return GENRE_EN_TO_ZH[name] || LEGACY_ALIASES[name] || name;
 }

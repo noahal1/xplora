@@ -134,6 +134,33 @@ export function formatProgress(progress: number): string {
   return (progress * 100).toFixed(1) + "%";
 }
 
+/** Format an ETA in seconds as "1d 2h" / "3h 25m" / "12m" / "45s". */
+export function formatEta(seconds: number): string {
+  if (!seconds || seconds <= 0) return "—";
+  const s = Math.round(seconds);
+  if (s >= 86400) {
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    return h > 0 ? `${d}d ${h}h` : `${d}d`;
+  }
+  if (s >= 3600) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  if (s >= 60) {
+    const m = Math.floor(s / 60);
+    return `${m}m`;
+  }
+  return `${s}s`;
+}
+
+/** Format a share ratio (e.g. 1.24) as a short string. */
+export function formatRatio(ratio: number): string {
+  if (ratio === 0) return "—";
+  return ratio.toFixed(2);
+}
+
 /** Map a MoviePilot torrent status code to an i18n label. */
 export function getStatusLabel(status: string, t: (key: string) => string): string {
   const map: Record<string, string> = {

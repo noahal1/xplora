@@ -68,15 +68,16 @@ def clear_repair_progress(user_id: int) -> None:
 def _get_available_model() -> tuple[str, str]:
     """Return ``(model_type, api_key)`` for the first configured AI model.
 
-    Priority: deepseek → openai.
-    Raises ``ValueError`` if neither is configured.
+    Priority: deepseek → openai → claude → gemini → zhipu (key-less local
+    models like Ollama are excluded because repair needs a working
+    remote model). Raises ``ValueError`` if none is configured.
     """
-    for model_type in ("deepseek", "openai"):
+    for model_type in ("deepseek", "openai", "claude", "gemini", "zhipu"):
         key = get_config_api_key(model_type)
         if key:
             return model_type, key
     raise ValueError(
-        "未配置 AI API 密钥。请先在设置中配置 DeepSeek 或 OpenAI 密钥。"
+        "未配置 AI API 密钥。请先在设置中配置 DeepSeek、OpenAI、Claude、Gemini 或智谱密钥。"
     )
 
 

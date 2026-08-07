@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Film, BookmarkPlus, Sparkles, Library, BarChart3, ListTodo } from "lucide-react";
+import { Film, BookmarkPlus, Sparkles, Library, BarChart3, ListTodo, Compass } from "lucide-react";
 import { useMemo } from "react";
 import { createPortal } from "react-dom";
 
@@ -11,6 +11,7 @@ export function TabNav() {
   const tabs = useMemo(() => [
     { id: "watched", label: t("tabs.watched"), icon: Film },
     { id: "wishlist", label: t("tabs.wishlist"), icon: BookmarkPlus },
+    { id: "discover", label: t("tabs.discover"), icon: Compass },
     { id: "playlists", label: t("playlists.tab_title"), icon: ListTodo },
     { id: "recommend", label: t("tabs.recommend"), icon: Sparkles },
     { id: "stats", label: t("tabs.stats"), icon: BarChart3 },

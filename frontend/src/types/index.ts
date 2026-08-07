@@ -177,6 +177,10 @@ export interface MediaSearchResult {
   series_poster_url?: string;
   /** Number of episodes in this season */
   episode_count?: number;
+  /** TMDB average rating (0-10), present on discover/search feeds */
+  vote_average?: number | null;
+  /** TMDB vote count */
+  vote_count?: number | null;
 }
 
 export interface ExternalDetail {
@@ -256,9 +260,15 @@ export interface MoviePilotTorrent {
   progress: number;     // 0-1
   size: number;
   downloaded: number;
+  uploaded: number;     // bytes
   dlspeed: number;      // bytes/s
   ulspeed: number;      // bytes/s
+  /** Estimated seconds remaining (0 when unknown / not downloading). */
+  eta: number;
+  /** Share ratio (uploaded / downloaded). */
+  ratio: number;
   seeders: number;
+  leechers: number;
   save_path: string;
 }
 
