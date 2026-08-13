@@ -256,7 +256,7 @@ export function WatchedTab() {
 
       {/* === Movie List Section === */}
       {(total > 0 || hasActiveFilters || loading) && (
-        <FadeContent className="section-card animate-slide-down">
+        <FadeContent className="section-card">
           <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <h2 className="section-title flex items-center gap-2">
               <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">

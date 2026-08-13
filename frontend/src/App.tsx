@@ -1,4 +1,4 @@
-import { useEffect, useRef, lazy, Suspense } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -24,7 +24,6 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ defa
 const WatchedTab = lazy(() => import("./components/WatchedTab").then((m) => ({ default: m.WatchedTab })));
 const WishlistTab = lazy(() => import("./components/WishlistTab").then((m) => ({ default: m.WishlistTab })));
 const DiscoverTab = lazy(() => import("./components/DiscoverTab").then((m) => ({ default: m.DiscoverTab })));
-const PlaylistsTab = lazy(() => import("./components/PlaylistsTab").then((m) => ({ default: m.PlaylistsTab })));
 const RecommendTab = lazy(() => import("./components/RecommendTab").then((m) => ({ default: m.RecommendTab })));
 const ManageTab = lazy(() => import("./components/ManageTab").then((m) => ({ default: m.ManageTab })));
 const StatsTab = lazy(() => import("./components/StatsTab").then((m) => ({ default: m.StatsTab })));
@@ -47,39 +46,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function MainApp() {
   const location = useLocation();
-  const prevPathRef = useRef(location.pathname);
-  const isInitialMount = useRef(true);
-
-  // Tab order for directional animation
-  const tabOrder = ["/watched", "/wishlist", "/discover", "/playlists", "/recommend", "/stats", "/manage"];
-
-  // Determine navigation direction
-  const prevPath = prevPathRef.current;
-  const currentTabIndex = tabOrder.indexOf(location.pathname);
-  const prevTabIndex = tabOrder.indexOf(prevPath);
-
-  // For non-tab pages (admin, profile), always animate forward
-  const goingForward =
-    prevTabIndex === -1 || currentTabIndex === -1 || currentTabIndex >= prevTabIndex;
-  const pageAnimClass = goingForward
-    ? "animate-page-slide-in-right"
-    : "animate-page-slide-in-left";
-
-  // On initial mount (coming from login), use a grander entrance animation.
-  // After mount, `useEffect` marks `isInitialMount` as false so subsequent
-  // tab switches use the regular directional animations instead.
-  useEffect(() => {
-    isInitialMount.current = false;
-  }, []);
-
-  const containerAnimClass = isInitialMount.current
-    ? "animate-main-entrance"
-    : pageAnimClass;
-
-  // Update previous path AFTER render
-  useEffect(() => {
-    prevPathRef.current = location.pathname;
-  }, [location.pathname]);
 
   // Reset scroll to top on every route change
   useEffect(() => {
@@ -113,8 +79,7 @@ function MainApp() {
           <EnrichBanner />
           <TabNav />
           <div className="flex flex-col gap-4 sm:gap-8 py-3 sm:py-6">
-            {/* Re-key on pathname to re-trigger entrance animation on every tab switch */}
-            <div key={location.pathname} className={containerAnimClass}>
+            <div>
               <Suspense fallback={
                 <div className="flex items-center justify-center py-16">
                   <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
@@ -125,7 +90,8 @@ function MainApp() {
                   <Route path="/watched" element={<WatchedTab />} />
                   <Route path="/wishlist" element={<WishlistTab />} />
                   <Route path="/discover" element={<DiscoverTab />} />
-                  <Route path="/playlists" element={<PlaylistsTab />} />
+                  {/* 片单已并入管理页，旧链接重定向 */}
+                  <Route path="/playlists" element={<Navigate to="/manage" replace />} />
                   <Route path="/recommend" element={<RecommendTab />} />
                   <Route path="/top-rated" element={<TopRatedTab />} />
                   <Route path="/stats" element={<StatsTab />} />

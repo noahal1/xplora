@@ -1,0 +1,220 @@
+/* ============================================================
+   GooeyNav — React Bits adaptation for Xplora
+   Theme-aware (dark/light), icon support, brand-color pill.
+   The gooey `blur + contrast` filter lives on the particle
+   layer only: contrast(100) would crush the amber brand color
+   into pure yellow, so the active pill stays crisp while the
+   burst particles get the gooey merge.
+   ============================================================ */
+
+.gooey-nav-container {
+  /* Theme tokens (inherit from :root / .light) */
+  --gooey-fg: var(--seed-fg);
+  --gooey-fg-muted: var(--fg-muted);
+  --gooey-fg-hover: var(--fg-secondary);
+  --gooey-pill: var(--seed-primary);
+  --gooey-pill-fg: var(--primary-foreground);
+  --gooey-particle-size: 12px;
+
+  /* Particle palette — monochrome amber, in sync with the pill.
+     The gooey SVG filter thresholds alpha only, so these exact colors
+     survive (CSS `contrast()` would crush them into primaries). */
+  --color-1: var(--seed-primary);
+  --color-2: var(--seed-primary);
+  --color-3: var(--seed-primary);
+  --color-4: var(--seed-primary);
+
+  position: relative;
+}
+
+.gooey-nav-container nav {
+  display: flex;
+  position: relative;
+  transform: translate3d(0, 0, 0.01px);
+}
+
+.gooey-nav-container nav ul {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 auto;
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  max-width: 72rem;
+  color: var(--gooey-fg-muted);
+}
+
+.gooey-nav-container nav ul li {
+  border-radius: 100vw;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+  color: var(--gooey-fg-muted);
+}
+
+.gooey-nav-container nav ul li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 510;
+  line-height: 1.2;
+  white-space: nowrap;
+  border-radius: 100vw;
+  outline: none;
+}
+
+/* Keyboard focus ring */
+.gooey-nav-container nav ul li:focus-within:has(:focus-visible) {
+  box-shadow: 0 0 0 2px var(--seed-bg), 0 0 0 4px var(--seed-primary);
+}
+
+/* Resting pill — crisp brand color (not filtered, keeps hue) */
+.gooey-nav-container nav ul li::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 100vw;
+  background: var(--gooey-pill);
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.3s ease;
+  z-index: -1;
+}
+
+.gooey-nav-container nav ul li.active {
+  color: var(--gooey-pill-fg);
+}
+
+.gooey-nav-container nav ul li.active::after {
+  opacity: 1;
+  transform: scale(1);
+  box-shadow: 0 0 14px 1px var(--accent-glow);
+}
+
+/* Inactive hover feedback */
+.gooey-nav-container nav ul li:not(.active):hover {
+  color: var(--gooey-fg-hover);
+  background: var(--bg-input);
+}
+
+/* Effect layer — absolutely positioned over the active item */
+.gooey-nav-container .effect {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+
+/* Gooey particle layer — SVG alpha-threshold filter keeps particle colors intact */
+.gooey-nav-container .effect.filter {
+  filter: url(#gooeynav-goo);
+  z-index: 1;
+}
+
+/* Label pop on activation — animates the active tab's own anchor */
+.gooey-nav-container nav ul li.active a {
+  animation: gooeyLabelPop 0.38s var(--ease-spring);
+}
+
+@keyframes gooeyLabelPop {
+  0% {
+    transform: scale(0.85);
+  }
+  55% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ── Particles ─────────────────────────────────────────────── */
+.particle,
+.point {
+  display: block;
+  opacity: 0;
+  width: var(--gooey-particle-size);
+  height: var(--gooey-particle-size);
+  border-radius: 100%;
+  transform-origin: center;
+}
+
+.particle {
+  --time: 5s;
+  position: absolute;
+  top: calc(50% - var(--gooey-particle-size) / 2);
+  left: calc(50% - var(--gooey-particle-size) / 2);
+  animation: particle calc(var(--time)) ease 1 -350ms;
+}
+
+.point {
+  background: var(--color);
+  opacity: 1;
+  animation: point calc(var(--time)) ease 1 -350ms;
+}
+
+@keyframes particle {
+  0% {
+    transform: rotate(0deg) translate(calc(var(--start-x)), calc(var(--start-y)));
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+
+  70% {
+    transform: rotate(calc(var(--rotate) * 0.5)) translate(calc(var(--end-x) * 1.2), calc(var(--end-y) * 1.2));
+    opacity: 1;
+    animation-timing-function: ease;
+  }
+
+  85% {
+    transform: rotate(calc(var(--rotate) * 0.66)) translate(calc(var(--end-x)), calc(var(--end-y)));
+    opacity: 1;
+  }
+
+  100% {
+    transform: rotate(calc(var(--rotate) * 1.2)) translate(calc(var(--end-x) * 0.5), calc(var(--end-y) * 0.5));
+    opacity: 1;
+  }
+}
+
+@keyframes point {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+
+  25% {
+    transform: scale(calc(var(--scale) * 0.25));
+  }
+
+  38% {
+    opacity: 1;
+  }
+
+  65% {
+    transform: scale(var(--scale));
+    opacity: 1;
+    animation-timing-function: ease;
+  }
+
+  85% {
+    transform: scale(var(--scale));
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}

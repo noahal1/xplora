@@ -1,61 +1,61 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Film, BookmarkPlus, Sparkles, Library, BarChart3, ListTodo, Compass } from "lucide-react";
+import { Film, BookmarkPlus, Sparkles, Library, BarChart3, Compass } from "lucide-react";
 import { useMemo } from "react";
 import { createPortal } from "react-dom";
+import GooeyNav, { type GooeyNavItem } from "./GooeyNav";
 
 export function TabNav() {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const tabs = useMemo(() => [
     { id: "watched", label: t("tabs.watched"), icon: Film },
     { id: "wishlist", label: t("tabs.wishlist"), icon: BookmarkPlus },
     { id: "discover", label: t("tabs.discover"), icon: Compass },
-    { id: "playlists", label: t("playlists.tab_title"), icon: ListTodo },
     { id: "recommend", label: t("tabs.recommend"), icon: Sparkles },
     { id: "stats", label: t("tabs.stats"), icon: BarChart3 },
     { id: "manage", label: t("tabs.manage"), icon: Library },
   ], [t]);
 
-  // Compute active index for sliding indicator
+  // Router is the single source of truth for the active tab (-1 = no tab matched)
   const activeIndex = tabs.findIndex((tab) => location.pathname === `/${tab.id}`);
+
+  // Build GooeyNav items with per-item active icon (bounce on activation)
+  const gooeyItems = useMemo<GooeyNavItem[]>(
+    () =>
+      tabs.map((tab, i) => {
+        const Icon = tab.icon;
+        const isActive = i === activeIndex;
+        return {
+          label: tab.label,
+          href: `/${tab.id}`,
+          icon: (
+            <Icon size={14} key={String(isActive)} className={isActive ? "animate-tab-icon-bounce" : ""} />
+          ),
+        };
+      }),
+    [tabs, activeIndex]
+  );
 
   return (
     <>
       {/* ── Top Navigation (hidden on mobile) ──────────────────── */}
-      <nav
-        className="relative flex items-center gap-1 mb-5 pb-2.5 max-sm:hidden border-b border-border-subtle"
-      >
-        {/* Sliding indicator */}
-        {activeIndex >= 0 && (
-          <div
-            className="absolute bottom-0 h-[2px] rounded-full transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-            style={{
-              background: "var(--seed-primary)",
-              width: `${100 / tabs.length}%`,
-              left: `${(activeIndex / tabs.length) * 100}%`,
-            }}
-          />
-        )}
-
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = location.pathname === `/${tab.id}`;
-          return (
-            <NavLink
-              key={tab.id}
-              to={`/${tab.id}`}
-              className={`tab-item flex items-center gap-1.5 flex-1 justify-center ${
-                isActive ? "active" : ""
-              }`}
-            >
-              <Icon size={14} key={String(isActive)} className={isActive ? "animate-tab-icon-bounce" : ""} />
-              <span>{tab.label}</span>
-            </NavLink>
-          );
-        })}
-      </nav>
+      <div className="max-sm:hidden mb-5 pb-3 border-b border-border-subtle">
+        <GooeyNav
+          items={gooeyItems}
+          activeIndex={activeIndex}
+          onSelect={(i) => {
+            const tab = tabs[i];
+            if (tab) navigate(`/${tab.id}`);
+          }}
+          particleCount={10}
+          particleDistances={[56, 12]}
+          particleR={50}
+          timeVariance={220}
+        />
+      </div>
 
       {/* ── Bottom Tab Bar (mobile only, portal to body) ──────── */}
       {createPortal(
