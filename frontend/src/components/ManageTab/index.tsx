@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { MediaDetail, MediaSearchResult, SortField } from "../../types";
+import type { MediaDetail, SortField } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { useEnrich } from "../../context/EnrichContext";
@@ -15,7 +15,7 @@ import { SortControls } from "../SortControls";
 import { StatusFilter } from "../StatusFilter";
 import { SearchInput } from "../SearchInput";
 import FadeContent from "../FadeContent";
-import { Film, Upload, Plus, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server, BrainCircuit } from "lucide-react";
+import { Film, Upload, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server, BrainCircuit, ListTodo } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { localDateToISO } from "../../utils/date";
 import { useSort } from "../../hooks/useSort";
@@ -23,7 +23,6 @@ import { isAbortError, getErrMsg } from "../../lib/utils";
 import { useEnrichReload } from "../../hooks/useEnrichReload";
 
 import { EmptyState } from "../EmptyState";
-import { SearchImportModal } from "./SearchImportModal";
 import { DetailModal } from "./DetailModal";
 import { RematchModal } from "./RematchModal";
 import { MarkWatchedModal } from "./MarkWatchedModal";
@@ -36,8 +35,10 @@ import { FilterBar } from "../shared/FilterBar";
 import { groupTVSeries } from "../../utils/groupTVSeries";
 import type { TVSeriesGroup } from "../../utils/groupTVSeries";
 import { DownloadQueue } from "./DownloadQueue";
+import ViewStack from "../ViewStack";
 
 const MediaServerTab = lazy(() => import("../MediaServerTab").then((m) => ({ default: m.MediaServerTab })));
+const PlaylistsTab = lazy(() => import("../PlaylistsTab").then((m) => ({ default: m.PlaylistsTab })));
 
 const MANAGE_PAGE_SIZE = 16;
 
@@ -78,6 +79,14 @@ export function ManageTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Sub-view: media library table or playlists (片单)
+  const [subView, setSubView] = useState<"media" | "playlists">(
+    () => (localStorage.getItem("xplora-manage-view") as "media" | "playlists") || "media"
+  );
+  useEffect(() => {
+    localStorage.setItem("xplora-manage-view", subView);
+  }, [subView]);
+
   const [page, setPage] = useState(0);
   const search = useDebouncedSearch("", 300);
   const { field: sortField, dir: sortDir, toggle: handleSort } = useSort("created_at", "desc");
@@ -98,9 +107,6 @@ export function ManageTab() {
 
   /* ── Delete confirmation modal ───────────────────────────────── */
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteAction>(null);
-
-  /* ── TMDB search & import ────────────────────────────────────── */
-  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
   /* ── Metadata detail modal ───────────────────────────────────── */
   const [detailMovie, setDetailMovie] = useState<MediaDetail | null>(null);
@@ -222,6 +228,8 @@ export function ManageTab() {
     setAiInferConfirm(null);
   }, [aiInferConfirm]);
 
+  // Media data stays fresh in the background — ViewStack keeps both views
+  // mounted, so no refetch/reload when switching back and forth.
   useEffect(() => {
     const controller = new AbortController();
     fetchData(controller.signal);
@@ -381,8 +389,6 @@ export function ManageTab() {
   }, [mediaList, fetchData, showToast, cancelInlineEdit, t]);
 
   /* ── Enrich operations ───────────────────────────────────────── */
-  const openSearchDialog = useCallback(() => { setSearchDialogOpen(true); }, []);
-
   const handleEnrich = useCallback(async (movieId: number) => {
     setEnrichingIds(prev => new Set(prev).add(movieId));
     try {
@@ -477,38 +483,70 @@ export function ManageTab() {
   
 
   return (
-    <FadeContent className="section-card min-h-[300px]">
-      {/* ── Header ──────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <Film size={15} className="text-primary" />
+    <div className="space-y-5">
+      {/* ── Shared header: title + sub-view switch + toolbar ── */}
+      <FadeContent className="section-card" distance={16}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+          <div className="flex items-center gap-2.5 min-w-0 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Film size={15} className="text-primary" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="section-title text-base leading-tight">{t("manage.title")}</h2>
+                {subView === "media" && (
+                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                    {t("manage.total").split("{{count}}")[0]}
+                    <span className="font-semibold text-foreground/80 tabular-nums"><CountUp end={total} /></span>
+                    {t("manage.total").split("{{count}}")[1]}
+                  </p>
+                )}
+              </div>
+            </div>
+            {/* Sub-view switch: 媒体库 / 片单 — right of the title */}
+            <div className="flex items-center gap-1 rounded-lg p-0.5 bg-muted/40 border border-border shrink-0">
+              {[
+                { id: "media", label: t("manage.tab_library"), icon: <Film size={12} /> },
+                { id: "playlists", label: t("playlists.tab_title"), icon: <ListTodo size={12} /> },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setSubView(opt.id as "media" | "playlists")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    subView === opt.id
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt.icon}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div>
-            <h2 className="section-title text-base leading-tight">{t("manage.title")}</h2>
-            <p className="text-[11px] text-muted-foreground/60 mt-0.5">
-              {t("manage.total").split("{{count}}")[0]}
-              <span className="font-semibold text-foreground/80 tabular-nums"><CountUp end={total} /></span>
-              {t("manage.total").split("{{count}}")[1]}
-            </p>
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {/* Media-only toolbar */}
+            {subView === "media" && (
+              <div className="flex gap-1 items-center overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1 flex-1 sm:flex-none sm:ml-auto">
+                <ToolbarBtn icon={<RefreshCw size={12} />} label={t("manage.refresh")} onClick={() => fetchData()} />
+                <ToolbarBtn icon={<Upload size={12} />} label={t("manage.export")} onClick={handleExportMovies} />
+                <ToolbarBtn icon={<Server size={12} />} label={t("media_server.tab_title")} onClick={() => setShowMediaServer(true)} />
+                <ToolbarBtn icon={<HardDrive size={12} />} label={t("moviepilot.downloading")} onClick={() => setShowDownloadQueue(true)} />
+                <ToolbarBtn
+                  icon={batchLoading ? <Loader2 size={12} className="animate-spin" /> : <WandSparkles size={12} />}
+                  label={t("manage.batch_all")}
+                  onClick={handleBatchAll}
+                  disabled={batchLoading}
+                />
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex gap-1 items-center w-full sm:w-auto overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1">
-          <ToolbarBtn icon={<RefreshCw size={12} />} label={t("manage.refresh")} onClick={() => fetchData()} />
-          <ToolbarBtn icon={<Upload size={12} />} label={t("manage.export")} onClick={handleExportMovies} />
-          <ToolbarBtn icon={<Server size={12} />} label={t("media_server.tab_title")} onClick={() => setShowMediaServer(true)} />
-          <ToolbarBtn icon={<HardDrive size={12} />} label={t("moviepilot.downloading")} onClick={() => setShowDownloadQueue(true)} />
-          <ToolbarBtn
-            icon={batchLoading ? <Loader2 size={12} className="animate-spin" /> : <WandSparkles size={12} />}
-            label={t("manage.batch_all")}
-            onClick={handleBatchAll}
-            disabled={batchLoading}
-          />
-          <button className="btn btn-primary btn-xs sm:py-1.5 sm:px-3 sm:text-sm shrink-0 gap-1" onClick={openSearchDialog}>
-            <Plus size={13} /><span className="hidden sm:inline">{t("manage.add_movie")}</span>
-          </button>
-        </div>
-      </div>
+      </FadeContent>
+
+      <ViewStack active={subView} className="animate-manage-view-in">
+        <div data-view="media" className="section-card min-h-[300px]">
 
       {/* ── Search & bulk actions ───────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-3">
@@ -608,11 +646,6 @@ export function ManageTab() {
         <EmptyState
           icon={<Film size={40} />}
           noDataKey="manage.no_movies"
-          noDataActions={
-            <button className="btn btn-primary btn-sm gap-1.5" onClick={openSearchDialog}>
-              <Plus size={13} />{t("manage.add_movie")}
-            </button>
-          }
         />
       )}
 
@@ -768,6 +801,7 @@ export function ManageTab() {
           />
         </div>
       )}
+        </div>
 
       {/* ── Delete Confirmation Modal ────────────────────────────── */}
       <Modal open={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)}
@@ -844,9 +878,6 @@ export function ManageTab() {
         )}
       </Modal>
 
-      {/* ── TMDB Search & Import Dialog ─────────────────────────── */}
-      <SearchImportModal open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)}      onImportComplete={() => { setSearchDialogOpen(false); fetchData(undefined, true); }} />
-
       {/* ── Metadata Detail Modal ───────────────────────────────── */}
       <DetailModal open={detailMovie !== null} movie={detailMovie} onClose={() => setDetailMovie(null)}
         onSave={() => { fetchData(undefined, true); }} />
@@ -911,7 +942,18 @@ export function ManageTab() {
           <MediaServerTab />
         </Suspense>
       </Modal>
-    </FadeContent>
+
+        <div data-view="playlists" className="min-h-[300px]">
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+            </div>
+          }>
+            <PlaylistsTab />
+          </Suspense>
+        </div>
+      </ViewStack>
+    </div>
   );
 }
 

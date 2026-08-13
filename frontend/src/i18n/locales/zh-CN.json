@@ -220,6 +220,7 @@
   },
   "manage": {
     "title": "电影管理",
+    "tab_library": "媒体库",
     "total": "共 {{count}} 部",
     "refresh": "刷新",
     "search_placeholder": "搜索电影名称...",

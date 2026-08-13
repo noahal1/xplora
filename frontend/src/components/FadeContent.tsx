@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -10,7 +10,7 @@ interface FadeContentProps extends React.HTMLAttributes<HTMLDivElement> {
   container?: Element | string | null;
   /** Apply blur filter on enter (FadeContent). @default false */
   blur?: boolean;
-  /** Scroll-triggered translate distance in px (AnimatedContent). @default 100 */
+  /** Scroll-triggered translate distance in px (AnimatedContent). @default 24 */
   distance?: number;
   /** Direction of scroll-triggered translate (AnimatedContent). @default 'vertical' */
   direction?: 'vertical' | 'horizontal';
@@ -20,7 +20,7 @@ interface FadeContentProps extends React.HTMLAttributes<HTMLDivElement> {
   animateOpacity?: boolean;
   /** Initial scale (AnimatedContent). @default 1 */
   scale?: number;
-  /** Animation duration in seconds (AnimatedContent) or ms (FadeContent). Auto-detected. @default 0.8 */
+  /** Animation duration in seconds (AnimatedContent) or ms (FadeContent). Auto-detected. @default 0.6 */
   duration?: number;
   /** GSAP ease string. @default 'power3.out' */
   ease?: string;
@@ -46,12 +46,12 @@ const FadeContent = React.forwardRef<HTMLDivElement, FadeContentProps>(({
   children,
   container,
   blur = false,
-  distance = 100,
+  distance = 24,
   direction = 'vertical',
   reverse = false,
   animateOpacity = true,
   scale = 1,
-  duration = 0.8,
+  duration = 0.6,
   ease = 'power3.out',
   delay = 0,
   threshold = 0.1,
@@ -62,7 +62,8 @@ const FadeContent = React.forwardRef<HTMLDivElement, FadeContentProps>(({
   onComplete,
   onDisappearanceComplete,
   className = '',
-  ...props
+  style,
+  ...rest
 }, ref) => {
   const internalRef = useRef<HTMLDivElement>(null);
 
@@ -151,8 +152,25 @@ const FadeContent = React.forwardRef<HTMLDivElement, FadeContentProps>(({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Pre-set the "from" state as inline styles at render time so the element
+  // never flashes fully-visible before GSAP takes over (first-paint flicker).
+  const fromStyle = useMemo(() => {
+    const s: React.CSSProperties = {};
+    if (animateOpacity) {
+      s.opacity = initialOpacity;
+      s.visibility = 'hidden';
+    }
+    if (blur) s.filter = 'blur(10px)';
+    if (distance !== 0) {
+      const axis = direction === 'horizontal' ? 'x' : 'y';
+      const offset = reverse ? -distance : distance;
+      s.transform = axis === 'x' ? `translateX(${offset}px)` : `translateY(${offset}px)`;
+    }
+    return s;
+  }, [animateOpacity, initialOpacity, blur, distance, direction, reverse]);
+
   return (
-    <div ref={setRefs} className={className} {...props}>
+    <div ref={setRefs} className={className} style={{ ...fromStyle, ...style }} {...rest}>
       {children}
     </div>
   );

@@ -251,7 +251,7 @@ export function PlaylistsTab() {
     const items = detail.items ?? [];
     return (
       <div className="space-y-5">
-        <FadeContent className="section-card animate-slide-down">
+        <FadeContent className="section-card">
           <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
             <button
               onClick={closeDetail}
@@ -407,7 +407,7 @@ export function PlaylistsTab() {
   // ════════════════════════════════════════════════════════════
   return (
     <div className="space-y-5">
-      <FadeContent className="section-card animate-slide-down">
+      <div className="section-card">
         <div className="section-header flex-wrap gap-2 sm:flex-nowrap">
           <h2 className="section-title flex items-center gap-2">
             <ListTodo className="w-4 h-4 text-primary" />
@@ -421,16 +421,16 @@ export function PlaylistsTab() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">{t("playlists.subtitle")}</p>
-      </FadeContent>
+      </div>
 
       {loading ? (
-        <FadeContent className="section-card">
+        <div className="section-card">
           <div className="flex items-center justify-center py-10">
             <div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
           </div>
-        </FadeContent>
+        </div>
       ) : playlists.length === 0 ? (
-        <FadeContent className="section-card">
+        <div className="section-card">
           <EmptyState
             icon={<ListTodo className="w-10 h-10" />}
             noDataKey="playlists.no_playlists"
@@ -442,9 +442,9 @@ export function PlaylistsTab() {
               </button>
             }
           />
-        </FadeContent>
+        </div>
       ) : (
-        <FadeContent className="section-card">
+        <div className="section-card">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {playlists.map((p) => (
               <button
@@ -486,7 +486,7 @@ export function PlaylistsTab() {
               </button>
             ))}
           </div>
-        </FadeContent>
+        </div>
       )}
 
       {/* Create modal */}

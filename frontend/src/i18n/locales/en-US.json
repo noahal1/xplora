@@ -218,6 +218,7 @@
   },
   "manage": {
     "title": "Movie Manager",
+    "tab_library": "Library",
     "total": "{{count}} movies",
     "refresh": "Refresh",
     "search_placeholder": "Search movies...",
