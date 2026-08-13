@@ -375,7 +375,7 @@ class MoviePilotConnector:
                 "downloadvolumefactor": dvf,
             })
 
-        return self._dedupe_results(results)
+        return _dedupe_results(results)
 
     async def download(self, title: str, url: str, save_path: str = "") -> dict:
         """Send a torrent to MoviePilot's downloader (qBittorrent).
