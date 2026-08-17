@@ -187,11 +187,11 @@ class TMDCMixin:
         # Keep at least top_n * 2 candidates before filtering to ensure
         # enough quality candidates for the AI to choose from.
         MIN_VOTE_COUNT = 50  # Movies with fewer than 50 votes are considered obscure
+        low_vote_count = sum(1 for c in ranked if (c.get("vote_count") or 0) < MIN_VOTE_COUNT)
+        # Always keep at least 5 low-vote candidates to avoid running out
         filtered = [
             c for c in ranked
-            if (c.get("vote_count") or 0) >= MIN_VOTE_COUNT
-            or len(ranked) - len([x for x in ranked if (x.get("vote_count") or 0) >= MIN_VOTE_COUNT]) < 5
-            # Always keep at least 5 low-vote candidates to avoid running out
+            if (c.get("vote_count") or 0) >= MIN_VOTE_COUNT or low_vote_count < 5
         ]
         result = filtered[:top_n]
 
@@ -390,6 +390,8 @@ class TMDCMixin:
         except Exception as e:
             raise ValueError(f"AI service error: {e}")
 
+        if not response.choices or not response.choices[0].message:
+            raise ValueError("Empty response from AI model")
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Empty response from AI model")
@@ -418,6 +420,11 @@ class TMDCMixin:
                     rec.year = matched["year"]
                 if not rec.genre and matched.get("genre"):
                     rec.genre = matched["genre"]
+
+        # Fallback metadata resolution: recs whose title didn't exactly match a
+        # candidate (e.g. AI rewrote the title) still need poster + tmdb_id.
+        # Already-resolved recs are skipped inside _resolve_metadata.
+        recs = self._resolve_metadata(recs)
 
         # Final safety filter: remove any recs that are in excluded_tmdb_ids
         if excluded_tmdb_ids:

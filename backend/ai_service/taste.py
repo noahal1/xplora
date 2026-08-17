@@ -102,7 +102,7 @@ class TasteMixin:
 
         if taste["decade_distribution"]:
             decade_desc = "、".join(
-                f"{d}年代{'-' + str(d+9) + '年代' if d < 2020 else ''}({c}部)"
+                f"{d}年代({c}部)"
                 for d, c in sorted(taste["decade_distribution"].items())
             )
             parts.append(f"  活跃年代：{decade_desc}")

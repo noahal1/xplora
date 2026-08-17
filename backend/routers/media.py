@@ -837,7 +837,7 @@ async def ai_repair_endpoint(
 
 
 @router.post("/media/{media_id}/ai-infer")
-async def ai_infer_single(
+def ai_infer_single(
     media_id: int,
     request: dict = {},
     current_user: dict = Depends(get_current_user),
@@ -860,6 +860,9 @@ async def ai_infer_single(
        - Used after user confirms in the diff modal
 
     Unlike the batch ``POST /media/ai-repair``, this runs synchronously.
+
+    Sync ``def`` (not ``async def``) — ``ai_repair_single_item`` blocks up
+    to 45s; sync endpoints run in FastAPI's thread pool.
     """
     media_item = get_media_for_user(media_id, current_user["id"], db=db)
     if not media_item:

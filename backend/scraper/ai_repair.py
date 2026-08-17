@@ -119,22 +119,31 @@ def _call_ai(prompt: str, model_type: str, api_key: str, temperature: float = 0.
 
 
 def _extract_json(content: str) -> str:
-    """Extract JSON from AI response, handling markdown code blocks."""
+    """Extract JSON from AI response, handling markdown code blocks, think blocks, and extraneous text.
+
+    Uses ``json.JSONDecoder.raw_decode`` instead of manual brace counting so
+    braces inside string values are ignored, and strips ``<think>...</think>``
+    reasoning blocks DeepSeek V4 models emit.
+    """
+    if not content or not content.strip():
+        raise ValueError("No valid JSON object found in AI response")
+
     block_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
     if block_match:
-        return block_match.group(1).strip()
+        content = block_match.group(1).strip()
 
-    brace_depth = 0
-    start = -1
+    # Strip <think>...</think> reasoning blocks (unclosed blocks too)
+    content = re.sub(r"<think>[\s\S]*?(?:</think>|$)", "", content)
+
+    decoder = json.JSONDecoder()
     for i, ch in enumerate(content):
-        if ch == "{":
-            if brace_depth == 0:
-                start = i
-            brace_depth += 1
-        elif ch == "}":
-            brace_depth -= 1
-            if brace_depth == 0 and start >= 0:
-                return content[start: i + 1]
+        if ch not in ("{", "["):
+            continue
+        try:
+            _, end = decoder.raw_decode(content[i:])
+        except json.JSONDecodeError:
+            continue
+        return content[i:i + end]
 
     raise ValueError("No valid JSON object found in AI response")
 

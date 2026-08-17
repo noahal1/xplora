@@ -359,7 +359,6 @@ Respond with ONLY valid JSON in the following format, without any markdown forma
         conversation: list,
         question: str,
         count: int,
-        watched_titles: Optional[list[str]] = None,
         taste_analysis: Optional[dict] = None,
         exclude_titles: Optional[list[str]] = None,
         lang: Optional[str] = None,

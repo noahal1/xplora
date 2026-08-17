@@ -121,7 +121,7 @@ class PlaylistMixin:
             return rotated[:count]
 
         try:
-            response = self._create_chat(
+            content = self._create_chat_retry(
                 messages=[
                     {"role": "system", "content": build_playlist_system_prompt(PLAYLIST_JSON_SCHEMA_NAMES)},
                     {"role": "user", "content": prompt},
@@ -130,10 +130,9 @@ class PlaylistMixin:
                 max_tokens=600,
                 timeout=30,
             )
-            content = response.choices[0].message.content or ""
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("AI playlist name generation failed: %s", e)
-            raise RuntimeError(f"AI 服务调用失败，请稍后重试：{e}") from e
+            raise
 
         names: list[str] = []
         people: list[dict] = []
@@ -267,7 +266,7 @@ class PlaylistMixin:
         )
 
         try:
-            response = self._create_chat(
+            content = self._create_chat_retry(
                 messages=[
                     {"role": "system", "content": build_playlist_system_prompt(PLAYLIST_JSON_SCHEMA_CATEGORIZE)},
                     {"role": "user", "content": prompt},
@@ -276,10 +275,9 @@ class PlaylistMixin:
                 max_tokens=500,
                 timeout=30,
             )
-            content = response.choices[0].message.content or ""
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("AI playlist categorization failed: %s", e)
-            raise RuntimeError(f"AI 服务调用失败，请稍后重试：{e}") from e
+            raise
 
         suggestions: list[dict] = []
         try:
@@ -399,7 +397,7 @@ class PlaylistMixin:
         )
 
         try:
-            response = self._create_chat(
+            content = self._create_chat_retry(
                 messages=[
                     {"role": "system", "content": build_playlist_system_prompt(PLAYLIST_JSON_SCHEMA_COMPLETE)},
                     {"role": "user", "content": prompt},
@@ -408,10 +406,9 @@ class PlaylistMixin:
                 max_tokens=900,
                 timeout=45,
             )
-            content = response.choices[0].message.content or ""
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("AI playlist completion failed: %s", e)
-            raise RuntimeError(f"AI 服务调用失败，请稍后重试：{e}") from e
+            raise
 
         try:
             json_str = self._extract_json(content)

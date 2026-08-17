@@ -582,12 +582,18 @@ def _followup_stream_with_persistence(movies, count, model, api_key, user_id, wa
 
 
 @router.post("", response_model=RecommendationResponse)
-async def recommend(
+def recommend(
     request: RecommendationRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """Generate movie recommendations based on watched movies and ratings."""
+    """Generate movie recommendations based on watched movies and ratings.
+
+    Deliberately a sync ``def`` (not ``async def``): the AI call blocks for
+    up to minutes (60s timeout × retries). FastAPI runs sync endpoints in a
+    thread pool, so this never blocks the event loop and other requests
+    (health checks, login, other users) keep working.
+    """
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     model, api_key = _resolve_model(request.model)
     try:
@@ -677,12 +683,16 @@ async def recommend(
 
 
 @router.post("/stream")
-async def recommend_stream(
+def recommend_stream(
     request: RecommendationRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """SSE streaming endpoint for movie recommendations. Auto-saves to DB."""
+    """SSE streaming endpoint for movie recommendations. Auto-saves to DB.
+
+    Sync ``def`` (not ``async def``) — the pre-stream DB queries are
+    blocking, and sync endpoints run in FastAPI's thread pool.
+    """
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     model, api_key = _resolve_model(request.model)
     # Single DB query: titles + TMDB IDs + source movies — all in one
@@ -758,12 +768,16 @@ async def recommend_stream(
 
 
 @router.post("/followup")
-async def followup_stream(
+def followup_stream(
     request: FollowUpRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """SSE streaming endpoint for follow-up conversation. Auto-saves to DB."""
+    """SSE streaming endpoint for follow-up conversation. Auto-saves to DB.
+
+    Sync ``def`` (not ``async def``) — the follow-up AI call blocks for a
+    long time; sync endpoints run in FastAPI's thread pool.
+    """
     movies = parse_movie_data([m.model_dump() for m in request.movies])
     model, api_key = _resolve_model(request.model)
 

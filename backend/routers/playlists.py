@@ -148,7 +148,7 @@ def _run_ai(fn):
 
 
 @router.post("/playlists/ai-name")
-async def generate_playlist_name_endpoint(
+def generate_playlist_name_endpoint(
     request: PlaylistAINameRequest,
     current_user: dict = Depends(get_current_user),
 ):
@@ -207,7 +207,7 @@ def _playlist_with_items(playlist, items) -> dict:
 
 
 @router.post("/playlists/ai-categorize")
-async def categorize_playlist_endpoint(
+def categorize_playlist_endpoint(
     request: PlaylistCategorizeRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
@@ -240,7 +240,7 @@ async def categorize_playlist_endpoint(
 
 
 @router.post("/playlists/{playlist_id}/ai-complete")
-async def complete_playlist_endpoint(
+def complete_playlist_endpoint(
     playlist_id: int,
     request: PlaylistCompleteRequest,
     current_user: dict = Depends(get_current_user),

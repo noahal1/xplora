@@ -93,8 +93,10 @@ class RecommendMixin:
                     all_excluded.append(t)
 
         if total_filtered > 0:
-            print(f"[Recommend] Filtered out {total_filtered} already-watched titles "
-                  f"({len(all_recs[:count])}/{count} final)")
+            logger.info(
+                "[Recommend] Filtered out %d already-watched titles (%d/%d final)",
+                total_filtered, len(all_recs[:count]), count,
+            )
 
         return all_recs, total_filtered
 
@@ -169,11 +171,19 @@ class RecommendMixin:
                 code = getattr(e, "status_code", "unknown")
                 raise ValueError(f"{self.model_type} API error ({code}): {e.message}")
 
+            if not response.choices or not response.choices[0].message:
+                # No choices (some gateways return empty choices on errors) or
+                # empty content (reasoning model spent all max_tokens on
+                # thinking). Return [] so _retry_loop keeps retrying instead
+                # of failing the whole request.
+                if attempt == 0:
+                    logger.warning("Empty response from %s on first attempt, retrying", self.model_type)
+                return []
             content = response.choices[0].message.content
             if not content:
                 if attempt == 0:
-                    raise ValueError("Empty response from AI model")
-                return None
+                    logger.warning("Empty content from %s on first attempt, retrying", self.model_type)
+                return []
 
             try:
                 return self._parse_response(content)
@@ -232,7 +242,6 @@ class RecommendMixin:
 
             prompt = self._build_followup_prompt(
                 movies, previous_recommendations, conversation, question, request_count,
-                watched_titles=all_excluded,
                 taste_analysis=taste_analysis,
                 exclude_titles=all_excluded,
                 lang=lang,
@@ -269,6 +278,10 @@ class RecommendMixin:
             accumulated = ""
 
             for chunk in stream:
+                # Some gateways send chunks with empty choices (e.g. a final
+                # chunk carrying only usage/finish info) — skip them.
+                if not chunk.choices:
+                    continue
                 delta = chunk.choices[0].delta
                 if delta and delta.content:
                     token = delta.content
@@ -484,12 +497,23 @@ class RecommendMixin:
             accumulated = ""
 
             for chunk in stream:
+                # Some gateways send chunks with empty choices (e.g. a final
+                # chunk carrying only usage/finish info) — skip them.
+                if not chunk.choices:
+                    continue
                 delta = chunk.choices[0].delta
                 if delta and delta.content:
                     token = delta.content
                     accumulated += token
                     # Forward chunk events so the frontend can show progress
                     yield f"event: chunk\ndata: {json.dumps({'text': token})}\n\n"
+
+            # Empty output (reasoning model produced no content) → retry the
+            # attempt instead of failing the whole stream.
+            if not accumulated.strip():
+                if attempt == 0:
+                    logger.warning("Empty streamed output from %s on first attempt, retrying", self.model_type)
+                continue
 
             # Parse and filter this attempt's results
             try:
@@ -509,3 +533,54 @@ class RecommendMixin:
             # Re-check against all_excluded (which now includes previous retry AI suggestions)
             before = list(new_recs)
             new_recs = self._filter_watched(new_recs, all_excluded)
+            filtered_out = _get_filtered_out(before, new_recs)
+            total_filtered += len(filtered_out)
+
+            filtered_titles_info = None
+            if filtered_out:
+                filtered_titles_info = [
+                    (_get_title(r), "已在用户的已看/想看列表中")
+                    for r in filtered_out
+                ]
+
+            if not new_recs:
+                continue
+
+            all_recs.extend(new_recs)
+            for r in new_recs:
+                t = _get_title(r)
+                if t and t not in all_excluded:
+                    all_excluded.append(t)
+
+        if total_filtered > 0:
+            logger.info(
+                "[Recommend] Filtered out %d already-watched titles (%d/%d final)",
+                total_filtered, len(all_recs[:count]), count,
+            )
+
+        # Resolve poster URLs + TMDB IDs from TMDB, then filter by excluded IDs
+        all_recs = self._resolve_metadata(all_recs)
+        all_recs = self._filter_by_tmdb_id(all_recs, excluded_tmdb_ids)
+
+        # Yield each recommendation as SSE event
+        for rec in all_recs[:count]:
+            rec_data = json.dumps({
+                "title": rec.get("title", "") if isinstance(rec, dict) else rec.title,
+                "year": rec.get("year") if isinstance(rec, dict) else rec.year,
+                "genre": rec.get("genre") if isinstance(rec, dict) else rec.genre,
+                "reason": rec.get("reason", "") if isinstance(rec, dict) else rec.reason,
+                "confidence": rec.get("confidence", 0.5) if isinstance(rec, dict) else rec.confidence,
+                "poster_url": rec.get("poster_url") if isinstance(rec, dict) else rec.poster_url,
+                "tmdb_id": rec.get("tmdb_id") if isinstance(rec, dict) else rec.tmdb_id,
+                "media_type": rec.get("media_type") if isinstance(rec, dict) else rec.media_type,
+            }, ensure_ascii=False)
+            yield f"event: recommendation\ndata: {rec_data}\n\n"
+
+        # Yield done event
+        done_data = json.dumps({
+            "model_used": self.model_type,
+            "source_count": len(movies),
+            "total": len(all_recs[:count]),
+            "filtered_count": total_filtered,
+        })
+        yield f"event: done\ndata: {done_data}\n\n"
