@@ -10,6 +10,8 @@ from .constants import (
     DEFAULT_TEMPERATURE,
     MAX_API_RETRIES,
     MAX_TOKENS,
+    MIN_RETRIES_FOR_FULL_LOOP,
+    SMALL_REQUEST_RETRY_CAP,
     STRATEGY_TEMPERATURES,
     SYSTEM_PROMPT_FOLLOWUP,
     SYSTEM_PROMPT_RECOMMEND,
@@ -46,7 +48,13 @@ class RecommendMixin:
 
         Returns ``(all_recs, total_filtered)``.
         """
-        max_retries = min(max(3, count), MAX_API_RETRIES)
+        # Small requests (e.g. the default 5 recs) cap the retry budget so a
+        # filter-heavy library can't stack several sequential 30-60s AI calls.
+        max_retries = (
+            min(SMALL_REQUEST_RETRY_CAP, MAX_API_RETRIES)
+            if count < MIN_RETRIES_FOR_FULL_LOOP
+            else min(max(3, count), MAX_API_RETRIES)
+        )
         all_recs = []
         total_filtered = 0
         filtered_titles_info = None

@@ -636,10 +636,16 @@ async def list_media(
     media_type: str = "",
     genre: str = "",
     country: str = "",
+    fields: str = Query("", description="'light' returns only title/rating/year/genre/media_type/tmdb_id/status — much smaller payload for consumers that don't render detail fields"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """List saved media items for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv'), genre, country."""
+    """List saved media items for current user. Optional filters: status ('watched'/'wish'), rating range, has_error, media_type ('movie'/'tv'), genre, country.
+
+    ``fields=light`` projects each row down to the few fields used by
+    list-only consumers (recommend tab genre filter etc.), cutting the
+    payload from ~2-4 MB to a few hundred KB for large libraries.
+    """
     status_filter = status if status in ("watched", "wish") else None
     media_type_filter = media_type if media_type in ("movie", "tv") else None
     records, total = db_get_media(
@@ -658,6 +664,7 @@ async def list_media(
         country=country or None,
         db=db,
     )
+    light = fields.strip().lower() == "light"
     return {
         "media": [
             {
@@ -682,6 +689,18 @@ async def list_media(
                 "episode_count": r.episode_count,
                 "series_poster_url": r.series_poster_url,
                 "created_at": iso_utc(r.created_at),
+            }
+            if not light else
+            {
+                "id": r.id,
+                "title": r.title,
+                "rating": r.rating,
+                "year": r.year,
+                "genre": r.genre,
+                "status": r.status,
+                "media_type": r.media_type,
+                "tmdb_id": r.tmdb_id,
+                "poster_url": r.poster_url,
             }
             for r in records
         ],

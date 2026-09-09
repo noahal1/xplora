@@ -79,6 +79,10 @@ def _playlist_detail_dict(playlist, items) -> dict:
     data = _playlist_to_dict(playlist)
     data["item_count"] = len(items)
     data["items"] = [_item_to_dict(i) for i in items]
+    data["cover_posters"] = [
+        i.poster_url for i in items[:3]
+        if i.poster_url
+    ]
     return data
 
 
@@ -296,6 +300,12 @@ async def get_playlists(
         data = _playlist_to_dict(p)
         items = list_items(p.id, db)
         data["item_count"] = len(items)
+        # First few item posters — lets the UI render a collage cover
+        # instead of a single cropped one.
+        data["cover_posters"] = [
+            i.poster_url for i in items[:3]
+            if i.poster_url
+        ]
         if check_item:
             data["item_included"] = playlist_items_contain_item(
                 items,

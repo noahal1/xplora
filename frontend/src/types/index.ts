@@ -324,6 +324,8 @@ export interface Playlist {
   updated_at: string;
   item_count?: number;
   items?: PlaylistItem[];
+  /** First few item posters — used to render a collage cover on cards. */
+  cover_posters?: string[];
   /** Whether the playlist already contains the queried item (list endpoint with item_* params). */
   item_included?: boolean;
 }

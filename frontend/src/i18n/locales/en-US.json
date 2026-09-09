@@ -850,7 +850,10 @@
     "ai_complete_none": "No missing titles found",
     "ai_people_suggest": "AI suggests creating:",
     "ai_people_director": "Director",
-    "ai_people_actor": "Starring"
+    "ai_people_actor": "Starring",
+    "shared_badge": "Shared · click to copy link",
+    "drag_hint": "Drag cards to reorder",
+    "edit_note": "Edit note"
   },
   "share": {
     "title": "Share Playlist",

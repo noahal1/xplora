@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaItem, Recommendation, ChatMessage, ExternalDetail, DBSession, DBSessionDetail, Playlist } from "../types";
 import * as api from "../api";
+import { API_BASE } from "../api";
 import { exportJSON } from "../utils/export";
 import { useToast } from "../context/ToastContext";
 import { SkeletonCard } from "./Skeleton";
@@ -89,9 +90,11 @@ export function RecommendTab() {
     try {
       // Playlist fetch is best-effort — a failure must not block the core
       // movie/wishlist data (Promise.all would reject the whole batch).
+      // fields=light keeps the payload small: this tab only uses
+      // title/rating/year/genre/media_type/tmdb_id, not overview/tagline.
       const [watchedData, wishlistData, playlistResult] = await Promise.all([
-        api.listMedia({ page: 0, page_size: 5000, status: "watched" }),
-        api.listMedia({ page: 0, page_size: 5000, status: "wish" }),
+        api.listMedia({ page: 0, page_size: 5000, status: "watched", fields: "light" }),
+        api.listMedia({ page: 0, page_size: 5000, status: "wish", fields: "light" }),
         api.listPlaylists().catch(() => ({ playlists: [] })),
       ]);
       setMovies(
@@ -315,52 +318,108 @@ export function RecommendTab() {
     cancelRef.current = controller;
     const timeoutId = setTimeout(() => controller.abort(), 120000);
 
+    // Enrich a streamed rec with watched/wishlist info as it arrives.
+    // Priority: TMDB ID exact match > title fuzzy match.
+    const wishlistTitlesArray = Array.from(wishlistTitles);
+    const enrichRec = (rec: Recommendation): Recommendation => {
+      if (rec.tmdb_id) {
+        const watched = watchedTmdbIds.has(rec.tmdb_id);
+        const inWishlist = wishlistTmdbIds.has(rec.tmdb_id);
+        if (watched || inWishlist) {
+          return { ...rec, poster_url: rec.poster_url || null, watched, inWishlist };
+        }
+      }
+      const matched = movies.find((m) => titleMatches(m.title, rec.title));
+      return {
+        ...rec,
+        poster_url: rec.poster_url || null,
+        media_type: rec.media_type || matched?.media_type,
+        watched: !!matched,
+        inWishlist: titleInSet(rec.title, wishlistTitlesArray),
+      };
+    };
+
+    // Streamed recs accumulate here; each `recommendation` event renders
+    // immediately so the user sees results while the AI keeps generating.
+    const streamedRecs: Recommendation[] = [];
+    let sourceCount = filteredMovies.length;
+
     try {
       const sp = getStrategyParams();
-      const data = await api.getRecommendations({
-        movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre, media_type: m.media_type })),
-        model: selectedModel,
-        count: recCount,
-        strategy,
-        strategy_params: sp || undefined,
-        lang: uiLang,
+      const token = localStorage.getItem("xplora-token");
+      const response = await fetch(`${API_BASE}/recommend/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre, media_type: m.media_type })),
+          model: selectedModel,
+          count: recCount,
+          strategy,
+          strategy_params: sp || undefined,
+          lang: uiLang,
+        }),
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
+      if (!response.ok || !response.body) {
+        const err = await response.json().catch(() => ({ detail: t("recommend.server_error") }));
+        throw new Error(err.detail || t("recommend.request_failed"));
+      }
 
-      // Backend may auto-fall back to local (no AI key) — surface the real model used
-      if (data.model_used) setModelUsed(getModelLabel(data.model_used));
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      // Enrich each recommendation with watched/wishlist info
-      // Priority: TMDB ID exact match > title fuzzy match
-      const wishlistTitlesArray = Array.from(wishlistTitles);
-      const recs: Recommendation[] = data.recommendations.map((rec) => {
-        // TMDB ID exact match (preferred — handles cross-language)
-        if (rec.tmdb_id) {
-          const watched = watchedTmdbIds.has(rec.tmdb_id);
-          const inWishlist = wishlistTmdbIds.has(rec.tmdb_id);
-          if (watched || inWishlist) {
-            return { ...rec, poster_url: rec.poster_url || null, watched, inWishlist };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+        for (const eventBlock of events) {
+          const lines = eventBlock.split("\n");
+          let eventType = "message";
+          let eventData = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+            else if (line.startsWith("data: ")) eventData = line.slice(6).trim();
+          }
+          if (!eventData) continue;
+          try {
+            const data = JSON.parse(eventData);
+            switch (eventType) {
+              case "start":
+                if (data.source_count) sourceCount = data.source_count;
+                break;
+              case "recommendation": {
+                const enriched = enrichRec(data as Recommendation);
+                streamedRecs.push(enriched);
+                setRecommendations([...streamedRecs]);
+                break;
+              }
+              case "done":
+                // Backend may auto-fall back to local (no AI key) — surface the real model used
+                if (data.model_used) setModelUsed(getModelLabel(data.model_used));
+                break;
+              case "error":
+                throw new Error(data.message);
+            }
+          } catch (parseErr) {
+            // Re-throw real errors thrown inside the switch; ignore JSON noise
+            if (parseErr instanceof Error && parseErr.message && eventType === "error") throw parseErr;
+            console.warn("SSE parse warning (recommend): invalid event data", eventData);
           }
         }
-        // Fallback: title fuzzy match for items without tmdb_id or no match
-        const matched = movies.find((m) => titleMatches(m.title, rec.title));
-        return {
-          ...rec,
-          poster_url: rec.poster_url || null,
-          media_type: rec.media_type || matched?.media_type,
-          watched: !!matched,
-          inWishlist: titleInSet(rec.title, wishlistTitlesArray),
-        };
-      });
+      }
 
-      setSourceInfo(t("recommend.source_info_done", { count: data.source_count, recs: recs.length }));
+      clearTimeout(timeoutId);
 
-      if (recs.length === 0) {
+      setSourceInfo(t("recommend.source_info_done", { count: sourceCount, recs: streamedRecs.length }));
+
+      if (streamedRecs.length === 0) {
         showToast(t("recommend.no_results"), "error");
       } else {
-        setRecommendations(recs);
+        setRecommendations(streamedRecs);
         setShowChat(true);
       }
     } catch (err) {
@@ -369,8 +428,18 @@ export function RecommendTab() {
           showToast(t("recommend.timeout"), "error");
         }
         cancelledByUserRef.current = false;
+        // Keep any recs that already streamed in — they are valid results
+        if (streamedRecs.length > 0) {
+          setSourceInfo(t("recommend.source_info_done", { count: sourceCount, recs: streamedRecs.length }));
+          setShowChat(true);
+        }
       } else {
         showToast(t("recommend.error", { message: getErrMsg(err) }), "error");
+        // Same: partial streaming results are still worth showing
+        if (streamedRecs.length > 0) {
+          setSourceInfo(t("recommend.source_info_done", { count: sourceCount, recs: streamedRecs.length }));
+          setShowChat(true);
+        }
       }
     } finally {
       clearTimeout(timeoutId);
@@ -378,7 +447,7 @@ export function RecommendTab() {
       cancelledByUserRef.current = false;
       setIsLoading(false);
     }
-  }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, uiLang, showToast, t]);
+  }, [movies, filteredMovies, selectedModel, recCount, strategy, getStrategyParams, uiLang, wishlistTitles, watchedTmdbIds, wishlistTmdbIds, showToast, t]);
 
   // ── Cancel loading handler ──
   const handleCancel = useCallback(() => {

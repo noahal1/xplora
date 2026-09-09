@@ -2,7 +2,7 @@
 
 import type { MediaImport, WishlistItem, MediaDetail, DBSession, DBSessionDetail, Recommendation, MediaSearchResult, ExternalDetail, StatsData } from "../types";
 
-const API_BASE = "/api";
+export const API_BASE = "/api";
 
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem("xplora-token");
@@ -75,6 +75,8 @@ export async function listMedia(params: {
   media_type?: string;
   genre?: string;
   country?: string;
+  /** "light" — only title/rating/year/genre/media_type/tmdb_id/status/poster; much smaller payload */
+  fields?: string;
   signal?: AbortSignal;
 }): Promise<{ media: MediaDetail[]; total: number }> {
   const qs = new URLSearchParams();
@@ -90,6 +92,7 @@ export async function listMedia(params: {
   if (params.media_type) qs.set("media_type", params.media_type);
   if (params.genre) qs.set("genre", params.genre);
   if (params.country) qs.set("country", params.country);
+  if (params.fields) qs.set("fields", params.fields);
   return fetchJSON(`${API_BASE}/media?${qs.toString()}`, { headers: getAuthHeaders(), signal: params.signal });
 }
 

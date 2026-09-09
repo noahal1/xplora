@@ -93,6 +93,10 @@ STRATEGY_TEMPERATURES = {
 DEFAULT_TEMPERATURE = 0.7
 MAX_TOKENS = 3000  # Increased from 2000 for Chinese responses
 MAX_API_RETRIES = 10  # Hard cap on total retries per request to prevent excessive API calls
+# Small requests (few recs) should not pay for many sequential AI calls when
+# filtering eats suggestions — cap attempts so the worst-case wait stays sane.
+MIN_RETRIES_FOR_FULL_LOOP = 6  # requests for fewer recs than this use a tighter cap
+SMALL_REQUEST_RETRY_CAP = 2  # max AI attempts when count < MIN_RETRIES_FOR_FULL_LOOP
 
 # ── System prompts ──────────────────────────────────────────────
 # The exact JSON output schema is embedded in each system prompt so

@@ -884,7 +884,10 @@
     "ai_complete_none": "没有找到需要补齐的影片",
     "ai_people_suggest": "AI 建议创建以下片单：",
     "ai_people_director": "导演",
-    "ai_people_actor": "主演"
+    "ai_people_actor": "主演",
+    "shared_badge": "分享中 · 点击复制链接",
+    "drag_hint": "拖拽卡片调整顺序",
+    "edit_note": "编辑备注"
   },
   "share": {
     "title": "分享片单",
