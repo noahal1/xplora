@@ -56,6 +56,13 @@ RUN sed -i "s/deb.debian.org/${APT_MIRROR_REPLACE}/g" /etc/apt/sources.list.d/de
 # Ensure SQLite database directory exists (baked into image)
 RUN mkdir -p /app/data
 
+# Create a dedicated non-root user (fixed uid/gid 1000 so host-side
+# permission management of ./data is predictable). The app runs as this
+# user — see entrypoint.sh — so a compromise of the app does NOT grant
+# root inside the container.
+RUN groupadd -g 1000 xplora && \
+    useradd -u 1000 -g xplora -d /app -s /usr/sbin/nologin xplora
+
 # Verify sqlite3 works in this image
 RUN python -c "import sqlite3; print(f'SQLite version: {sqlite3.sqlite_version}'); conn = sqlite3.connect('/tmp/test.db'); conn.execute('CREATE TABLE t(v)'); conn.execute('INSERT INTO t VALUES(1)'); print(conn.execute('SELECT * FROM t').fetchone()); conn.close(); print('SQLite: OK')"
 
@@ -69,8 +76,16 @@ COPY backend/ ./backend/
 # Copy pre-built frontend from builder stage
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
+# Everything under /app belongs to the app user (code only needs read access;
+# writable dirs like /app/data are handled by the entrypoint at runtime).
+RUN chown -R xplora:xplora /app
+
+# Entrypoint: fix up persistent dir ownership, then drop privileges.
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Expose the application port
 EXPOSE 8327
 
-# Run the application
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8327"]

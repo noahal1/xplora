@@ -208,6 +208,11 @@ async def import_my_data(
     if movie_ids:
         background_tasks.add_task(async_background_enrich_movies, current_user["id"], movie_ids)
 
+    # Launch background BGE-M3 embedding for imported movies
+    if watched_items:
+        from routers.media import _background_embed_movies
+        background_tasks.add_task(_background_embed_movies, current_user["id"])
+
     # Determine primary status type for response
     status_type = "watched" if len(watched_items) >= len(wish_items) else "wish"
     log_operation(current_user["id"], current_user["username"], "import_data", f"导入数据: {len(total_records)} 部电影, {playlist_count} 个片单", db=db)

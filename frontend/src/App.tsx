@@ -17,22 +17,21 @@ import "./style.css";
 
 // Lazy-loaded route-level chunks (pages & tabs)
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const ForcePasswordChangePage = lazy(() => import("./pages/ForcePasswordChangePage").then((m) => ({ default: m.ForcePasswordChangePage })));
 const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage").then((m) => ({ default: m.AdminUsersPage })));
 const AdminLogsPage = lazy(() => import("./pages/AdminLogsPage").then((m) => ({ default: m.AdminLogsPage })));
 const AdminDiagnosticsPage = lazy(() => import("./pages/AdminDiagnosticsPage").then((m) => ({ default: m.AdminDiagnosticsPage })));
 const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const MyPage = lazy(() => import("./pages/MyPage").then((m) => ({ default: m.MyPage })));
 const WatchedTab = lazy(() => import("./components/WatchedTab").then((m) => ({ default: m.WatchedTab })));
 const WishlistTab = lazy(() => import("./components/WishlistTab").then((m) => ({ default: m.WishlistTab })));
 const DiscoverTab = lazy(() => import("./components/DiscoverTab").then((m) => ({ default: m.DiscoverTab })));
 const RecommendTab = lazy(() => import("./components/RecommendTab").then((m) => ({ default: m.RecommendTab })));
-const ManageTab = lazy(() => import("./components/ManageTab").then((m) => ({ default: m.ManageTab })));
-const StatsTab = lazy(() => import("./components/StatsTab").then((m) => ({ default: m.StatsTab })));
 const TopRatedTab = lazy(() => import("./components/TopRatedTab").then((m) => ({ default: m.TopRatedTab })));
-const MediaServerTab = lazy(() => import("./components/MediaServerTab").then((m) => ({ default: m.MediaServerTab })));
 const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
@@ -41,6 +40,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Accounts on the initial/default password may only change it
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
   return <>{children}</>;
 }
 
@@ -90,18 +91,20 @@ function MainApp() {
                   <Route path="/watched" element={<WatchedTab />} />
                   <Route path="/wishlist" element={<WishlistTab />} />
                   <Route path="/discover" element={<DiscoverTab />} />
-                  {/* 片单已并入管理页，旧链接重定向 */}
-                  <Route path="/playlists" element={<Navigate to="/manage" replace />} />
+                  {/* 旧链接重定向：片单已并入「我的」页 tab */}
+                  <Route path="/playlists" element={<Navigate to="/profile?tab=playlists" replace />} />
                   <Route path="/recommend" element={<RecommendTab />} />
                   <Route path="/top-rated" element={<TopRatedTab />} />
-                  <Route path="/stats" element={<StatsTab />} />
-                  <Route path="/manage" element={<ManageTab />} />
-                  <Route path="/media-servers" element={<MediaServerTab />} />
+                  {/* 操作页面已并入「我的」页 tab，旧链接重定向 */}
+                  <Route path="/stats" element={<Navigate to="/profile?tab=stats" replace />} />
+                  <Route path="/manage" element={<Navigate to="/profile?tab=manage" replace />} />
+                  <Route path="/media-servers" element={<Navigate to="/profile?tab=servers" replace />} />
                   <Route path="/admin/users" element={<AdminUsersPage />} />
                   <Route path="/admin/logs" element={<AdminLogsPage />} />
                   <Route path="/admin/diagnostics" element={<AdminDiagnosticsPage />} />
                   <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
-                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/profile" element={<MyPage />} />
+                  <Route path="/settings" element={<ProfilePage />} />
                 </Routes>
               </Suspense>
             </div>
@@ -130,6 +133,8 @@ export default function App() {
       }>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Forced password change for accounts on the default password */}
+          <Route path="/change-password" element={<ForcePasswordChangePage />} />
           {/* Public read-only share page — no auth required */}
           <Route path="/share/:token" element={<SharePage />} />
           <Route

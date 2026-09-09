@@ -16,8 +16,12 @@ interface User {
 interface AuthContextValue {
   user: User | null;
   token: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  /** True while the account still needs to replace its initial/default password. */
+  mustChangePassword: boolean;
+  /** Logs in and returns true if a password change is required before using the app. */
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
+  clearMustChangePassword: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -25,8 +29,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   token: null,
-  login: async () => {},
+  mustChangePassword: false,
+  login: async () => false,
   logout: () => {},
+  clearMustChangePassword: () => {},
   isAuthenticated: false,
   isLoading: true,
 });
@@ -36,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() =>
     localStorage.getItem("xplora-token")
   );
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // On mount, verify token is still valid
@@ -51,12 +58,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .then((data) => {
           setUser({ id: data.id, username: data.username, is_admin: data.is_admin });
+          setMustChangePassword(!!data.must_change_password);
           setToken(storedToken);
         })
         .catch(() => {
           localStorage.removeItem("xplora-token");
           setToken(null);
           setUser(null);
+          setMustChangePassword(false);
         })
         .finally(() => setIsLoading(false));
     } else {
@@ -77,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     localStorage.setItem("xplora-token", data.token);
     setToken(data.token);
+    setMustChangePassword(!!data.must_change_password);
 
     // Fetch user details to get real ID (await in the same function so user
     // is set before the calling code navigates away from the login page)
@@ -86,13 +96,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (meRes.ok) {
       const me = await meRes.json();
       setUser({ id: me.id, username: me.username, is_admin: me.is_admin });
+      setMustChangePassword(!!me.must_change_password);
     }
+    return !!data.must_change_password;
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem("xplora-token");
     setToken(null);
     setUser(null);
+    setMustChangePassword(false);
+  }, []);
+
+  const clearMustChangePassword = useCallback(() => {
+    setMustChangePassword(false);
   }, []);
 
   return (
@@ -100,8 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         token,
+        mustChangePassword,
         login,
         logout,
+        clearMustChangePassword,
         isAuthenticated: !!token && !!user,
         isLoading,
       }}

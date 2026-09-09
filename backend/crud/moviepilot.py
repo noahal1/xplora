@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from crypto import encrypt_secret
 from models.db import MoviePilotRecord
 
 
@@ -39,7 +40,7 @@ def create_mp_connection(
         name=name,
         host=host,
         port=port,
-        api_token=api_token,
+        api_token=encrypt_secret(api_token),
         use_ssl=use_ssl,
         is_active=True,
     )
@@ -79,7 +80,7 @@ def update_mp_connection(
     if port is not None:
         record.port = port
     if api_token is not None:
-        record.api_token = api_token
+        record.api_token = encrypt_secret(api_token)
     if use_ssl is not None:
         record.use_ssl = use_ssl
     if is_active is not None:

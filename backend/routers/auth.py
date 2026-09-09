@@ -1,9 +1,9 @@
 """Authentication & user management endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session
 
-from auth import get_current_user, require_admin, create_token
+from auth import get_current_user_relaxed, require_admin, create_token
 from crud import (
     create_user,
     authenticate_user,
@@ -15,6 +15,7 @@ from crud import (
 )
 from database import get_db, init_user_database, delete_user_database
 from helpers import iso_utc
+from ratelimit import client_ip, login_rate_limiter
 from models import (
     LoginRequest,
     LoginResponse,
@@ -27,19 +28,38 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, db: Session = Depends(get_db)):
-    """Login with username and password. Returns JWT token."""
+async def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    """Login with username and password. Returns JWT token.
+
+    Failed attempts are rate-limited per client IP to mitigate brute-force
+    attacks (see ``ratelimit``).
+    """
+    ip = client_ip(request)
+    allowed, retry_after = login_rate_limiter.check(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="尝试次数过多，请稍后再试",
+            headers={"Retry-After": str(retry_after)},
+        )
     user = authenticate_user(req.username, req.password, db=db)
     if not user:
+        login_rate_limiter.record_failure(ip)
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    login_rate_limiter.reset(ip)
     token = create_token(user.id, user.username, user.is_admin)
     log_operation(user.id, user.username, "login", "用户登录", db=db)
-    return LoginResponse(token=token, username=user.username, is_admin=user.is_admin)
+    return LoginResponse(
+        token=token,
+        username=user.username,
+        is_admin=user.is_admin,
+        must_change_password=user.must_change_password,
+    )
 
 
 @router.get("/me")
-async def get_me(current_user: dict = Depends(get_current_user)):
-    """Get current user info."""
+async def get_me(current_user: dict = Depends(get_current_user_relaxed)):
+    """Get current user info (works even while a password change is pending)."""
     return current_user
 
 
@@ -117,8 +137,8 @@ async def admin_reset_password_endpoint(
 ):
     """Admin only: reset a user's password."""
     new_password = req.get("new_password", "")
-    if len(new_password) < 4:
-        raise HTTPException(status_code=400, detail="密码长度不能少于4位")
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="密码长度不能少于8位")
     success = admin_reset_user_password(user_id, new_password, db=db)
     if not success:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -129,11 +149,14 @@ async def admin_reset_password_endpoint(
 @router.put("/password")
 async def change_my_password(
     req: ChangePasswordRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_relaxed),
     db: Session = Depends(get_db),
 ):
-    """Change the current user's password."""
-    success = change_password(current_user["id"], req.old_password, req.new_password, db=db)
+    """Change the current user's password (allowed while a change is pending)."""
+    try:
+        success = change_password(current_user["id"], req.old_password, req.new_password, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not success:
         raise HTTPException(status_code=400, detail="原密码错误")
     log_operation(current_user["id"], current_user["username"], "change_password", "修改密码", db=db)

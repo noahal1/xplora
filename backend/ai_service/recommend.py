@@ -34,6 +34,7 @@ class RecommendMixin:
         previous_feedback: Optional[dict],
         call_ai,
         lang: Optional[str] = None,
+        rag_context=None,
     ) -> tuple[list, int]:
         """Shared retry loop for the pure-AI recommendation path.
 
@@ -112,6 +113,7 @@ class RecommendMixin:
         previous_feedback: Optional[dict] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
         lang: Optional[str] = None,
+        rag_context=None,
     ) -> list[MediaRecommendation]:
         """Generate movie recommendations (non-streaming) with dynamic retry.
 
@@ -135,6 +137,7 @@ class RecommendMixin:
                     user_tmdb_ids=user_tmdb_ids,
                     excluded_tmdb_ids=excluded_tmdb_ids,
                     lang=lang,
+                    rag_context=rag_context,
                 )
             except Exception as e:
                 logger.warning(
@@ -195,7 +198,7 @@ class RecommendMixin:
         all_recs, _ = self._retry_loop(
             movies, count, strategy, strategy_params,
             all_excluded, taste_analysis, previous_feedback,
-            _sync_call_ai, lang=lang,
+            _sync_call_ai, lang=lang, rag_context=rag_context,
         )
 
         all_recs = self._resolve_metadata(all_recs)
@@ -214,6 +217,7 @@ class RecommendMixin:
         taste_analysis: Optional[dict] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
         lang: Optional[str] = None,
+        rag_context=None,
     ):
         """Generator that yields SSE-formatted events for follow-up conversation.
 
@@ -355,6 +359,7 @@ class RecommendMixin:
         previous_feedback: Optional[dict] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
         lang: Optional[str] = None,
+        rag_context=None,
     ):
         """Generator that yields SSE-formatted events as recommendations are streamed.
 
@@ -432,6 +437,7 @@ class RecommendMixin:
                     previous_feedback=previous_feedback,
                     excluded_tmdb_ids=excluded_tmdb_ids,
                     lang=lang,
+                    rag_context=rag_context,
                 )
                 return
 
@@ -463,6 +469,7 @@ class RecommendMixin:
                 previous_feedback=previous_feedback,
                 filtered_titles_info=filtered_titles_info,
                 lang=lang,
+                rag_context=rag_context,
             )
 
             # SSE stream from AI

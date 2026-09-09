@@ -415,8 +415,9 @@ def init_db():
     SQLModel.metadata.create_all(master_engine)
     _rename_table_if_needed(_inspect(master_engine))
     _run_column_migrations()
+    _migrate_users_table()
 
-    # Seed default admin user
+    # Seed default admin user (password must be changed on first login)
     db = get_session()
     try:
         existing = db.exec(
@@ -427,11 +428,12 @@ def init_db():
                 username="admin",
                 password_hash=bcrypt.hash("admin123"),
                 is_admin=True,
+                must_change_password=True,
                 created_at=datetime.now(timezone.utc),
             )
             db.add(admin)
             db.commit()
-            print("  [Seed] Default admin user created (admin / admin123)")
+            print("  [Seed] Default admin user created — CHANGE THE PASSWORD on first login")
 
         # Migrate existing data to per-user databases
         if USE_PER_USER_DBS:
@@ -531,6 +533,54 @@ def _run_column_migrations():
     ])
 
 
+def _migrate_users_table():
+    """Add ``must_change_password`` to the master ``users`` table.
+
+    Also flags the seeded admin (or any admin) still using the well-known
+    default password, forcing them to change it on next login — existing
+    installations would otherwise stay silently vulnerable.
+    """
+    from sqlalchemy import inspect
+
+    try:
+        inspector = inspect(master_engine)
+        columns = [c["name"] for c in inspector.get_columns("users")]
+    except Exception:
+        return
+
+    _add_columns_if_missing("users", columns, [
+        ("must_change_password", "BOOLEAN NOT NULL DEFAULT 0"),
+    ])
+
+    # Flag admins still on the default password so they are forced to change it
+    try:
+        db = get_session()
+        try:
+            admins = db.exec(
+                select(UserRecord).where(UserRecord.is_admin == True)  # noqa: E712
+            ).all()
+            flagged = 0
+            for admin in admins:
+                if admin.must_change_password:
+                    continue
+                try:
+                    if bcrypt.verify("admin123", admin.password_hash):
+                        admin.must_change_password = True
+                        flagged += 1
+                        print(
+                            f"  [Security] Admin '{admin.username}' still uses the default "
+                            "password — password change now required"
+                        )
+                except ValueError:
+                    continue  # not a bcrypt hash — leave untouched
+            if flagged:
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"  [Migration] Error flagging default-password admins: {e}")
+
+
 def _run_per_user_column_migrations(user_id: int):
     """Run column-level schema migrations for a per-user database."""
     from sqlalchemy import inspect
@@ -542,6 +592,16 @@ def _run_per_user_column_migrations(user_id: int):
         columns = [c["name"] for c in inspector.get_columns("media_items")]
     except Exception:
         return
+
+    # Per-user DBs carry a users row purely for FK compliance; keep its schema
+    # in sync so ``select(UserRecord)`` works after model changes.
+    try:
+        user_columns = [c["name"] for c in inspector.get_columns("users")]
+    except Exception:
+        user_columns = []
+    _add_columns_if_missing("users", user_columns, [
+        ("must_change_password", "BOOLEAN NOT NULL DEFAULT 0"),
+    ], engine=engine)
 
     if "session_id" in columns:
         _drop_column_if_exists("media_items", "session_id", engine=engine)
@@ -601,8 +661,50 @@ def _run_per_user_column_migrations(user_id: int):
     # ── Migration: media_servers.last_synced column ──
     _media_server_add_last_synced_column(engine, user_id)
 
+    # ── Migration: RAG user profile tables ──
+    if "user_profiles" not in existing_tables:
+        _create_rag_tables(engine, user_id)
+
+    # ── Migration: user_preferences table ──
+    if "user_preferences" not in existing_tables:
+        _create_user_preferences_table(engine, user_id)
+
     # ── Data migration: ensure items with sort_order are marked as pinned ──
     _fix_top_rated_pins(user_id, engine)
+
+    # ── Data migration: encrypt secrets still stored in plaintext ──
+    _encrypt_existing_secrets(engine)
+
+
+def _encrypt_existing_secrets(engine) -> None:
+    """Encrypt media server / MoviePilot tokens still stored in plaintext.
+
+    Older versions stored these as plaintext (despite the model comment
+    claiming otherwise). ``decrypt_secret`` falls back to plaintext so old
+    rows keep working; this migration upgrades them to encrypted form.
+    Idempotent — skips values that already carry the ``enc:v1:`` prefix.
+    """
+    from crypto import encrypt_secret, is_encrypted
+    from models import MediaServerRecord, MoviePilotRecord
+
+    try:
+        with Session(engine) as session:
+            changed = False
+            for rec in session.exec(select(MediaServerRecord)).all():
+                if rec.api_key and not is_encrypted(rec.api_key):
+                    rec.api_key = encrypt_secret(rec.api_key)
+                    changed = True
+            for rec in session.exec(select(MoviePilotRecord)).all():
+                if rec.api_token and not is_encrypted(rec.api_token):
+                    rec.api_token = encrypt_secret(rec.api_token)
+                    changed = True
+            if changed:
+                session.commit()
+                logger.info(
+                    "  [Migration] Encrypted stored media server / MoviePilot secrets"
+                )
+    except Exception as e:
+        logger.warning(f"  [Migration] Error encrypting stored secrets: {e}")
 
 
 def _fix_top_rated_pins(user_id: int, engine=None):
@@ -925,5 +1027,113 @@ def _drop_column_if_exists(table: str, column: str, engine=None):
                 conn.rollback()
             else:
                 raise
+
+
+def _create_rag_tables(engine, user_id: int):
+    """Create the RAG user profile / memory / embedding tables."""
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_profiles (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) UNIQUE,
+                    profile_json TEXT NOT NULL DEFAULT '{}',
+                    version INTEGER NOT NULL DEFAULT 1,
+                    movie_count_analyzed INTEGER NOT NULL DEFAULT 0,
+                    model_used VARCHAR(50) NOT NULL DEFAULT 'deepseek',
+                    avg_rating REAL NOT NULL DEFAULT 0.0,
+                    top_genres VARCHAR(1000) NOT NULL DEFAULT '[]',
+                    preferred_decades VARCHAR(500) NOT NULL DEFAULT '[]',
+                    preferred_countries VARCHAR(500) NOT NULL DEFAULT '[]',
+                    last_full_rebuild TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_incremental_update TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_memories (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    memory_text VARCHAR(2000) NOT NULL,
+                    memory_type VARCHAR(32) NOT NULL,
+                    confidence REAL NOT NULL DEFAULT 0.8,
+                    related_movies VARCHAR(2000) NOT NULL DEFAULT '[]',
+                    source_ratings VARCHAR(2000) NOT NULL DEFAULT '[]',
+                    embedding VARCHAR(10000),
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    superseded_by INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_memories_user_active
+                ON user_memories (user_id, is_active)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_memories_type
+                ON user_memories (memory_type)
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS movie_embeddings (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    media_item_id INTEGER,
+                    title VARCHAR(255) NOT NULL,
+                    year INTEGER,
+                    genre VARCHAR(255),
+                    rating REAL NOT NULL,
+                    media_type VARCHAR(10) NOT NULL DEFAULT 'movie',
+                    tmdb_id VARCHAR(50),
+                    embedding_dense VARCHAR(10000) NOT NULL,
+                    embedding_sparse VARCHAR(50000),
+                    embedding_text VARCHAR(2000) NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_embeddings_user
+                ON movie_embeddings (user_id)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_embeddings_title
+                ON movie_embeddings (user_id, title)
+            """))
+            # Unique index on (user_id, media_item_id) — prevents duplicate
+            # embedding rows from concurrent background tasks and gives the
+            # idempotency check a fast lookup path.
+            conn.execute(text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_media_unique
+                ON movie_embeddings (user_id, media_item_id)
+                WHERE media_item_id IS NOT NULL
+            """))
+            conn.commit()
+            logger.info(f"  [Migration] Created RAG tables (user_profiles, user_memories, movie_embeddings) for user id={user_id}")
+    except Exception as e:
+        logger.warning(f"  [Migration] Error creating RAG tables for user id={user_id}: {e}")
+
+
+def _create_user_preferences_table(engine, user_id: int):
+    """Create the user_preferences table for a per-user database."""
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS user_preferences (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) UNIQUE,
+                    rag_enabled BOOLEAN NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info(f"  [Migration] Created user_preferences table for user id={user_id}")
+    except Exception as e:
+        logger.warning(f"  [Migration] Error creating user_preferences table for user id={user_id}: {e}")
 
 

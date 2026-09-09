@@ -10,6 +10,7 @@ from sqlmodel import Session
 
 from auth import get_current_user
 from deps import get_user_db
+from ssrf import validate_ssrf_target
 from media_server.jellyfin_connector import JellyfinConnector
 from media_server.base import ServerStatus
 from crud.media_servers import (
@@ -117,6 +118,12 @@ async def verify_connection(
     if not host:
         raise HTTPException(status_code=400, detail="请填写服务器地址")
 
+    # SSRF guard: never connect to loopback / link-local / metadata addresses
+    try:
+        validate_ssrf_target(host, port)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # FeiNiu: authenticate with username/password
     # NOTE: FeiNiu's SPA intercepts GET requests (e.g. /System/Info),
     # so we skip test_connection() and rely on auth success alone.
@@ -207,6 +214,12 @@ async def add_server(
     if not host:
         raise HTTPException(status_code=400, detail="请填写服务器地址")
 
+    # SSRF guard: reject targets pointing at loopback / link-local / metadata
+    try:
+        validate_ssrf_target(host, port)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # FeiNiu: authenticate via username/password, store the token as api_key
     # NOTE: FeiNiu's SPA intercepts GET requests, so skip test_connection.
     # Successful auth = server is reachable.
@@ -271,6 +284,14 @@ async def edit_server(
     """
     record = _get_record(server_id, current_user["id"], db)
 
+    new_host = request.get("host")
+    if new_host:
+        new_port = request.get("port", record.port)
+        try:
+            validate_ssrf_target(new_host, new_port)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     updated = update_media_server(
         server_id,
         current_user["id"],
@@ -316,7 +337,7 @@ async def verify_saved_server(
 
     try:
         connector = get_connector(
-            record.server_type, record.host, record.port, record.api_key, record.use_ssl,
+            record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl,
             user_id=record.server_user_id,
         )
     except ValueError as e:
@@ -351,7 +372,7 @@ async def list_libraries(
 
     try:
         connector = get_connector(
-            record.server_type, record.host, record.port, record.api_key, record.use_ssl,
+            record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl,
             user_id=record.server_user_id,
         )
     except ValueError as e:
@@ -390,7 +411,7 @@ async def list_library_items(
 
     try:
         connector = get_connector(
-            record.server_type, record.host, record.port, record.api_key, record.use_ssl,
+            record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl,
             user_id=record.server_user_id,
         )
     except ValueError as e:
@@ -427,7 +448,7 @@ async def refresh_server(
 
     try:
         connector = get_connector(
-            record.server_type, record.host, record.port, record.api_key, record.use_ssl,
+            record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl,
             user_id=record.server_user_id,
         )
     except ValueError as e:
@@ -484,7 +505,7 @@ async def import_watched_from_server(
     # Get connector (pass cached user_id for FeiNiu)
     server_user_id = getattr(record, "server_user_id", None)
     try:
-        connector = get_connector(record.server_type, record.host, record.port, record.api_key, record.use_ssl, user_id=server_user_id)
+        connector = get_connector(record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl, user_id=server_user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -556,6 +577,12 @@ async def import_watched_from_server(
             skipped += 1
 
     total = imported + moved_from_wishlist + skipped
+
+    # Launch background BGE-M3 embedding for newly imported movies
+    if imported > 0:
+        from routers.media import _background_embed_movies
+        _background_embed_movies(current_user["id"])  # Embed all un-embedded
+
     log_operation(
         current_user["id"], current_user["username"],
         "import_watched",
@@ -605,7 +632,7 @@ async def batch_search_server(
 
     try:
         connector = get_connector(
-            record.server_type, record.host, record.port, record.api_key, record.use_ssl,
+            record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl,
             user_id=record.server_user_id,
         )
     except ValueError as e:
@@ -676,7 +703,7 @@ async def sync_server_library(
 
     try:
         connector = get_connector(
-            record.server_type, record.host, record.port, record.api_key, record.use_ssl,
+            record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl,
             user_id=record.server_user_id,
         )
     except ValueError as e:
@@ -754,7 +781,7 @@ async def search_server(
 
     try:
         connector = get_connector(
-            record.server_type, record.host, record.port, record.api_key, record.use_ssl,
+            record.server_type, record.host, record.port, record.api_key_plain, record.use_ssl,
             user_id=record.server_user_id,
         )
     except ValueError as e:

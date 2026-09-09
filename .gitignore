@@ -30,3 +30,6 @@ backend/static/posters/*.png
 backend/static/posters/*.webp
 !backend/static/posters/.gitkeep
 .blender-mcp
+
+#docs
+docs/

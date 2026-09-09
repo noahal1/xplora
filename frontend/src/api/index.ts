@@ -330,6 +330,8 @@ export async function checkUpdate(force?: boolean): Promise<{
   release_url: string | null;
   release_notes: string | null;
   published_at: string | null;
+  /** False when the Docker socket is not mounted (manual trigger unavailable). */
+  manual_update_available?: boolean;
   error: string | null;
 }> {
   const qs = force ? "?force=true" : "";

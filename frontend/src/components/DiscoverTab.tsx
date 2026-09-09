@@ -25,6 +25,7 @@ const SECTIONS = [
 
 const TV_SUPPORTED = new Set(["trending", "popular", "top_rated"]);
 const PAGE_SIZE = 20;
+const MAX_SLIDER_ITEMS = 10;
 
 export function DiscoverTab() {
   const { t } = useTranslation();
@@ -184,6 +185,7 @@ export function DiscoverTab() {
     () =>
       wishlistItems
         .filter((m) => !!m.poster_url && !!m.tmdb_id)
+        .slice(0, MAX_SLIDER_ITEMS)
         .map((m) => ({ image: m.poster_url as string, caption: m.title, media: m })),
     [wishlistItems]
   );

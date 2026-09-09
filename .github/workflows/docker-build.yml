@@ -18,6 +18,7 @@ name: Build & Push to GHCR
     # Also run when Dockerfile or workflow changes
     paths:
       - "Dockerfile"
+      - "entrypoint.sh"
       - ".github/workflows/docker-build.yml"
       - "backend/**"
       - "frontend/**"

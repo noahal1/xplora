@@ -1,5 +1,6 @@
 """Update check router — queries GitHub Releases API for latest version."""
 
+import os
 import re
 import time
 
@@ -43,7 +44,7 @@ def _restart_container(container: str) -> dict:
     except NotFound:
         return {"ok": False, "error": f"未检测到 {container} 容器，请确认容器正在运行"}
     except DockerException:
-        return {"ok": False, "error": "无法连接 Docker 套接字，请确认 /var/run/docker.sock 已挂载"}
+        return {"ok": False, "error": "手动更新已禁用：出于安全考虑，容器不再挂载 Docker 套接字。Watchtower 会按计划自动检查更新，无需手动触发。"}
     except Exception as e:
         return {"ok": False, "error": f"重启容器失败: {str(e)}"}
     finally:
@@ -105,6 +106,9 @@ def _get_update_info() -> dict:
         "release_url": None,
         "release_notes": None,
         "published_at": None,
+        # False unless the Docker socket is mounted (it is removed by default
+        # for security — see docker-compose.yml)
+        "manual_update_available": os.path.exists(DOCKER_SOCKET),
         "error": None,
     }
 
@@ -148,6 +152,7 @@ def _get_update_info() -> dict:
             "release_url": release_url,
             "release_notes": body,
             "published_at": published_at,
+            "manual_update_available": os.path.exists(DOCKER_SOCKET),
             "error": None,
         }
         _CACHE = result

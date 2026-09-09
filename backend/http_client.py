@@ -71,8 +71,10 @@ def get_shared_client() -> httpx.Client:
 
         if not verify:
             logger.warning(
-                "SSL verification is DISABLED via SSL_VERIFY env var. "
-                "This reduces security — use only as a temporary workaround."
+                "SSL verification is DISABLED via SSL_VERIFY=false — every outbound "
+                "HTTPS request (TMDB/DeepSeek/posters) now trusts any certificate, "
+                "so a man-in-the-middle can read all API keys in transit. Remove "
+                "SSL_VERIFY from the environment; use SSL_CERT_FILE for private CAs."
             )
             verify = False
         elif cert_file:

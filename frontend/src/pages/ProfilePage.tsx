@@ -72,6 +72,9 @@ export function ProfilePage() {
   const [savingKeys, setSavingKeys] = useState(false);
   const [keyConfigOpen, setKeyConfigOpen] = useState(false);
 
+  // === RAG / AI preferences ===
+  const [ragEnabled, setRagEnabled] = useState(true);
+
   // Populate editKeys when health loads
   useEffect(() => {
     if (health?.api_keys) {
@@ -147,6 +150,25 @@ export function ProfilePage() {
     fetchHealth();
   }, [t]);
 
+  // Fetch user preferences on mount
+  useEffect(() => {
+    const fetchPrefs = async () => {
+      try {
+        const token = localStorage.getItem("xplora-token");
+        const res = await fetch("/api/profile/preferences", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRagEnabled(data.rag_enabled);
+        }
+      } catch {
+        // Silently ignore — defaults to true
+      }
+    };
+    fetchPrefs();
+  }, []);
+
   // ================================
   // Password
   // ================================
@@ -160,7 +182,7 @@ export function ProfilePage() {
       setPwError(t("profile.password_empty"));
       return;
     }
-    if (newPassword.length < 4) {
+    if (newPassword.length < 8) {
       setPwError(t("profile.password_too_short"));
       return;
     }
@@ -652,7 +674,65 @@ export function ProfilePage() {
       </FadeContent>
 
       {/* ======================== */}
-      {/* 6. System Info Section */}
+      {/* 6. AI Features Section */}
+      {/* ======================== */}
+      <FadeContent className="section-card">
+        <div className="section-header">
+          <h2 className="section-title flex items-center gap-2">
+            <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+            </svg>
+            {t("profile.ai_features")}
+          </h2>
+        </div>
+
+        <div className="space-y-3">
+          {/* RAG Embedding Toggle */}
+          <div className="flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{t("profile.rag_embedding")}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t("profile.rag_embedding_desc")}
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem("xplora-token");
+                  const currentPrefs = await fetch("/api/profile/preferences", {
+                    headers: { Authorization: `Bearer ${token}` },
+                  }).then((r) => r.json());
+                  const newVal = !currentPrefs.rag_enabled;
+                  await fetch("/api/profile/preferences", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ rag_enabled: newVal }),
+                  });
+                  setRagEnabled(newVal);
+                  showToast(
+                    newVal ? t("profile.rag_enabled") : t("profile.rag_disabled"),
+                    "success"
+                  );
+                } catch {
+                  showToast(t("profile.rag_toggle_failed"), "error");
+                }
+              }}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                ragEnabled ? "bg-primary" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                  ragEnabled ? "translate-x-6" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </FadeContent>
+
+      {/* ======================== */}
+      {/* 7. System Info Section */}
       {/* ======================== */}
       <FadeContent className="section-card">
         <div className="section-header">

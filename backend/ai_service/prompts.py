@@ -23,6 +23,7 @@ class PromptMixin:
         filtered_titles_info: Optional[list[tuple[str, str]]] = None,
         candidates: Optional[list[dict]] = None,
         lang: Optional[str] = None,
+        rag_context=None,
     ) -> str:
         """Build an optimized prompt for the AI model.
 
@@ -40,9 +41,15 @@ class PromptMixin:
           (candidates are already pre-filtered)
         - Titles are always in Chinese
         """
-        # ── Shared: taste analysis + strategy instruction ────────────
+        # ── Shared: taste analysis + RAG context + strategy instruction ──
+        # When RAG context is available, use it as the primary taste signal
+        # (richer than raw statistical analysis). Fall back to taste_summary.
+        rag_section = ""
+        if rag_context and hasattr(rag_context, "to_prompt_context"):
+            rag_section = rag_context.to_prompt_context()
+
         taste_summary = ""
-        if taste_analysis:
+        if not rag_section and taste_analysis:
             taste_summary = self._build_taste_summary(taste_analysis)
 
         strategy_instruction = self._get_strategy_instruction(strategy, strategy_params, count)
@@ -138,13 +145,17 @@ class PromptMixin:
                 for i, c in enumerate(candidates_sample)
             )
 
+            # Choose between RAG context or fallback taste summary for hybrid mode
+            hybrid_context = rag_section if rag_section else (
+                f"## Taste Analysis\n{taste_summary or 'No taste analysis available.'}"
+            )
+
             return f"""Below is a list of candidate movies that TMDB's algorithm identified as similar to what the user has watched and enjoyed. Your task is to select the BEST movies from this list and write personalized recommendations for each.
 
 ## User's Taste Profile
 Total watched movies: {total_count}.
 
-## Taste Analysis
-{taste_summary or "No taste analysis available."}
+{hybrid_context}
 
 ## Candidate Movies (from TMDB collaborative filtering)
 These are movies that fans of the user's favorite films also enjoy:
@@ -245,14 +256,18 @@ You MUST NOT recommend any of the following movies, even if they seem like a goo
             if feedback_parts:
                 feedback_section = "\n\n## Previous Recommendation Feedback\n" + "\n\n".join(feedback_parts)
 
+        # Choose between RAG context (rich, semantic) or fallback taste summary
+        context_block = rag_section if rag_section else (
+            f"## Taste Analysis\n{taste_summary or 'No taste analysis available.'}"
+        )
+
         return f"""Based on the movies the user has watched and their ratings, recommend NEW movies they haven't seen.
 
 ## User's Taste Profile
 Total watched movies: {total_count}. Below is a sample of {len(sample)} highest-rated movies:
 {movies_list}
 
-## Taste Analysis
-{taste_summary or "No taste analysis available."}
+{context_block}
 {exclude_section}{retry_hint}{feedback_section}
 
 {strategy_instruction}

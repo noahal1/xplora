@@ -12,6 +12,7 @@ interface UpdateInfo {
   release_url: string | null;
   release_notes: string | null;
   published_at: string | null;
+  manual_update_available?: boolean;
   error: string | null;
 }
 
@@ -124,7 +125,7 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
 
         {/* Actions */}
         <div className="flex items-center justify-between gap-2 pt-1">
-          {updateInfo.update_available && (
+          {updateInfo.update_available && updateInfo.manual_update_available !== false && (
             <button
               onClick={handleUpdateNow}
               disabled={updating}
@@ -149,6 +150,11 @@ export function UpdateModal({ open, onClose, updateInfo }: Props) {
                 </>
               )}
             </button>
+          )}
+          {updateInfo.update_available && updateInfo.manual_update_available === false && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed max-w-[220px]">
+              {t("update.manual_disabled")}
+            </p>
           )}
           <button
             onClick={onClose}

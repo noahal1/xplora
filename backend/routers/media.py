@@ -1,5 +1,6 @@
 """Media item, wishlist, and external search endpoints."""
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -48,6 +49,346 @@ from poster_cache import download_and_cache_poster
 
 
 router = APIRouter(prefix="/api", tags=["media"])
+
+
+def _background_embed_movies(user_id: int, media_ids: list[int] = None, force: bool = False):
+    """Background task: generate BGE-M3 embeddings for user's movies.
+
+    When ``media_ids`` is provided, only those specific movies are embedded
+    (single-item or small batch updates).  When ``None``, embeds ALL
+    un-embedded movies (bulk imports).
+
+    Idempotent — movies that already have embeddings are skipped UNLESS
+    ``force=True``, in which case existing records for ``media_ids`` are
+    deleted first so the movies get freshly re-embedded (used when metadata
+    like title/genre/overview changes).
+
+    Errors are logged but never raised (fire-and-forget).
+    """
+    import json
+    import logging
+    from sqlmodel import select
+    from database import get_user_session
+    from models import MediaItemRecord, MovieEmbeddingRecord, UserPreferencesRecord
+    from ai_service.embedding import EmbeddingPipeline, build_movie_embedding_text
+
+    _logger = logging.getLogger(__name__)
+    try:
+        db = get_user_session(user_id)
+        try:
+            # Check user preference — skip embedding if RAG is disabled
+            prefs = db.exec(
+                select(UserPreferencesRecord).where(UserPreferencesRecord.user_id == user_id)
+            ).first()
+            if prefs and not prefs.rag_enabled:
+                _logger.debug("Skipping embedding for user %d: rag_enabled=False", user_id)
+                return
+
+            # Fetch target movies
+            if media_ids:
+                movies = db.exec(
+                    select(MediaItemRecord).where(
+                        MediaItemRecord.id.in_(media_ids),
+                        MediaItemRecord.user_id == user_id,
+                        MediaItemRecord.status == "watched",
+                    )
+                ).all()
+            else:
+                movies = db.exec(
+                    select(MediaItemRecord).where(
+                        MediaItemRecord.user_id == user_id,
+                        MediaItemRecord.status == "watched",
+                    )
+                ).all()
+
+            if not movies:
+                return
+
+            # Force mode: delete existing embedding records for the target
+            # movies so they get re-embedded with fresh metadata.
+            if force and media_ids:
+                stale = db.exec(
+                    select(MovieEmbeddingRecord).where(
+                        MovieEmbeddingRecord.user_id == user_id,
+                        MovieEmbeddingRecord.media_item_id.in_(media_ids),
+                    )
+                ).all()
+                for r in stale:
+                    db.delete(r)
+                if stale:
+                    db.commit()
+
+            # Fetch existing embeddings (by media_item_id) — skip already embedded.
+            # Keying on media_item_id (not title) avoids collisions between
+            # remakes with the same title.
+            existing_ids = {
+                r.media_item_id
+                for r in db.exec(
+                    select(MovieEmbeddingRecord).where(MovieEmbeddingRecord.user_id == user_id)
+                ).all()
+                if r.media_item_id is not None
+            }
+
+            new_movies = [m for m in movies if m.id not in existing_ids]
+            if not new_movies:
+                return
+
+            pipeline = EmbeddingPipeline()
+            texts = [
+                build_movie_embedding_text(
+                    title=m.title, year=m.year, genre=m.genre,
+                    rating=m.rating, overview=m.overview,
+                )
+                for m in new_movies
+            ]
+            result = pipeline.embed_texts(texts)
+
+            # If the pipeline failed entirely (no API key fallback), skip
+            # persisting — zero/empty vectors would poison the index.
+            if not result.get("dense") or len(result["dense"]) != len(new_movies):
+                _logger.warning(
+                    "Background embedding: pipeline returned empty results for user %d — skipping persist", user_id
+                )
+                return
+
+            for i, movie in enumerate(new_movies):
+                record = MovieEmbeddingRecord(
+                    user_id=user_id,
+                    media_item_id=movie.id,
+                    title=movie.title,
+                    year=movie.year,
+                    genre=movie.genre,
+                    rating=movie.rating,
+                    media_type=movie.media_type or "movie",
+                    tmdb_id=movie.tmdb_id,
+                    embedding_dense=json.dumps(result["dense"][i]),
+                    embedding_sparse=json.dumps(result["sparse"][i]) if result.get("sparse") else None,
+                    embedding_text=texts[i],
+                )
+                db.add(record)
+
+            db.commit()
+            try:
+                from ai_service.rag import invalidate_vector_cache
+                invalidate_vector_cache(user_id)
+            except Exception:
+                pass
+
+            _logger.info("Background embedding: %d movies embedded for user %d", len(new_movies), user_id)
+
+            # ── Auto-trigger memory & profile rebuild when enough new embeddings ──
+            _auto_update_profile_and_memories(user_id, len(new_movies), db)
+
+        finally:
+            db.close()
+    except Exception as e:
+        _logger.warning("Background embedding failed for user %d: %s", user_id, e)
+
+
+def _auto_update_profile_and_memories(user_id: int, new_embed_count: int, db):
+    """Auto-trigger memory generation and profile rebuild when thresholds are met.
+
+    Thresholds (conservative to avoid excessive LLM calls):
+    - ≥ 5 new embeddings AND ≥ 10 total movies: regenerate memories
+    - ≥ 10 new embeddings: rebuild profile
+    """
+    import logging
+    from sqlmodel import select, func
+    from models import (
+        UserProfileRecord, UserMemoryRecord, MediaItemRecord, MovieEmbeddingRecord,
+    )
+    from ai_service.memory import generate_memories, should_regenerate_memories
+    from routers.recommend import _resolve_model
+    from config_manager import get_api_key
+
+    _logger = logging.getLogger(__name__)
+
+    try:
+        # Count total embedded movies
+        total_embedded = db.exec(
+            select(func.count(MovieEmbeddingRecord.id)).where(
+                MovieEmbeddingRecord.user_id == user_id
+            )
+        ).one() or 0
+
+        # Count total watched movies
+        total_watched = db.exec(
+            select(func.count(MediaItemRecord.id)).where(
+                MediaItemRecord.user_id == user_id,
+                MediaItemRecord.status == "watched",
+            )
+        ).one() or 0
+
+        if total_watched < 5:
+            return  # Not enough data for meaningful memories
+
+        # ── Memory auto-generation ──
+        existing_memories = db.exec(
+            select(UserMemoryRecord).where(
+                UserMemoryRecord.user_id == user_id,
+                UserMemoryRecord.is_active == True,  # noqa: E712
+            )
+        ).all()
+
+        should_gen = should_regenerate_memories(existing_memories, new_embed_count)
+        if should_gen:
+            _logger.info("Auto-generating memories for user %d (new=%d, total=%d)",
+                         user_id, new_embed_count, total_watched)
+
+            # Resolve model (prefer deepseek, fallback to openai)
+            resolved_model, api_key = _resolve_model("deepseek")
+            if resolved_model == "local" or not api_key:
+                # Try openai as fallback
+                resolved_model, api_key = _resolve_model("openai")
+            if resolved_model == "local" or not api_key:
+                _logger.debug("No AI key available for auto memory generation, skipping")
+                return
+
+            movies = db.exec(
+                select(MediaItemRecord).where(
+                    MediaItemRecord.user_id == user_id,
+                    MediaItemRecord.status == "watched",
+                ).order_by(MediaItemRecord.rating.desc())
+            ).all()
+
+            movie_dicts = [
+                {"title": m.title, "rating": m.rating, "year": m.year, "genre": m.genre}
+                for m in movies
+            ]
+
+            generate_memories(
+                user_id=user_id,
+                movies=movie_dicts,
+                existing_memories=existing_memories,
+                model_type=resolved_model,
+                api_key=api_key,
+                db=db,
+            )
+
+        # ── Profile auto-rebuild (when ≥ 10 new embeddings) ──
+        if new_embed_count >= 10:
+            _logger.info("Auto-rebuilding profile for user %d (new=%d)", user_id, new_embed_count)
+            _rebuild_profile_simple(user_id, db)
+
+    except Exception as e:
+        _logger.warning("Auto profile/memory update failed for user %d: %s", user_id, e)
+
+
+def _rebuild_profile_simple(user_id: int, db):
+    """Lightweight profile rebuild (stats only, no LLM call)."""
+    import json
+    import re
+    from collections import Counter
+    from sqlmodel import select
+    from models import MediaItemRecord, UserProfileRecord
+
+    movies = db.exec(
+        select(MediaItemRecord).where(
+            MediaItemRecord.user_id == user_id,
+            MediaItemRecord.status == "watched",
+        )
+    ).all()
+
+    if len(movies) < 3:
+        return
+
+    ratings = [m.rating for m in movies if m.rating]
+    avg_rating = sum(ratings) / len(ratings) if ratings else 0
+
+    genre_counter = Counter()
+    decade_counter = Counter()
+    for m in movies:
+        if m.genre:
+            for g in re.split(r"\s*/\s*", m.genre):
+                genre_counter[g.strip()] += 1
+        if m.year:
+            decade_counter[f"{(m.year // 10) * 10}s"] += 1
+
+    top_genres = [g for g, _ in genre_counter.most_common(5)]
+    preferred_decades = [d for d, _ in decade_counter.most_common(3)]
+
+    profile = db.exec(
+        select(UserProfileRecord).where(UserProfileRecord.user_id == user_id)
+    ).first()
+
+    profile_data = {
+        "top_genres": top_genres,
+        "avg_rating": round(avg_rating, 1),
+        "total_movies": len(movies),
+    }
+
+    if profile:
+        # MERGE stats into the existing profile instead of overwriting it.
+        # profile_json may contain rich LLM-generated fields (taste_personality,
+        # anti_preferences, rating_patterns, evolution_notes...) that must be
+        # preserved — the stats-only rebuild only updates its own keys.
+        try:
+            merged = json.loads(profile.profile_json) if profile.profile_json else {}
+        except (json.JSONDecodeError, ValueError):
+            merged = {}
+        if not isinstance(merged, dict):
+            merged = {}
+        merged.update(profile_data)
+
+        profile.profile_json = json.dumps(merged, ensure_ascii=False)
+        profile.version += 1
+        profile.movie_count_analyzed = len(movies)
+        profile.avg_rating = avg_rating
+        profile.top_genres = json.dumps(top_genres, ensure_ascii=False)
+        profile.preferred_decades = json.dumps(preferred_decades, ensure_ascii=False)
+        profile.last_incremental_update = datetime.now(timezone.utc)
+    else:
+        profile = UserProfileRecord(
+            user_id=user_id,
+            profile_json=json.dumps(profile_data, ensure_ascii=False),
+            movie_count_analyzed=len(movies),
+            avg_rating=avg_rating,
+            top_genres=json.dumps(top_genres, ensure_ascii=False),
+            preferred_decades=json.dumps(preferred_decades, ensure_ascii=False),
+        )
+        db.add(profile)
+
+    db.commit()
+    # Invalidate the RAG vector/profile caches so the next retrieval
+    # sees fresh data
+    try:
+        from ai_service.rag import invalidate_vector_cache
+        invalidate_vector_cache(user_id)
+    except Exception:
+        pass
+
+
+def _cleanup_embedding_for_media(user_id: int, media_id: int, db: Session):
+    """Remove the MovieEmbeddingRecord for a deleted media item.
+
+    Looks up the embedding by ``media_item_id`` and deletes it if found.
+    Also invalidates the vectorized matrix cache so the next retrieval
+    doesn't serve stale data.
+    Silently ignores errors (best-effort cleanup).
+    """
+    from sqlmodel import select
+    from models import MovieEmbeddingRecord
+
+    try:
+        record = db.exec(
+            select(MovieEmbeddingRecord).where(
+                MovieEmbeddingRecord.user_id == user_id,
+                MovieEmbeddingRecord.media_item_id == media_id,
+            )
+        ).first()
+        if record:
+            db.delete(record)
+            db.commit()
+            try:
+                from ai_service.rag import invalidate_vector_cache
+                invalidate_vector_cache(user_id)
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 # ── Stats ───────────────────────────────────────────────────────────
@@ -185,6 +526,10 @@ async def add_watched_media(
             )
             if not converted:
                 raise HTTPException(status_code=500, detail="转换失败")
+
+            # Embed the newly-watched item
+            background_tasks.add_task(_background_embed_movies, current_user["id"], [converted.id])
+
             log_operation(
                 current_user["id"], current_user["username"],
                 "add_watched", f"从想看转为已看: {converted.title}", db=db,
@@ -222,6 +567,9 @@ async def add_watched_media(
     # Launch background metadata scraping for this single item
     background_tasks.add_task(async_background_enrich_movies, current_user["id"], [r.id])
 
+    # Launch background BGE-M3 embedding for this single item
+    background_tasks.add_task(_background_embed_movies, current_user["id"], [r.id])
+
     log_operation(
         current_user["id"], current_user["username"],
         "add_watched", f"添加已看: {r.title}", db=db,
@@ -255,6 +603,10 @@ async def replace_media(
     media_ids = [r.id for r in records]
     if media_ids:
         background_tasks.add_task(async_background_enrich_movies, current_user["id"], media_ids)
+
+    # Launch background BGE-M3 embedding
+    if records:
+        background_tasks.add_task(_background_embed_movies, current_user["id"])
 
     log_operation(current_user["id"], current_user["username"], "replace_watched", f"替换已看列表: {len(records)} 部", db=db)
     return {"status": "saved", "count": len(records)}
@@ -343,6 +695,7 @@ async def list_media(
 async def update_media_endpoint(
     media_id: int,
     data: dict,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
@@ -372,6 +725,16 @@ async def update_media_endpoint(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Media item not found")
+
+    # Re-embed when metadata changes (background).
+    # - title/genre/overview changes → force=True (delete + re-embed with
+    #   fresh metadata; idempotent check would otherwise skip these)
+    # - rating-only changes → no re-embed needed (rating is not part of the
+    #   embedding text anymore)
+    metadata_keys = ["title", "genre", "overview", "year", "tmdb_id", "media_type"]
+    if any(k in data for k in metadata_keys):
+        background_tasks.add_task(_background_embed_movies, current_user["id"], [media_id], True)
+
     log_operation(current_user["id"], current_user["username"], "update_media", f"更新条目: {updated.title} (ID: {media_id})", db=db)
     return {
         "id": updated.id,
@@ -512,6 +875,7 @@ async def enrich_media_metadata_endpoint(
 async def mark_as_watched(
     media_id: int,
     request: MarkAsWatchedRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
@@ -527,6 +891,10 @@ async def mark_as_watched(
             status_code=404,
             detail="Media item not found or already marked as watched",
         )
+
+    # Embed the newly-watched item
+    background_tasks.add_task(_background_embed_movies, current_user["id"], [updated.id])
+
     log_operation(current_user["id"], current_user["username"], "mark_watched", f"标记已看: {updated.title}", db=db)
     return {
         "id": updated.id,
@@ -544,10 +912,18 @@ async def delete_media_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """Delete a saved media item (must belong to current user)."""
+    """Delete a saved media item (must belong to current user).
+
+    Also cleans up the corresponding MovieEmbeddingRecord to prevent
+    orphaned embeddings from consuming storage.
+    """
     deleted = db_delete_media(media_id, current_user["id"], db=db)
     if not deleted:
         raise HTTPException(status_code=404, detail="Media item not found")
+
+    # Clean up orphaned embedding
+    _cleanup_embedding_for_media(current_user["id"], media_id, db)
+
     log_operation(current_user["id"], current_user["username"], "delete_media", f"删除条目 ID: {media_id}", db=db)
     return {"status": "deleted"}
 
@@ -558,11 +934,22 @@ async def batch_delete_media_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """Batch delete media items by IDs."""
+    """Batch delete media items by IDs.
+
+    Also cleans up corresponding MovieEmbeddingRecords.
+    """
     ids = request.get("ids", [])
     if not isinstance(ids, list) or len(ids) == 0:
         raise HTTPException(status_code=400, detail="请提供要删除的条目 ID 列表")
     count = db_batch_delete_media(ids, current_user["id"], db=db)
+
+    # Clean up orphaned embeddings for each deleted ID
+    for mid in ids:
+        try:
+            _cleanup_embedding_for_media(current_user["id"], mid, db)
+        except Exception:
+            pass  # Best-effort cleanup
+
     log_operation(current_user["id"], current_user["username"], "batch_delete_media", f"批量删除: {count} 条", db=db)
     return {"status": "deleted", "count": count}
 

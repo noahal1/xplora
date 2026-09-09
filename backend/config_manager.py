@@ -73,6 +73,11 @@ def _save_config(config: dict) -> None:
         os.makedirs(config_dir, exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
+    # The file contains API keys — restrict it to the owning user only.
+    try:
+        os.chmod(CONFIG_FILE, 0o600)
+    except OSError:
+        pass  # Windows / filesystems without POSIX permissions
     _config_cache = config
 
 

@@ -1,0 +1,54 @@
+# =============================================================================
+# Backend tests — run the pytest suite on every push / PR
+#
+# Triggers:
+#   - push to any branch (paths limited to backend + workflow files)
+#   - pull requests targeting main
+#
+# Runs with Python 3.12 (same major version as the production Docker image)
+# against official PyPI mirrors (GitHub runners have direct access).
+# =============================================================================
+
+name: Backend Tests
+
+'on':
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+
+concurrency:
+  group: backend-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+
+      - name: Compile check (syntax of all backend modules)
+        run: python -m compileall -q backend
+
+      - name: Run tests
+        working-directory: backend
+        run: python -m pytest -v

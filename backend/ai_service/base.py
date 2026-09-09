@@ -127,10 +127,12 @@ class AIServiceBase:
                 if content:
                     return content
                 last_error = ValueError("Empty response from AI model")
+            except AuthenticationError:
+                # Must come before the APIError clause: AuthenticationError is a
+                # subclass of APIError, and a bad key won't be fixed by retrying.
+                raise
             except (APITimeoutError, RateLimitError, APIConnectionError, APIError) as e:
                 last_error = e
-            except AuthenticationError:
-                raise
             logger.warning(
                 "AI call attempt %d/%d failed: %s",
                 attempt + 1, retries + 1, last_error,

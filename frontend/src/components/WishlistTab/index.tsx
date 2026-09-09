@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
+import { Modal } from "../Modal";
 import type { WishlistItem, SortField } from "../../types";
 import * as api from "../../api";
 import { useToast } from "../../context/ToastContext";
@@ -207,6 +208,9 @@ export function WishlistTab() {
   // Wishlist operations
   // ================================
 
+  // Delete confirmation: row buttons open the modal; deleteItem runs after confirm
+  const [deleteTarget, setDeleteTarget] = useState<WishlistEntry | null>(null);
+
   const deleteItem = useCallback(async (id: number) => {
     try {
       await api.deleteMedia(id);
@@ -216,6 +220,18 @@ export function WishlistTab() {
       else setReloadTrigger((n) => n + 1);
     } catch (err: unknown) { showToast(t("wishlist.delete_failed", { message: getErrMsg(err) }), "error"); }
   }, [items.length, currentPage, showToast, t]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    await deleteItem(id);
+  }, [deleteTarget, deleteItem]);
+
+  // Row buttons hand us an id; resolve it to the full entry for the modal
+  const openDeleteConfirm = useCallback((id: number) => {
+    setDeleteTarget(items.find((m) => m.id === id) ?? null);
+  }, [items]);
 
   const confirmMarkAsWatched = useCallback(async (movieId: number, rating: number) => {
     try {
@@ -339,7 +355,7 @@ export function WishlistTab() {
                           key={m.id}
                           item={m}
                           onMarkWatched={setMarkingMovie}
-                          onDelete={deleteItem}
+                          onDelete={openDeleteConfirm}
                           onOpenDetail={setDetailSaved}
                           onSearchPT={setSearchPTItem}
                           onServer={serverAvailable ? serverMatches[m.title]?.found : undefined}
@@ -357,7 +373,7 @@ export function WishlistTab() {
                           key={m.id}
                           item={m}
                           onMarkWatched={setMarkingMovie}
-                          onDelete={deleteItem}
+                          onDelete={openDeleteConfirm}
                           onOpenDetail={setDetailSaved}
                           onSearchPT={setSearchPTItem}
                           onServer={serverAvailable ? serverMatches[m.title]?.found : undefined}
@@ -429,6 +445,28 @@ export function WishlistTab() {
           searchQuery={`${searchPTItem.title}${searchPTItem.year ? ` ${searchPTItem.year}` : ""}`}
         />
       )}
+
+      {/* === Delete Confirmation Modal === */}
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={t("wishlist.delete_confirm_title")}
+        description={t("wishlist.delete_confirm_desc", { title: deleteTarget?.title ?? "" })}
+        footer={
+          <div className="flex items-center gap-2 w-full justify-end">
+            <button className="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(null)}>
+              {t("common.cancel")}
+            </button>
+            <button
+              className="btn btn-sm gap-1.5"
+              style={{ background: "var(--destructive)", color: "#fff", borderColor: "transparent" }}
+              onClick={confirmDelete}
+            >
+              <Trash2 size={12} />{t("common.delete")}
+            </button>
+          </div>
+        }
+      />
 
       {/* === Rating Modal === */}
       <WishlistRatingModal open={markingMovie !== null} movie={markingMovie} onClose={() => setMarkingMovie(null)} onConfirm={confirmMarkAsWatched} />

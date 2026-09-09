@@ -11,6 +11,10 @@ from models.db import (
     PlaylistItemRecord,
     MediaServerRecord,
     MoviePilotRecord,
+    UserProfileRecord,
+    UserMemoryRecord,
+    MovieEmbeddingRecord,
+    UserPreferencesRecord,
 )
 
 from models.schemas import (
@@ -48,6 +52,10 @@ __all__ = [
     "OperationLogRecord",
     "MediaServerRecord",
     "MoviePilotRecord",
+    "UserProfileRecord",
+    "UserMemoryRecord",
+    "MovieEmbeddingRecord",
+    "UserPreferencesRecord",
     "LoginRequest",
     "LoginResponse",
     "CreateUserRequest",

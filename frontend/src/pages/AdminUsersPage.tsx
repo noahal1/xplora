@@ -71,6 +71,10 @@ export function AdminUsersPage() {
       showToast(t("admin.create_failed"), "error");
       return;
     }
+    if (newPassword.length < 8) {
+      showToast(t("admin.pwd_too_short"), "error");
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch("/api/auth/users", {
@@ -116,7 +120,7 @@ export function AdminUsersPage() {
 
   const handleResetPassword = async () => {
     if (!resetTarget) return;
-    if (resetPassword.length < 4) {
+    if (resetPassword.length < 8) {
       showToast(t("admin.pwd_too_short"), "error");
       return;
     }
@@ -321,7 +325,7 @@ export function AdminUsersPage() {
             </button>
             <button
               onClick={handleResetPassword}
-              disabled={resetting || resetPassword.length < 4}
+              disabled={resetting || resetPassword.length < 8}
               className="btn btn-primary btn-sm"
             >
               {resetting ? t("admin.reset_progress") : t("admin.confirm_reset")}

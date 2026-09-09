@@ -32,8 +32,7 @@
     "watched": "看过",
     "wishlist": "想看",
     "recommend": "推荐",
-    "manage": "管理",
-    "stats": "数据",
+    "my": "我的",
     "top_rated": "排行榜",
     "history": "历史",
     "discover": "发现"
@@ -139,7 +138,8 @@
     "add_failed": "添加失败：{{message}}",
     "delete_success": "已从想看列表中移除",
     "delete_failed": "删除失败：{{message}}",
-    "marked_as_watched": "已标记「{{title}}」为已看！⭐ {{rating}} 分",
+    "delete_confirm_title": "删除想看条目",
+    "delete_confirm_desc": "确定要从想看列表中删除「{{title}}」吗？此操作不可撤销。",
     "mark_failed": "操作失败：{{message}}",
     "json_empty": "请粘贴 JSON 数据",
     "json_invalid": "未找到有效的电影数据",
@@ -363,8 +363,20 @@
     "login": "登录",
     "logging_in": "登录中...",
     "error_empty": "请输入用户名和密码",
-    "error_auth": "登录失败",
-    "hint": "默认管理员账号: admin / admin123"
+    "error_auth": "登录失败"
+  },
+  "force_password_change": {
+    "title": "设置新密码",
+    "subtitle": "首次登录请修改默认密码后再继续使用",
+    "old_password": "当前密码",
+    "new_password": "新密码",
+    "confirm_password": "确认新密码",
+    "submit": "确认修改",
+    "submitting": "提交中...",
+    "error_empty": "请填写所有字段",
+    "error_too_short": "新密码长度不能少于8位",
+    "error_mismatch": "两次输入的密码不一致",
+    "success": "密码修改成功"
   },
   "admin": {
     "title": "用户管理",
@@ -394,11 +406,11 @@
     "confirm_delete": "确认删除",
     "reset_pwd_title": "重置密码 — {{username}}",
     "new_password": "新密码",
-    "new_password_placeholder": "输入新密码（至少4位）",
+    "new_password_placeholder": "输入新密码（至少8位）",
     "reset_progress": "重置中...",
     "confirm_reset": "确认重置",
     "pwd_reset": "用户 {{username}} 的密码已重置",
-    "pwd_too_short": "密码长度不能少于4位",
+    "pwd_too_short": "密码长度不能少于8位",
     "user_deleted": "用户 {{username}} 已删除",
     "tab_users": "用户管理",
     "tab_logs": "操作日志",
@@ -441,7 +453,7 @@
     "new_password": "新密码",
     "confirm_password": "确认新密码",
     "password_empty": "请填写所有密码字段",
-    "password_too_short": "新密码至少需要 4 个字符",
+    "password_too_short": "新密码至少需要 8 个字符",
     "password_mismatch": "两次输入的新密码不一致",
     "password_success": "密码已更新",
     "password_changing": "修改中...",
@@ -477,7 +489,13 @@
     "zhipu_guide_step2": "进入控制台 → API Keys → 创建 API Key",
     "zhipu_guide_step3": "复制 Key 粘贴到上方输入框，点击保存",
     "zhipu_guide_open": "打开智谱开放平台",
-    "zhipu_guide_free": "永久免费 · GLM-4-Flash"
+    "zhipu_guide_free": "永久免费 · GLM-4-Flash",
+    "ai_features": "AI 功能",
+    "rag_embedding": "智能品味分析（RAG）",
+    "rag_embedding_desc": "启用后，系统会自动分析你的观影偏好并生成品味画像，提升推荐质量",
+    "rag_enabled": "智能品味分析已启用",
+    "rag_disabled": "智能品味分析已关闭",
+    "rag_toggle_failed": "切换失败，请稍后重试"
   },
   "stars": {
     "label": "{{value}} 分"
@@ -593,7 +611,8 @@
     "published_at": "发布于 {{date}}",
     "notification_badge": "有新版本可用",
     "update_now": "立即更新",
-    "updating": "更新中..."
+    "updating": "更新中...",
+    "manual_disabled": "出于安全考虑，手动更新已禁用（未挂载 Docker 套接字）。Watchtower 会自动检查更新。"
   },
   "about": {
     "title": "关于 Xplora",
@@ -925,5 +944,40 @@
     "add": "想看",
     "added": "已添加",
     "load_more": "加载更多"
+  },
+  "mypage": {
+    "tab_manage": "管理",
+    "tab_stats": "统计",
+    "tab_servers": "媒体服务器",
+    "tab_ai": "AI 画像",
+    "tab_settings": "设置",
+    "watched": "已看",
+    "wishlist": "想看",
+    "taste_profile": "品味画像",
+    "refresh": "刷新",
+    "avg_rating_label": "平均评分",
+    "preferred_decades": "偏好年代",
+    "profile_version": "版本",
+    "movies_analyzed": "分析电影数",
+    "no_profile_yet": "尚未生成品味画像",
+    "rag_disabled_notice": "请先启用智能品味分析",
+    "build_profile": "生成画像",
+    "profile_rebuilt": "画像已重建",
+    "profile_rebuild_failed": "重建失败",
+    "embedding_status": "嵌入状态",
+    "embed_now": "立即嵌入",
+    "embed_triggered": "嵌入已触发",
+    "embed_trigger_failed": "触发失败",
+    "embed_progress": "嵌入进度",
+    "embedding_now": "嵌入中...",
+    "embedding_in_progress": "正在嵌入...",
+    "provider": "模型",
+    "embed_complete": "已完成",
+    "no_embed_data": "暂无嵌入数据",
+    "taste_memories": "品味记忆",
+    "generate_memories": "生成记忆",
+    "memories_generated": "记忆已生成",
+    "memories_generate_failed": "生成失败",
+    "no_memories": "暂无品味记忆"
   }
 }

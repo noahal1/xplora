@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlmodel import Session, select, delete
 
+from crypto import encrypt_secret
 from models.db import MediaServerRecord, MediaServerLibraryCache
 
 
@@ -21,14 +22,17 @@ def create_media_server(
     *,
     db: Session,
 ) -> MediaServerRecord:
-    """Create a new media server record for the given user."""
+    """Create a new media server record for the given user.
+
+    The API key / token is encrypted before storage (see ``crypto``).
+    """
     record = MediaServerRecord(
         user_id=user_id,
         name=name,
         server_type=server_type,
         host=host,
         port=port,
-        api_key=api_key,
+        api_key=encrypt_secret(api_key),
         username=username,
         server_user_id=server_user_id,
         use_ssl=use_ssl,
@@ -84,7 +88,7 @@ def update_media_server(
     if port is not None:
         record.port = port
     if api_key is not None:
-        record.api_key = api_key
+        record.api_key = encrypt_secret(api_key)
     if username is not None:
         record.username = username
     if use_ssl is not None:

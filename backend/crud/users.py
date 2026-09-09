@@ -73,8 +73,17 @@ def get_user_by_id(user_id: int, db: Optional[Session] = None) -> Optional[UserR
             session.close()
 
 
+# The well-known default password shipped with the seeded admin account.
+# Users who are still on it (must_change_password=True) may not set it again.
+DEFAULT_ADMIN_PASSWORD = "admin123"
+
+
 def change_password(user_id: int, old_password: str, new_password: str, db: Optional[Session] = None) -> bool:
-    """Change a user's password. Returns True on success, False if old password is wrong."""
+    """Change a user's password. Returns True on success, False if old password is wrong.
+
+    Raises ``ValueError`` if the user is still on their initial password and
+    tries to set it back to the well-known default.
+    """
     session, close_db = _resolve_db(db)
     try:
         user = session.exec(
@@ -84,7 +93,10 @@ def change_password(user_id: int, old_password: str, new_password: str, db: Opti
             return False
         if not bcrypt.verify(old_password, user.password_hash):
             return False
+        if user.must_change_password and new_password == DEFAULT_ADMIN_PASSWORD:
+            raise ValueError("密码不能设置为默认密码")
         user.password_hash = bcrypt.hash(new_password)
+        user.must_change_password = False
         session.commit()
         return True
     except Exception:
@@ -129,7 +141,11 @@ def admin_delete_user(target_user_id: int, db: Optional[Session] = None) -> bool
 
 
 def admin_reset_user_password(target_user_id: int, new_password: str, db: Optional[Session] = None) -> bool:
-    """Admin: reset a user's password. Returns True if successful."""
+    """Admin: reset a user's password. Returns True if successful.
+
+    The target user is flagged to change their password at next login, since
+    the new password was set by someone else and is therefore "initial".
+    """
     session, close_db = _resolve_db(db)
     try:
         user = session.exec(
@@ -138,6 +154,7 @@ def admin_reset_user_password(target_user_id: int, new_password: str, db: Option
         if not user:
             return False
         user.password_hash = bcrypt.hash(new_password)
+        user.must_change_password = True
         session.commit()
         return True
     except Exception:

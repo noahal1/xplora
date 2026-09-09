@@ -19,17 +19,22 @@ class LoginResponse(SQLModel):
     token: str
     username: str
     is_admin: bool
+    must_change_password: bool = Field(
+        default=False,
+        description="True if the user must change their (default) password before using the app",
+    )
 
 
 class CreateUserRequest(SQLModel):
     username: str = Field(min_length=2, max_length=64, description="New username")
-    password: str = Field(min_length=4, max_length=128, description="Password")
+    password: str = Field(min_length=8, max_length=128, description="Password")
 
 
 class UserInfo(SQLModel):
     id: int
     username: str
     is_admin: bool
+    must_change_password: bool = Field(default=False)
     created_at: str
 
 
@@ -37,7 +42,7 @@ class ChangePasswordRequest(SQLModel):
     """Request body for changing password."""
     old_password: str = Field(description="Current password")
     new_password: str = Field(
-        min_length=4, max_length=128, description="New password"
+        min_length=8, max_length=128, description="New password"
     )
 
 

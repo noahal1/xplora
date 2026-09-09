@@ -32,8 +32,7 @@
     "watched": "Watched",
     "wishlist": "Wishlist",
     "recommend": "Recommend",
-    "manage": "Manage",
-    "stats": "Stats",
+    "my": "My",
     "top_rated": "Top 10",
     "history": "History",
     "discover": "Discover"
@@ -140,6 +139,8 @@
     "add_failed": "Add failed: {{message}}",
     "delete_success": "Removed from wishlist",
     "delete_failed": "Delete failed: {{message}}",
+    "delete_confirm_title": "Delete Wishlist Item",
+    "delete_confirm_desc": "Are you sure you want to remove \"{{title}}\" from your wishlist? This cannot be undone.",
     "marked_as_watched": "\"{{title}}\" marked as watched! ⭐ {{rating}} pts",
     "mark_failed": "Operation failed: {{message}}",
     "json_empty": "Please paste JSON data",
@@ -360,8 +361,20 @@
     "login": "Sign In",
     "logging_in": "Signing in...",
     "error_empty": "Please enter username and password",
-    "error_auth": "Login failed",
-    "hint": "Default admin: admin / admin123"
+    "error_auth": "Login failed"
+  },
+  "force_password_change": {
+    "title": "Set a new password",
+    "subtitle": "You must change the default password before continuing",
+    "old_password": "Current password",
+    "new_password": "New password",
+    "confirm_password": "Confirm new password",
+    "submit": "Update password",
+    "submitting": "Updating...",
+    "error_empty": "Please fill in all fields",
+    "error_too_short": "New password must be at least 8 characters",
+    "error_mismatch": "Passwords do not match",
+    "success": "Password updated"
   },
   "admin": {
     "title": "User Management",
@@ -391,11 +404,11 @@
     "confirm_delete": "Confirm Delete",
     "reset_pwd_title": "Reset Password — {{username}}",
     "new_password": "New Password",
-    "new_password_placeholder": "Enter new password (min 4 characters)",
+    "new_password_placeholder": "Enter new password (min 8 characters)",
     "reset_progress": "Resetting...",
     "confirm_reset": "Confirm Reset",
     "pwd_reset": "Password reset for {{username}}",
-    "pwd_too_short": "Password must be at least 4 characters",
+    "pwd_too_short": "Password must be at least 8 characters",
     "user_deleted": "User {{username}} deleted",
     "load_failed": "Failed to load users",
     "export_success": "Data exported successfully",
@@ -429,7 +442,7 @@
     "new_password": "New Password",
     "confirm_password": "Confirm Password",
     "password_empty": "Please fill in all password fields",
-    "password_too_short": "New password must be at least 4 characters",
+    "password_too_short": "New password must be at least 8 characters",
     "password_mismatch": "New passwords do not match",
     "password_success": "Password updated successfully",
     "password_changing": "Updating...",
@@ -465,7 +478,13 @@
     "zhipu_guide_step2": "Go to the console → API Keys → Create API Key",
     "zhipu_guide_step3": "Copy the key and paste it into the field above, then save",
     "zhipu_guide_open": "Open Zhipu Console",
-    "zhipu_guide_free": "Permanently free · GLM-4-Flash"
+    "zhipu_guide_free": "Permanently free · GLM-4-Flash",
+    "ai_features": "AI Features",
+    "rag_embedding": "Smart Taste Analysis (RAG)",
+    "rag_embedding_desc": "When enabled, the system automatically analyzes your viewing preferences and builds a taste profile to improve recommendations",
+    "rag_enabled": "Smart taste analysis enabled",
+    "rag_disabled": "Smart taste analysis disabled",
+    "rag_toggle_failed": "Toggle failed, please try again later"
   },
   "stars": {
     "label": "{{value}} pts"
@@ -558,7 +577,8 @@
     "published_at": "Released {{date}}",
     "notification_badge": "New version available",
     "update_now": "Update Now",
-    "updating": "Updating..."
+    "updating": "Updating...",
+    "manual_disabled": "Manual update is disabled for security (Docker socket not mounted). Watchtower will update automatically."
   },
   "about": {
     "title": "About Xplora",
@@ -890,5 +910,40 @@
     "add": "Wishlist",
     "added": "Added",
     "load_more": "Load More"
+  },
+  "mypage": {
+    "tab_manage": "Manage",
+    "tab_stats": "Stats",
+    "tab_servers": "Media Servers",
+    "tab_ai": "AI Profile",
+    "tab_settings": "Settings",
+    "watched": "watched",
+    "wishlist": "wishlist",
+    "taste_profile": "Taste Profile",
+    "refresh": "Refresh",
+    "avg_rating_label": "Avg Rating",
+    "preferred_decades": "Preferred Decades",
+    "profile_version": "Version",
+    "movies_analyzed": "Movies Analyzed",
+    "no_profile_yet": "No taste profile generated yet",
+    "rag_disabled_notice": "Please enable smart taste analysis first",
+    "build_profile": "Generate Profile",
+    "profile_rebuilt": "Profile rebuilt",
+    "profile_rebuild_failed": "Rebuild failed",
+    "embedding_status": "Embedding Status",
+    "embed_now": "Embed Now",
+    "embed_triggered": "Embedding triggered",
+    "embed_trigger_failed": "Trigger failed",
+    "embed_progress": "Embedding Progress",
+    "embedding_now": "Embedding...",
+    "embedding_in_progress": "Embedding in progress...",
+    "provider": "Model",
+    "embed_complete": "Complete",
+    "no_embed_data": "No embedding data yet",
+    "taste_memories": "Taste Memories",
+    "generate_memories": "Generate Memories",
+    "memories_generated": "Memories generated",
+    "memories_generate_failed": "Generation failed",
+    "no_memories": "No taste memories yet"
   }
 }

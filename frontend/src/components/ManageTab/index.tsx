@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaDetail, SortField } from "../../types";
 import * as api from "../../api";
@@ -15,7 +15,7 @@ import { SortControls } from "../SortControls";
 import { StatusFilter } from "../StatusFilter";
 import { SearchInput } from "../SearchInput";
 import FadeContent from "../FadeContent";
-import { Film, Upload, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, Server, BrainCircuit, ListTodo } from "lucide-react";
+import { Film, Upload, Sparkles, Loader2, RefreshCw, Trash2, WandSparkles, X, HardDrive, BrainCircuit } from "lucide-react";
 import { useDebouncedSearch } from "../../hooks/useDebouncedSearch";
 import { localDateToISO } from "../../utils/date";
 import { useSort } from "../../hooks/useSort";
@@ -35,10 +35,6 @@ import { FilterBar } from "../shared/FilterBar";
 import { groupTVSeries } from "../../utils/groupTVSeries";
 import type { TVSeriesGroup } from "../../utils/groupTVSeries";
 import { DownloadQueue } from "./DownloadQueue";
-import ViewStack from "../ViewStack";
-
-const MediaServerTab = lazy(() => import("../MediaServerTab").then((m) => ({ default: m.MediaServerTab })));
-const PlaylistsTab = lazy(() => import("../PlaylistsTab").then((m) => ({ default: m.PlaylistsTab })));
 
 const MANAGE_PAGE_SIZE = 16;
 
@@ -78,14 +74,6 @@ export function ManageTab() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  // Sub-view: media library table or playlists (片单)
-  const [subView, setSubView] = useState<"media" | "playlists">(
-    () => (localStorage.getItem("xplora-manage-view") as "media" | "playlists") || "media"
-  );
-  useEffect(() => {
-    localStorage.setItem("xplora-manage-view", subView);
-  }, [subView]);
 
   const [page, setPage] = useState(0);
   const search = useDebouncedSearch("", 300);
@@ -228,8 +216,7 @@ export function ManageTab() {
     setAiInferConfirm(null);
   }, [aiInferConfirm]);
 
-  // Media data stays fresh in the background — ViewStack keeps both views
-  // mounted, so no refetch/reload when switching back and forth.
+  // Media data refreshes on mount and when background enrichment completes
   useEffect(() => {
     const controller = new AbortController();
     fetchData(controller.signal);
@@ -468,7 +455,6 @@ export function ManageTab() {
   }, []);
 
   const [showDownloadQueue, setShowDownloadQueue] = useState(false);
-  const [showMediaServer, setShowMediaServer] = useState(false);
 
   const hasActiveFilters = !!(search.debouncedValue || statusFilter || mediaTypeFilter || genreFilter.size > 0 || countryFilter.size > 0 || errorFilter);
 
@@ -494,59 +480,34 @@ export function ManageTab() {
               </div>
               <div className="min-w-0">
                 <h2 className="section-title text-base leading-tight">{t("manage.title")}</h2>
-                {subView === "media" && (
-                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
-                    {t("manage.total").split("{{count}}")[0]}
-                    <span className="font-semibold text-foreground/80 tabular-nums"><CountUp end={total} /></span>
-                    {t("manage.total").split("{{count}}")[1]}
-                  </p>
-                )}
+                <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                  {t("manage.total").split("{{count}}")[0]}
+                  <span className="font-semibold text-foreground/80 tabular-nums"><CountUp end={total} /></span>
+                  {t("manage.total").split("{{count}}")[1]}
+                </p>
               </div>
-            </div>
-            {/* Sub-view switch: 媒体库 / 片单 — right of the title */}
-            <div className="flex items-center gap-1 rounded-lg p-0.5 bg-muted/40 border border-border shrink-0">
-              {[
-                { id: "media", label: t("manage.tab_library"), icon: <Film size={12} /> },
-                { id: "playlists", label: t("playlists.tab_title"), icon: <ListTodo size={12} /> },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => setSubView(opt.id as "media" | "playlists")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    subView === opt.id
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {opt.icon}
-                  {opt.label}
-                </button>
-              ))}
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            {/* Media-only toolbar */}
-            {subView === "media" && (
-              <div className="flex gap-1 items-center overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1 flex-1 sm:flex-none sm:ml-auto">
-                <ToolbarBtn icon={<RefreshCw size={12} />} label={t("manage.refresh")} onClick={() => fetchData()} />
-                <ToolbarBtn icon={<Upload size={12} />} label={t("manage.export")} onClick={handleExportMovies} />
-                <ToolbarBtn icon={<Server size={12} />} label={t("media_server.tab_title")} onClick={() => setShowMediaServer(true)} />
-                <ToolbarBtn icon={<HardDrive size={12} />} label={t("moviepilot.downloading")} onClick={() => setShowDownloadQueue(true)} />
-                <ToolbarBtn
-                  icon={batchLoading ? <Loader2 size={12} className="animate-spin" /> : <WandSparkles size={12} />}
-                  label={t("manage.batch_all")}
-                  onClick={handleBatchAll}
-                  disabled={batchLoading}
-                />
-              </div>
-            )}
+            {/* Toolbar */}
+            <div className="flex gap-1 items-center overflow-x-auto no-scrollbar max-sm:pb-1 max-sm:-mb-1 flex-1 sm:flex-none sm:ml-auto">
+              <ToolbarBtn icon={<RefreshCw size={12} />} label={t("manage.refresh")} onClick={() => fetchData()} />
+              <ToolbarBtn icon={<Upload size={12} />} label={t("manage.export")} onClick={handleExportMovies} />
+              <ToolbarBtn icon={<HardDrive size={12} />} label={t("moviepilot.downloading")} onClick={() => setShowDownloadQueue(true)} />
+              <ToolbarBtn
+                icon={batchLoading ? <Loader2 size={12} className="animate-spin" /> : <WandSparkles size={12} />}
+                label={t("manage.batch_all")}
+                onClick={handleBatchAll}
+                disabled={batchLoading}
+              />
+            </div>
           </div>
         </div>
       </FadeContent>
 
-      <ViewStack active={subView} className="animate-manage-view-in">
-        <div data-view="media" className="section-card min-h-[300px]">
+      <div className="animate-manage-view-in">
+        <div className="section-card min-h-[300px]">
 
       {/* ── Search & bulk actions ───────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-3">
@@ -927,32 +888,7 @@ export function ManageTab() {
       >
         <DownloadQueue />
       </Modal>
-
-      {/* ── Media Server Modal ─────────────────────────────────── */}
-      <Modal
-        open={showMediaServer}
-        onClose={() => setShowMediaServer(false)}
-        title={t("media_server.title")}
-      >
-        <Suspense fallback={
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-          </div>
-        }>
-          <MediaServerTab />
-        </Suspense>
-      </Modal>
-
-        <div data-view="playlists" className="min-h-[300px]">
-          <Suspense fallback={
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-            </div>
-          }>
-            <PlaylistsTab />
-          </Suspense>
-        </div>
-      </ViewStack>
+      </div>
     </div>
   );
 }

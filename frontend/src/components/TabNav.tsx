@@ -1,6 +1,6 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Film, BookmarkPlus, Sparkles, Library, BarChart3, Compass } from "lucide-react";
+import { Film, BookmarkPlus, Sparkles, Compass, User } from "lucide-react";
 import { useMemo } from "react";
 import { createPortal } from "react-dom";
 import GooeyNav, { type GooeyNavItem } from "./GooeyNav";
@@ -15,8 +15,7 @@ export function TabNav() {
     { id: "wishlist", label: t("tabs.wishlist"), icon: BookmarkPlus },
     { id: "discover", label: t("tabs.discover"), icon: Compass },
     { id: "recommend", label: t("tabs.recommend"), icon: Sparkles },
-    { id: "stats", label: t("tabs.stats"), icon: BarChart3 },
-    { id: "manage", label: t("tabs.manage"), icon: Library },
+    { id: "profile", label: t("tabs.my"), icon: User },
   ], [t]);
 
   // Router is the single source of truth for the active tab (-1 = no tab matched)

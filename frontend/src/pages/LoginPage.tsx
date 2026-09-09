@@ -28,10 +28,10 @@ export function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(username.trim(), password);
+      const mustChangePassword = await login(username.trim(), password);
       // Trigger exit animation before navigating
       setIsExiting(true);
-      setTimeout(() => navigate("/"), 400);
+      setTimeout(() => navigate(mustChangePassword ? "/change-password" : "/"), 400);
     } catch (err) {
       setError(getErrMsg(err));
     } finally {

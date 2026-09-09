@@ -5,6 +5,7 @@ from sqlmodel import Session
 
 from auth import get_current_user
 from deps import get_user_db
+from ssrf import validate_ssrf_target
 from crud.moviepilot import (
     create_mp_connection,
     get_mp_connection,
@@ -45,7 +46,7 @@ def _get_connector_from_db(user_id: int, db: Session) -> MoviePilotConnector:
     return MoviePilotConnector(
         host=record.host,
         port=record.port,
-        api_token=record.api_token,
+        api_token=record.api_token_plain,
         use_ssl=record.use_ssl,
     )
 
@@ -101,6 +102,12 @@ async def save_config(
             port = int(parts[1].strip())
         except (ValueError, IndexError):
             pass
+
+    # SSRF guard: reject loopback / link-local / metadata targets
+    try:
+        validate_ssrf_target(host, port)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     record = create_mp_connection(
         user_id=current_user["id"],
@@ -165,10 +172,14 @@ async def test_connection(
     use_ssl = request.get("use_ssl", False)
 
     if host and api_token:
-        # Test with provided config
+        # Test with provided config — validate the target first (SSRF guard)
+        try:
+            validate_ssrf_target(host, port)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         connector = MoviePilotConnector(host, port, api_token, use_ssl)
     else:
-        # Test with saved config
+        # Test with saved config (validated when it was saved)
         connector = _get_connector_from_db(current_user["id"], db)
 
     result = await connector.test_connection()
