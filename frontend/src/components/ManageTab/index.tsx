@@ -434,7 +434,7 @@ export function ManageTab() {
     } catch (err) {
       showToast(t("manage.export_failed", { message: getErrMsg(err) }), "error");
     }
-  }, [total, search.debouncedValue, statusFilter, sortField, sortDir, errorFilter, mediaTypeFilter, genreFilter, showToast, t]);
+  }, [total, search.debouncedValue, statusFilter, sortField, sortDir, errorFilter, mediaTypeFilter, genreFilter, countryFilter, showToast, t]);
 
   /* ── Pagination helpers ──────────────────────────────────────── */
   const totalPages = Math.ceil(total / MANAGE_PAGE_SIZE);

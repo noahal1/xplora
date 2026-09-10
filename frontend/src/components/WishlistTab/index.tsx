@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { Modal } from "../Modal";
@@ -121,14 +121,14 @@ export function WishlistTab() {
 
   // Fetch availability for the current page items.
   // Re-runs when the page/filters change, and on manual refresh (nonce bump).
+  const itemTitles = useMemo(() => items.map((i) => i.title), [items]);
   useEffect(() => {
     if (!serverAvailable) return;
     const serverId = serverRef.current?.id;
     if (!serverId) return;
-    const wishlistTitles = items.map((item) => item.title);
-    if (wishlistTitles.length === 0) return;
+    if (itemTitles.length === 0) return;
     let cancelled = false;
-    api.batchSearchMediaServer(serverId, wishlistTitles)
+    api.batchSearchMediaServer(serverId, itemTitles)
       .then((data) => {
         if (cancelled) return;
         const matches: Record<string, ServerMatch> = {};
@@ -150,7 +150,7 @@ export function WishlistTab() {
     // manual re-click, or items becoming empty) — otherwise the spinner could
     // stay stuck because the cancelled request never resets it.
     return () => { cancelled = true; setServerRefreshing(false); };
-  }, [items.map((i) => i.title).join(","), serverAvailable, serverRefreshNonce]);
+  }, [itemTitles, serverAvailable, serverRefreshNonce]);
 
   // === PT Search modal ===
   const [searchPTItem, setSearchPTItem] = useState<WishlistEntry | null>(null);

@@ -157,11 +157,6 @@ export function RecommendTab() {
     }
   }, [healthLoaded, availableModels, selectedModel]);
 
-  useEffect(() => {
-    loadMoviesFromDB();
-    loadSessions(0);
-  }, [loadMoviesFromDB]);
-
   /* ── History: load sessions ─────────────────────────────── */
   const loadSessions = useCallback(async (p: number = 0) => {
     setSessionsLoading(true);
@@ -177,6 +172,11 @@ export function RecommendTab() {
       setSessionsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    loadMoviesFromDB();
+    loadSessions(0);
+  }, [loadMoviesFromDB, loadSessions]);
 
   const viewSession = useCallback(async (id: number) => {
     setSelectedSessionLoading(true);

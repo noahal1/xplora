@@ -29,6 +29,17 @@
   height: 100%;
 }
 
+/* Canvas fades in once the first real texture is loaded, so remounts
+   transition smoothly from the dark background instead of hard-popping. */
+.morph-slider-stage .morph-slider-canvas {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.morph-slider-stage.is-ready .morph-slider-canvas {
+  opacity: 1;
+}
+
 /* Static fallback used when WebGL is unavailable — the page keeps working.
    Mirrors the shader hero: blurred backdrop + full uncropped poster. */
 .morph-slider-fallback {
@@ -203,6 +214,10 @@
   .morph-slider-btn,
   .morph-slider-dot {
     animation: none;
+    transition: none;
+  }
+
+  .morph-slider-stage .morph-slider-canvas {
     transition: none;
   }
 }

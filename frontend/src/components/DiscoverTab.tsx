@@ -27,6 +27,25 @@ const TV_SUPPORTED = new Set(["trending", "popular", "top_rated"]);
 const PAGE_SIZE = 20;
 const MAX_SLIDER_ITEMS = 10;
 
+// Session-cached wishlist snapshot so the top hero carousel renders instantly
+// on re-entry (instead of popping in after the API round-trip).
+const WISHLIST_CACHE_KEY = "xplora.discover.wishlist.v1";
+
+function readWishlistCache(): MediaDetail[] {
+  try {
+    const raw = sessionStorage.getItem(WISHLIST_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Minimal shape validation — only items usable by the hero carousel matter
+    return parsed.filter(
+      (m): m is MediaDetail => !!m && typeof m === "object" && typeof m.title === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
 export function DiscoverTab() {
   const { t } = useTranslation();
   const { showToast } = useToast();
@@ -44,7 +63,10 @@ export function DiscoverTab() {
 
   // Wishlist state
   const [wishlistTmdbIds, setWishlistTmdbIds] = useState<Set<string>>(new Set());
-  const [wishlistItems, setWishlistItems] = useState<MediaDetail[]>([]);
+  // Hydrated from the session cache so the hero carousel paints immediately
+  // on re-entry; the background refresh below reconciles with the server.
+  const [wishlistItems, setWishlistItems] = useState<MediaDetail[]>(readWishlistCache);
+  const [wishlistLoadedOnce, setWishlistLoadedOnce] = useState(false);
   const [adding, setAdding] = useState<Record<number, boolean>>({});
 
   // Top carousel (morph slider) state
@@ -65,9 +87,27 @@ export function DiscoverTab() {
   const loadWishlist = useCallback(async () => {
     try {
       const data = await api.listMedia({ page: 0, page_size: 5000, status: "wish" });
-      setWishlistItems(data.media);
+      const items = data.media;
+      // Write the session cache for the next remount
+      try {
+        sessionStorage.setItem(WISHLIST_CACHE_KEY, JSON.stringify(items));
+      } catch {
+        // Storage full / unavailable — cache is best-effort
+      }
+      setWishlistLoadedOnce(true);
+      setWishlistItems((prev) => {
+        // Skip no-op updates: an identical list would otherwise recreate the
+        // WebGL engine (full remount with dark flash) for no visual change.
+        if (
+          prev.length === items.length &&
+          prev.every((p, i) => p.id === items[i].id && p.title === items[i].title && p.poster_url === items[i].poster_url)
+        ) {
+          return prev;
+        }
+        return items;
+      });
       setWishlistTmdbIds(
-        new Set(data.media.map((m) => m.tmdb_id).filter((x): x is string => !!x))
+        new Set(items.map((m) => m.tmdb_id).filter((x): x is string => !!x))
       );
     } catch {
       // Best-effort — wishlist badge is non-critical
@@ -209,8 +249,12 @@ export function DiscoverTab() {
   return (
     <div className="space-y-5">
       {/* ── Wishlist morph carousel (top) ──────────────────── */}
+      {sliderItems.length === 0 && !wishlistLoadedOnce && (
+        /* Skeleton hero keeps the layout stable while the first load is in-flight */
+        <div className="relative w-full h-56 sm:h-72 lg:h-[30rem] rounded-2xl skeleton" />
+      )}
       {sliderItems.length > 0 && (
-        <FadeContent>
+        <FadeContent distance={0} duration={0.35}>
           {/* Cinematic hero banner: blurred backdrop + full uncropped poster */}
           <div
             className="relative w-full h-56 sm:h-72 lg:h-[30rem]"

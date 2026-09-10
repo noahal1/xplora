@@ -30,6 +30,8 @@ export interface MorphSliderProps extends HTMLAttributes<HTMLDivElement> {
   showIndicators?: boolean;
   /** Fired whenever the active slide changes (including during drags). */
   onIndexChange?: (index: number) => void;
+  /** Fired once the engine is rendering real imagery (first texture loaded). */
+  onReady?: () => void;
   className?: string;
 }
 
@@ -308,6 +310,7 @@ interface EngineOptions {
   dprCap: number;
   getOptions: () => MorphOptions;
   onIndexChange: (index: number) => void;
+  onReady: () => void;
 }
 
 class MorphEngine {
@@ -315,7 +318,10 @@ class MorphEngine {
   items: MorphSliderItem[];
   getOptions: () => MorphOptions;
   onIndexChange: (index: number) => void;
+  onReady: () => void;
   reducedMotion: boolean;
+  /** Set once the first real texture is bound — used for the fade-in. */
+  ready = false;
 
   current: number;
   animating: boolean;
@@ -347,6 +353,7 @@ class MorphEngine {
     this.items = options.items;
     this.getOptions = options.getOptions;
     this.onIndexChange = options.onIndexChange;
+    this.onReady = options.onReady;
     this.reducedMotion = options.reducedMotion;
 
     this.current = options.startIndex;
@@ -438,9 +445,20 @@ class MorphEngine {
         if (index === this.current) {
           this.program.uniforms.tCurrent.value = texture;
           this.program.uniforms.uCurrentSize.value = this.sizes[index];
+          if (!this.ready) {
+            this.ready = true;
+            this.onReady();
+          }
         }
       };
-      img.onerror = () => {};
+      img.onerror = () => {
+        // A failed current-slide image would otherwise leave the canvas at
+        // opacity 0 forever — fade in anyway (dark fallback texture is shown).
+        if (index === this.current && !this.ready && !this.disposed) {
+          this.ready = true;
+          this.onReady();
+        }
+      };
     });
   }
 
@@ -649,6 +667,8 @@ export default function MorphSlider({
   const [index, setIndex] = useState(startIndex);
   const [hovering, setHovering] = useState(false);
   const [failed, setFailed] = useState(false);
+  /** True once the engine is rendering real imagery — drives the canvas fade-in. */
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -657,6 +677,8 @@ export default function MorphSlider({
     let engine: MorphEngine | null = null;
     let rafId = 0;
     try {
+      // New engine starts on fallback textures — fade it in once imagery loads
+      setReady(false);
       engine = new MorphEngine(containerRef.current, {
         items,
         startIndex,
@@ -677,6 +699,7 @@ export default function MorphSlider({
           setIndex(i);
           onIndexChange?.(i);
         },
+        onReady: () => setReady(true),
       });
       engineRef.current = engine;
       // Re-align the React index with the (recreated) engine's slide.
@@ -826,7 +849,7 @@ export default function MorphSlider({
       ) : (
         <div
           ref={containerRef}
-          className="morph-slider-stage"
+          className={`morph-slider-stage ${ready ? "is-ready" : ""}`.trim()}
           role="group"
           aria-roledescription="carousel"
           aria-label="Image morph slider"
