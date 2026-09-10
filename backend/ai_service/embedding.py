@@ -1,11 +1,15 @@
-"""BGE-M3 embedding pipeline for the RAG user profile system.
+"""Embedding pipeline for the RAG user profile system.
 
-Provides dense (1024-dim), sparse (lexical), and ColBERT (token-level)
-embeddings for movie descriptions.  BGE-M3 is the default embedder —
-completely free (MIT license), local, and supports 100+ languages.
+Providers (set via EMBEDDING_PROVIDER, default auto-detected):
+- ``bge-m3``  — local in-process model (dense 1024 + sparse), needs torch
+- ``api``     — any OpenAI-compatible ``/embeddings`` HTTP endpoint
+                (e.g. a bge-m3 service via xinference / ollama / vLLM on
+                another machine). Enabled automatically when
+                ``EMBEDDING_API_BASE`` is set. Recommended on low-power
+                CPUs (no AVX) where in-process torch cannot run.
+- ``openai``  — OpenAI cloud API fallback
 
-Fallback providers (OpenAI) are available when GPU/CPU resources are
-unavailable or when BGE-M3 loading fails.
+Fallback chain: primary → OpenAI (when an OpenAI key is configured).
 """
 
 import json
@@ -22,7 +26,18 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-EMBEDDING_DIMENSIONS = 1024  # BGE-M3 dense output dimension
+# Dense output dimension. 1024 = BGE-M3. Override when the remote
+# embedding API serves a model with a different dimension (e.g. 1536 for
+# text-embedding-3-small) — records with mismatched dims are ignored by
+# the RAG index, so this MUST match the actual endpoint output.
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
+
+# OpenAI-compatible embedding endpoint (empty = disabled).
+# Example: http://192.168.1.10:9997/v1 (xinference) or http://host:11434/v1 (ollama)
+EMBEDDING_API_BASE = os.getenv("EMBEDDING_API_BASE", "").rstrip("/")
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
+EMBEDDING_API_MODEL = os.getenv("EMBEDDING_API_MODEL", "bge-m3")
+EMBEDDING_API_TIMEOUT = float(os.getenv("EMBEDDING_API_TIMEOUT", "300"))
 
 EMBEDDING_CONFIGS = {
     "bge-m3": {
@@ -40,8 +55,7 @@ EMBEDDING_CONFIGS = {
         "supports_sparse": False,
         "supports_colbert": False,
         "cost_per_1k_tokens": 0,
-    },
-    "openai": {
+    },    "openai": {
         "model": "text-embedding-3-small",
         "dimensions": 1536,
         "max_tokens": 8191,
@@ -49,9 +63,22 @@ EMBEDDING_CONFIGS = {
         "supports_colbert": False,
         "cost_per_1k_tokens": 0.00002,
     },
+    "api": {
+        "model": EMBEDDING_API_MODEL,
+        "dimensions": EMBEDDING_DIMENSIONS,
+        "max_tokens": 8192,
+        "supports_sparse": False,
+        "supports_colbert": False,
+        "cost_per_1k_tokens": 0,
+    },
 }
 
-DEFAULT_EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "bge-m3")
+# Provider selection: explicit EMBEDDING_PROVIDER wins; otherwise use the
+# external API when configured, and only fall back to local BGE-M3 when
+# neither is set (local torch cannot start on AVX-less CPUs like J1900).
+DEFAULT_EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "") or (
+    "api" if EMBEDDING_API_BASE else "bge-m3"
+)
 FALLBACK_EMBEDDING_PROVIDER = "openai"
 
 
@@ -205,7 +232,9 @@ class EmbeddingPipeline:
 
         t0 = time.time()
 
-        if self.provider == "bge-m3":
+        if self.provider == "api":
+            result = self._embed_api_with_fallback(texts)
+        elif self.provider == "bge-m3":
             result = self._embed_bge_m3_with_fallback(texts)
         elif self.provider == "bge-large-zh":
             result = self._embed_bge_zh_with_fallback(texts)
@@ -227,6 +256,17 @@ class EmbeddingPipeline:
         }
 
     # ── Provider implementations with fallback ────────────────────
+
+    def _embed_api_with_fallback(self, texts: list[str]) -> dict:
+        """External OpenAI-compatible endpoint with OpenAI-cloud fallback."""
+        try:
+            return self._embed_api(texts)
+        except Exception as e:
+            logger.warning(
+                "External embedding API failed (%s: %s), falling back to OpenAI",
+                type(e).__name__, e,
+            )
+            return self._fallback_to_openai(texts, str(e))
 
     def _embed_bge_m3_with_fallback(self, texts: list[str]) -> dict:
         """BGE-M3 with automatic fallback to OpenAI on failure."""
@@ -295,6 +335,51 @@ class EmbeddingPipeline:
             "sparse": sparse,
         }
 
+    def _embed_api(self, texts: list[str]) -> dict:
+        """Any OpenAI-compatible ``POST {base}/embeddings`` endpoint.
+
+        Works with xinference, ollama (`/v1`), vLLM, LM Studio, or any
+        service exposing the standard request shape::
+
+            {"model": "bge-m3", "input": ["text", ...]}
+        """
+        if not EMBEDDING_API_BASE:
+            raise ValueError("EMBEDDING_API_BASE is not configured")
+
+        import httpx
+
+        headers = {"Content-Type": "application/json"}
+        if EMBEDDING_API_KEY:
+            headers["Authorization"] = f"Bearer {EMBEDDING_API_KEY}"
+
+        response = httpx.post(
+            f"{EMBEDDING_API_BASE}/embeddings",
+            json={"model": self.config["model"], "input": texts},
+            headers=headers,
+            timeout=EMBEDDING_API_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        items = data.get("data")
+        if not items or len(items) != len(texts):
+            raise ValueError(
+                f"Embedding API returned {len(items or [])} vectors "
+                f"for {len(texts)} inputs"
+            )
+        # Respect the endpoint's ordering via the index field when present.
+        items.sort(key=lambda item: item.get("index", 0))
+        dense = [item["embedding"] for item in items]
+
+        actual_dim = len(dense[0])
+        if actual_dim != EMBEDDING_DIMENSIONS:
+            logger.warning(
+                "Embedding API returned %d-dim vectors but EMBEDDING_DIMENSIONS "
+                "is %d — set EMBEDDING_DIMENSIONS=%d or the RAG index will "
+                "ignore these embeddings",
+                actual_dim, EMBEDDING_DIMENSIONS, actual_dim,
+            )
+        return {"dense": dense, "sparse": None}
+
     def _embed_bge_zh(self, texts: list[str]) -> dict:
         """BGE-large-zh: dense only, Chinese-optimized."""
         model = _get_bge_zh_model()
@@ -345,6 +430,11 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     if norm_a == 0 or norm_b == 0:
         return 0.0
     return float(np.dot(a_arr, b_arr) / (norm_a * norm_b))
+
+
+def get_configured_provider() -> str:
+    """Name of the embedding provider new pipelines will use."""
+    return DEFAULT_EMBEDDING_PROVIDER
 
 
 def sparse_dot_product(query_sparse: dict, doc_sparse: dict) -> float:

@@ -26,6 +26,8 @@ from models import (
     UserPreferencesRecord,
 )
 
+from ai_service.embedding import get_configured_provider
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
@@ -179,7 +181,7 @@ async def embedding_stats(
     return {
         "total_movies": total_movies or 0,
         "embedded_movies": embedded_count or 0,
-        "embedding_provider": "bge-m3",
+        "embedding_provider": get_configured_provider(),
     }
 
 
