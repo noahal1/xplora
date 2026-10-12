@@ -363,7 +363,9 @@
     "login": "登录",
     "logging_in": "登录中...",
     "error_empty": "请输入用户名和密码",
-    "error_auth": "登录失败"
+    "error_auth": "登录失败",
+    "setup_banner": "首次部署？先完成初始化设置再开始使用",
+    "setup_button": "立即初始化"
   },
   "force_password_change": {
     "title": "设置新密码",
@@ -982,5 +984,56 @@
     "memories_generated": "记忆已生成",
     "memories_generate_failed": "生成失败",
     "no_memories": "暂无品味记忆"
+  },
+  "setup": {
+    "title": "初始化设置",
+    "welcome_title": "欢迎使用 Xplora",
+    "welcome_subtitle": "完成以下几步，即可开始管理你的电影库",
+    "steps": {
+      "account": "创建管理员账户",
+      "api": "配置 API 密钥",
+      "done": "完成"
+    },
+    "account_title": "创建管理员账户",
+    "account_subtitle": "这是你的主账户，拥有全部管理权限",
+    "username": "用户名",
+    "username_placeholder": "设置管理员用户名",
+    "password": "密码",
+    "password_placeholder": "至少 8 位",
+    "confirm_password": "确认密码",
+    "confirm_password_placeholder": "再次输入密码",
+    "api_title": "配置 API 密钥",
+    "api_subtitle": "至少填写一个 AI 模型密钥与 TMDB 密钥，即可获得完整体验；也可以稍后在设置中补充",
+    "api_hint": "AI 推荐至少需要一个模型密钥；TMDB 用于海报与元数据刮削",
+    "recommended": "推荐",
+    "next": "下一步",
+    "back": "上一步",
+    "skip": "跳过，稍后配置",
+    "finish": "完成初始化",
+    "submitting": "提交中...",
+    "done_title": "设置完成",
+    "done_subtitle": "你的 Xplora 已准备就绪",
+    "enter": "进入 Xplora",
+    "error_empty_username": "请输入用户名",
+    "error_short_password": "密码长度不能少于8位",
+    "error_mismatch": "两次输入的密码不一致",
+    "providers": {
+      "tmdb": "TMDB",
+      "deepseek": "DeepSeek",
+      "openai": "OpenAI",
+      "claude": "Claude",
+      "gemini": "Gemini",
+      "zhipu": "智谱 GLM",
+      "ollama": "Ollama"
+    },
+    "provider_desc": {
+      "tmdb": "用于刮削海报、导演、演员等元数据（推荐）",
+      "deepseek": "DeepSeek AI 推荐模型（推荐）",
+      "openai": "OpenAI GPT 系列模型",
+      "claude": "Anthropic Claude 模型",
+      "gemini": "Google Gemini 模型",
+      "zhipu": "智谱 GLM-4-Flash（永久免费）",
+      "ollama": "本地部署模型（可选）"
+    }
   }
 }

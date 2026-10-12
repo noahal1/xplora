@@ -988,3 +988,26 @@ export async function changePassword(oldPassword: string, newPassword: string): 
     body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
   });
 }
+
+// ── First-run setup (guided onboarding) API ─────────────────────
+
+/** Public: whether the instance still needs first-run setup. */
+export async function getSetupStatus(): Promise<{
+  needs_setup: boolean;
+  api_keys_configured: boolean;
+}> {
+  return fetchJSON(`${API_BASE}/setup/status`);
+}
+
+/** Public (first-run only): create the admin account and save API keys. */
+export async function runSetup(data: {
+  username: string;
+  password: string;
+  api_keys?: Record<string, string>;
+}): Promise<{ token: string; username: string; is_admin: boolean }> {
+  return fetchJSON(`${API_BASE}/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}

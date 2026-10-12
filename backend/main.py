@@ -102,6 +102,7 @@ from routers.moviepilot import router as moviepilot_router
 from routers.playlists import router as playlists_router
 from routers.discover import router as discover_router
 from routers.profile import router as profile_router
+from routers.setup import router as setup_router
 
 app.include_router(auth_router)
 app.include_router(media_router)
@@ -116,6 +117,7 @@ app.include_router(moviepilot_router)
 app.include_router(playlists_router)
 app.include_router(discover_router)
 app.include_router(profile_router)
+app.include_router(setup_router)
 
 
 # ── Health check ────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { getErrMsg } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
+import { useSetup } from "../context/SetupContext";
 import { useTheme } from "../context/ThemeContext";
 import LineWaves from "../components/LineWaves";
 import { Logo } from "../components/Logo";
@@ -11,6 +12,7 @@ import SplitText from "../components/SplitText";
 export function LoginPage() {
   const { t } = useTranslation();
   const { login } = useAuth();
+  const { needsSetup } = useSetup();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -78,6 +80,19 @@ export function LoginPage() {
       />
 
       <div className="w-full max-w-sm relative z-10">
+        {/* First-run guided setup CTA */}
+        {needsSetup && (
+          <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2.5 text-center">
+            <p className="text-xs text-foreground/90">{t("login.setup_banner")}</p>
+            <button
+              type="button"
+              onClick={() => navigate("/setup")}
+              className="mt-1.5 btn btn-primary h-8 px-3 rounded-lg text-xs font-medium transition-all"
+            >
+              {t("login.setup_button")}
+            </button>
+          </div>
+        )}
         {/* Logo — staggered entrance */}
         <div className="text-center">
           <div

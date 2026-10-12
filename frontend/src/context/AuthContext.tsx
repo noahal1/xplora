@@ -22,6 +22,8 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   clearMustChangePassword: () => void;
+  /** Immediately establish a session from a token + user (used by first-run setup). */
+  setSession: (token: string, user: User) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -33,6 +35,7 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => false,
   logout: () => {},
   clearMustChangePassword: () => {},
+  setSession: () => {},
   isAuthenticated: false,
   isLoading: true,
 });
@@ -112,6 +115,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMustChangePassword(false);
   }, []);
 
+  const setSession = useCallback((newToken: string, newUser: User) => {
+    localStorage.setItem("xplora-token", newToken);
+    setToken(newToken);
+    setUser(newUser);
+    setMustChangePassword(false);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -121,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         clearMustChangePassword,
+        setSession,
         isAuthenticated: !!token && !!user,
         isLoading,
       }}

@@ -11,6 +11,7 @@ import { TabNav } from "./components/TabNav";
 import { HistorySidebar } from "./components/HistorySidebar";
 import { EnrichBanner } from "./components/EnrichBanner";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { SetupProvider, useSetup } from "./context/SetupContext";
 import { SWUpdatePrompt } from "./components/SWUpdatePrompt";
 import { Footer } from "./components/Footer";
 import "./style.css";
@@ -29,17 +30,22 @@ const DiscoverTab = lazy(() => import("./components/DiscoverTab").then((m) => ({
 const RecommendTab = lazy(() => import("./components/RecommendTab").then((m) => ({ default: m.RecommendTab })));
 const TopRatedTab = lazy(() => import("./components/TopRatedTab").then((m) => ({ default: m.TopRatedTab })));
 const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
+const SetupWizardPage = lazy(() => import("./pages/SetupWizardPage").then((m) => ({ default: m.SetupWizardPage })));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
-  if (isLoading) {
+  const { needsSetup, isLoading: setupLoading } = useSetup();
+  if (isLoading || setupLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
       </div>
     );
   }
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    // Freshly deployed instances should complete guided setup before login.
+    return <Navigate to={needsSetup ? "/setup" : "/login"} replace />;
+  }
   // Accounts on the initial/default password may only change it
   if (mustChangePassword) return <Navigate to="/change-password" replace />;
   return <>{children}</>;
@@ -126,27 +132,31 @@ function MainApp() {
 export default function App() {
   return (
     <ToastProvider>
-      <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-page">
-          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
-        </div>
-      }>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          {/* Forced password change for accounts on the default password */}
-          <Route path="/change-password" element={<ForcePasswordChangePage />} />
-          {/* Public read-only share page — no auth required */}
-          <Route path="/share/:token" element={<SharePage />} />
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <MainApp />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Suspense>
+      <SetupProvider>
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-page">
+            <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-stream-spin" />
+          </div>
+        }>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            {/* Forced password change for accounts on the default password */}
+            <Route path="/change-password" element={<ForcePasswordChangePage />} />
+            {/* First-run guided setup — public, only valid before initialization */}
+            <Route path="/setup" element={<SetupWizardPage />} />
+            {/* Public read-only share page — no auth required */}
+            <Route path="/share/:token" element={<SharePage />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <MainApp />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Suspense>
+      </SetupProvider>
       <Toaster position="bottom-center" richColors closeButton />
     </ToastProvider>
   );

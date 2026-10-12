@@ -361,7 +361,9 @@
     "login": "Sign In",
     "logging_in": "Signing in...",
     "error_empty": "Please enter username and password",
-    "error_auth": "Login failed"
+    "error_auth": "Login failed",
+    "setup_banner": "First deployment? Complete the guided setup before you start",
+    "setup_button": "Start setup"
   },
   "force_password_change": {
     "title": "Set a new password",
@@ -948,5 +950,56 @@
     "memories_generated": "Memories generated",
     "memories_generate_failed": "Generation failed",
     "no_memories": "No taste memories yet"
+  },
+  "setup": {
+    "title": "Initial Setup",
+    "welcome_title": "Welcome to Xplora",
+    "welcome_subtitle": "Complete the steps below to start managing your movie library",
+    "steps": {
+      "account": "Create admin account",
+      "api": "Configure API keys",
+      "done": "Done"
+    },
+    "account_title": "Create admin account",
+    "account_subtitle": "This is your primary account with full administrative access",
+    "username": "Username",
+    "username_placeholder": "Set an admin username",
+    "password": "Password",
+    "password_placeholder": "At least 8 characters",
+    "confirm_password": "Confirm password",
+    "confirm_password_placeholder": "Re-enter the password",
+    "api_title": "Configure API keys",
+    "api_subtitle": "Fill in at least one AI model key and a TMDB key for the full experience; you can also add them later in Settings",
+    "api_hint": "AI recommendations need at least one model key; TMDB powers poster & metadata scraping",
+    "recommended": "Recommended",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip for now",
+    "finish": "Finish setup",
+    "submitting": "Submitting...",
+    "done_title": "Setup complete",
+    "done_subtitle": "Your Xplora is ready to go",
+    "enter": "Enter Xplora",
+    "error_empty_username": "Please enter a username",
+    "error_short_password": "Password must be at least 8 characters",
+    "error_mismatch": "Passwords do not match",
+    "providers": {
+      "tmdb": "TMDB",
+      "deepseek": "DeepSeek",
+      "openai": "OpenAI",
+      "claude": "Claude",
+      "gemini": "Gemini",
+      "zhipu": "Zhipu GLM",
+      "ollama": "Ollama"
+    },
+    "provider_desc": {
+      "tmdb": "Scrapes posters, directors, cast & metadata (recommended)",
+      "deepseek": "DeepSeek AI recommendation model (recommended)",
+      "openai": "OpenAI GPT series models",
+      "claude": "Anthropic Claude models",
+      "gemini": "Google Gemini models",
+      "zhipu": "Zhipu GLM-4-Flash (free forever)",
+      "ollama": "Locally hosted models (optional)"
+    }
   }
 }
