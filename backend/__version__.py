@@ -1,1 +1,1 @@
-VERSION = "voyage-2.7.1"
+VERSION = "voyage-2.8.0"
