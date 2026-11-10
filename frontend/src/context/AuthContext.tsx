@@ -6,6 +6,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { apiFetchResponse } from "../api";
 
 interface User {
   id: number;
@@ -52,8 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedToken = localStorage.getItem("xplora-token");
     if (storedToken) {
-      fetch("/api/auth/me", {
+      apiFetchResponse("/api/auth/me", {
         headers: { Authorization: `Bearer ${storedToken}` },
+        redirectOn401: false,
       })
         .then((res) => {
           if (!res.ok) throw new Error("Invalid token");
@@ -77,10 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
+    const res = await apiFetchResponse("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
+      auth: false,
+      redirectOn401: false,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: "登录失败" }));
@@ -93,8 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Fetch user details to get real ID (await in the same function so user
     // is set before the calling code navigates away from the login page)
-    const meRes = await fetch("/api/auth/me", {
+    const meRes = await apiFetchResponse("/api/auth/me", {
       headers: { Authorization: `Bearer ${data.token}` },
+      redirectOn401: false,
     });
     if (meRes.ok) {
       const me = await meRes.json();

@@ -7,18 +7,9 @@ from typing import Optional, Any
 from sqlalchemy import func as sa_func
 from sqlmodel import Session, select, delete as sa_delete
 
-from database import get_session
+from crud._session import resolve_db
 from helpers import NORMALIZE_GENRE, REVERSE_GENRE_MAP, iso_utc
 from models import MediaItemRecord, MediaRating, WishlistItem
-
-
-# ── Helper: resolve session ────────────────────────────────────
-
-def _resolve_db(db: Optional[Session] = None) -> tuple[Session, bool]:
-    """Return a session and whether it needs to be closed."""
-    if db is not None:
-        return db, False
-    return get_session(), True
 
 
 # ── Helper: parse ISO datetime string ──────────────────────────────
@@ -47,7 +38,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 def delete_all_media_for_user(user_id: int, db: Optional[Session] = None) -> int:
     """Delete all media records for a specific user. Returns count."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         result = session.exec(
             sa_delete(MediaItemRecord).where(MediaItemRecord.user_id == user_id)
@@ -64,7 +55,7 @@ def delete_all_media_for_user(user_id: int, db: Optional[Session] = None) -> int
 
 def db_delete_media_by_status(user_id: int, status: str, db: Optional[Session] = None) -> int:
     """Delete all media records for a user with a specific status. Returns count."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         result = session.exec(
             sa_delete(MediaItemRecord).where(
@@ -89,7 +80,7 @@ def save_media(
     db: Optional[Session] = None,
 ) -> list[MediaItemRecord]:
     """Persist a list of imported MediaRating objects for a user with the given status."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         records: list[MediaItemRecord] = []
         now = datetime.now(timezone.utc)
@@ -126,7 +117,7 @@ def save_wishlist_items(
     db: Optional[Session] = None,
 ) -> list[MediaItemRecord]:
     """Persist a list of wishlist items for a user."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         records: list[MediaItemRecord] = []
         now = datetime.now(timezone.utc)
@@ -171,7 +162,7 @@ def get_media(
 ) -> tuple[list[MediaItemRecord], int]:
     """List saved media items for a user with optional search, status filter, rating range,
     scrape_error filter, media_type filter, genre filter, country filter, pagination, and sort."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         query = select(MediaItemRecord).where(MediaItemRecord.user_id == user_id)
         if status:
@@ -288,7 +279,7 @@ def get_media(
 
 def get_media_titles(user_id: int, db: Optional[Session] = None) -> list[str]:
     """Return just the titles of all media items for a user (lightweight, no pagination)."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         results = session.exec(
             select(MediaItemRecord.title).where(MediaItemRecord.user_id == user_id)
@@ -311,7 +302,7 @@ def get_media_by_title(
        returns that record (exact match, regardless of title).
     2. Falls back to case-insensitive title match.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         # 1. Try TMDB ID first (most reliable)
         if tmdb_id:
@@ -338,7 +329,7 @@ def get_media_by_title(
 
 def get_media_for_user(media_id: int, user_id: int, db: Optional[Session] = None) -> Optional[MediaItemRecord]:
     """Get a media item by ID, ensuring it belongs to the user."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         return session.exec(
             select(MediaItemRecord).where(
@@ -357,7 +348,7 @@ def mark_media_as_watched(
     db: Optional[Session] = None,
 ) -> Optional[MediaItemRecord]:
     """Move a media item from wishlist to watched with a rating."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -409,7 +400,7 @@ def update_media(
     db: Optional[Session] = None,
 ) -> Optional[MediaItemRecord]:
     """Update a media record. Returns updated record or None if not found."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -470,7 +461,7 @@ def update_media(
 
 def batch_delete_media(media_ids: list[int], user_id: int, db: Optional[Session] = None) -> int:
     """Delete multiple media items by IDs (must all belong to user). Returns count."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         result = session.exec(
             sa_delete(MediaItemRecord).where(
@@ -497,7 +488,7 @@ def enrich_media_metadata(
     """Update a media record with scraped metadata fields.
     Only updates fields that are present in the metadata dict.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -568,7 +559,7 @@ def enrich_media_metadata(
 
 def set_scrape_error(media_id: int, user_id: int, error: str, db: Optional[Session] = None):
     """Record a scrape error message for a media item."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -588,7 +579,7 @@ def set_scrape_error(media_id: int, user_id: int, error: str, db: Optional[Sessi
 
 def clear_scrape_error(media_id: int, user_id: int, db: Optional[Session] = None):
     """Clear the scrape error for a media item (on successful scrape)."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -619,7 +610,7 @@ def get_unenriched_media_ids(user_id: int, db: Optional[Session] = None) -> list
     """
     from poster_cache import local_poster_file_exists
 
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         # Items with NULL poster_url
         null_records = session.exec(
@@ -656,7 +647,7 @@ def get_external_poster_media_ids(user_id: int, db: Optional[Session] = None) ->
     introduced — they have valid poster URLs from TMDB but the image
     hasn't been downloaded to the local filesystem yet.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         records = session.exec(
             select(MediaItemRecord.id, MediaItemRecord.poster_url, MediaItemRecord.tmdb_id).where(
@@ -685,7 +676,7 @@ def get_enrich_progress(user_id: int, db: Optional[Session] = None) -> tuple[int
 
     Returns (total, processed, failed).
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         total = session.scalar(
             select(sa_func.count()).select_from(
@@ -717,7 +708,7 @@ def get_enrich_progress(user_id: int, db: Optional[Session] = None) -> tuple[int
 
 def delete_media(media_id: int, user_id: int, db: Optional[Session] = None) -> bool:
     """Delete a media item by ID (must belong to user)."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -750,7 +741,7 @@ def get_top_rated(
     Items are sorted by sort_order ascending, then by rating descending
     as a tiebreaker. Returns up to 10 items.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         records = session.exec(
             select(MediaItemRecord).where(
@@ -788,7 +779,7 @@ def add_to_top_rated(
     Returns the item dict on success, or ``None`` if the item doesn't
     exist / isn't watched.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -847,7 +838,7 @@ def remove_from_top_rated(
     Sets ``pinned=False``, ``sort_order=None``, ``hidden_from_top=True``.
     Returns ``True`` on success.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         record = session.exec(
             select(MediaItemRecord).where(
@@ -880,7 +871,7 @@ def reorder_top_rated(
 
     Items not in the list get sort_order set to None.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         # Reset all existing sort_orders for this user
         all_records = session.exec(
@@ -960,7 +951,7 @@ def get_media_stats(user_id: int, tz_offset: int = 0, db: Optional[Session] = No
     - monthly_trend: list of {month, count}
     - avg_rating, top_rated, recent_additions
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         # Fetch ALL media for this user
         records = session.exec(

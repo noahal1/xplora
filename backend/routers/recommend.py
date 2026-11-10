@@ -1,145 +1,51 @@
-"""Recommendation endpoints — sync, SSE streaming, and follow-up conversations."""
+"""Recommendation endpoints — sync, SSE streaming, and follow-up conversations.
+
+These are thin adapters.  All session framing and persistence lives in the
+deep :mod:`recommendation_session` module; this router only resolves request
+parameters and delegates.
+"""
 
 import json
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-
-logger = logging.getLogger(__name__)
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
 from auth import get_current_user
 from deps import get_user_db
-from database import get_user_session
 from helpers import parse_movie_data
-from config_manager import get_api_key as get_config_api_key
 from ai_service import AIService
-from ai_service.constants import MODEL_CONFIGS
-from crud import save_session as db_save_session, get_sessions as db_get_sessions
+from crud import get_sessions as db_get_sessions
 from models import (
     RecommendationRequest,
     RecommendationResponse,
-    MediaRecommendation,
     FollowUpRequest,
     MediaRating,
     MediaItemRecord,
-    UserPreferencesRecord,
+)
+from recommendation_session import (
+    LOCAL_MODEL,
+    resolve_model,
+    retrieve_rag_context,
+    save_recommendation_session,
+    stream_recommendations,
+    stream_local_recommendations,
+    stream_followup,
 )
 
-router = APIRouter(prefix="/api/recommend", tags=["recommend"])
+logger = logging.getLogger(__name__)
 
-# ``model_used`` value for the no-AI-key local (TMDB-only) path
-LOCAL_MODEL = "local"
+router = APIRouter(prefix="/api/recommend", tags=["recommend"])
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
 
-def _resolve_model(request_model: str) -> tuple[str, str]:
-    """Resolve which model + API key to actually use.
-
-    - ``local`` → local TMDB-only recommendations (no AI key needed)
-    - ``ollama`` → local key-less model (placeholder key)
-    - configured model → (model, key)
-    - requested model without a key → falls back to local TMDB recs
-      (the frontend prefers ``model_used`` from the response)
-    """
-    if request_model == LOCAL_MODEL:
-        return LOCAL_MODEL, ""
-    config = MODEL_CONFIGS.get(request_model)
-    if not config:
-        return LOCAL_MODEL, ""
-    if config.get("requires_key") is False:
-        return request_model, config.get("placeholder_key", "ollama")
-    key = get_config_api_key(request_model)
-    if key:
-        return request_model, key
-    return LOCAL_MODEL, ""
-
-
-def _build_rag_query(movies: list[MediaRating], strategy: str) -> str:
-    """Build a semantically meaningful retrieval query from real taste data.
-
-    The old implementation embedded a meta-label like "taste strategy for
-    120 movies" which has no semantic content — retrieval results were
-    essentially random. Instead we build a query from the user's actual
-    high-rated genres and titles so the vector search finds genuinely
-    similar history.
-    """
-    import re
-    from collections import Counter
-
-    high_rated = [m for m in movies if m.rating and m.rating >= 7.0]
-
-    # Top genres from high-rated movies (weighted by rating)
-    genre_counter: Counter = Counter()
-    for m in high_rated:
-        if m.genre:
-            for g in re.split(r"\s*/\s*", m.genre):
-                g = g.strip()
-                if g:
-                    genre_counter[g] += int(m.rating)
-    top_genres = [g for g, _ in genre_counter.most_common(5)]
-
-    # A few representative high-rated titles
-    top_titles = [
-        m.title for m in sorted(high_rated, key=lambda m: m.rating or 0, reverse=True)[:5]
-        if m.title
-    ]
-
-    parts = []
-    if top_genres:
-        parts.append("、".join(top_genres))
-    if top_titles:
-        parts.append("、".join(top_titles))
-
-    query = " ".join(parts)
-    # Fallback when the user has no high-rated history
-    return query or strategy
-
-
-def _retrieve_rag_context(user_id: int, movies: list[MediaRating], strategy: str, lang: Optional[str] = None):
-    """Retrieve RAG context for the recommendation prompt.
-
-    Returns a ``RetrievalResult`` when embeddings are available and RAG is
-    enabled, otherwise ``None`` (falls back to statistical taste analysis).
-
-    Errors are caught and logged — RAG failure must never block recommendations.
-    """
-    try:
-        user_session = get_user_session(user_id)
-        try:
-            # Check if RAG is enabled for this user
-            prefs = user_session.exec(
-                select(UserPreferencesRecord).where(UserPreferencesRecord.user_id == user_id)
-            ).first()
-            if prefs and not prefs.rag_enabled:
-                return None
-
-            # Build a semantically meaningful query from real taste data
-            query = _build_rag_query(movies, strategy)
-
-            from ai_service.rag import get_rag_context_cached
-            result = get_rag_context_cached(
-                user_id=user_id,
-                query=query,
-                strategy=strategy,
-                count=5,
-                db=user_session,
-            )
-            return result
-        finally:
-            user_session.close()
-    except Exception as e:
-        logger.debug("RAG retrieval skipped for user %d: %s", user_id, e)
-        return None
-
-
-def _extract_watched_titles(movies: list[MediaRating]) -> list[str]:
-    """Extract watched movie titles from the movie list."""
-    return [m.title for m in movies if m.title]
+# ``_resolve_model`` stays as a private name for backwards compatibility,
+# but it is now a one-line adapter over the deep module's resolver.
+_resolve_model = resolve_model
 
 
 def _load_user_library(db: Session, user_id: int, media_type: Optional[str] = None) -> dict:
@@ -449,220 +355,6 @@ def _build_previous_feedback(
     }
 
 
-# ── Helper: stream with persistence ─────────────────────────────────
-# Note: Both _stream_with_persistence and _followup_stream_with_persistence
-# are generators used inside StreamingResponse, which lives longer than the
-# request scope. They manage their own DB session by not passing db=db,
-# letting save_session create its own session.
-
-
-def _stream_with_persistence(movies, count, model, api_key, user_id, strategy="taste", strategy_params=None, watched_titles=None, previous_feedback=None, excluded_tmdb_ids=None, lang=None):
-    """SSE generator that auto-saves recommendations to DB on completion."""
-    service = AIService(api_key=api_key, model_type=model, user_id=user_id)
-    taste_analysis = service._analyze_user_taste(movies)
-    watched = watched_titles or _extract_watched_titles(movies)
-    # Retrieve RAG context (silently falls back to None on error)
-    rag_context = _retrieve_rag_context(user_id, movies, strategy, lang)
-    # Pass strategy_params so the streaming generator can extract user_tmdb_ids
-    raw_generator = service.get_recommendations_stream(
-        movies, count, strategy, strategy_params,
-        watched_titles=watched,
-        taste_analysis=taste_analysis,
-        previous_feedback=previous_feedback,
-        excluded_tmdb_ids=excluded_tmdb_ids,
-        lang=lang,
-        rag_context=rag_context,
-    )
-    recommendations_cache: list[dict] = []
-
-    for event in raw_generator:
-        if event.startswith("event: recommendation"):
-            lines = event.split("\n")
-            for line in lines:
-                if line.startswith("data: "):
-                    try:
-                        rec_data = json.loads(line[6:])
-                        recommendations_cache.append(rec_data)
-                    except json.JSONDecodeError:
-                        pass
-        yield event
-        if event.startswith("event: done"):
-            try:
-                rec_models = [
-                    MediaRecommendation(
-                        title=r.get("title", "Unknown"),
-                        year=r.get("year"),
-                        genre=r.get("genre"),
-                        reason=r.get("reason", ""),
-                        confidence=min(max(float(r.get("confidence", 0.5)), 0.0), 1.0),
-                        tmdb_id=r.get("tmdb_id"),
-                        media_type=r.get("media_type"),
-                    )
-                    for r in recommendations_cache
-                ]
-                if rec_models:
-                    # Create a session to the user's personal database (streaming
-                    # response outlives the request-scoped DI session, so we create
-                    # our own session here)
-                    user_session = get_user_session(user_id)
-                    try:
-                        db_save_session(
-                            model=model,
-                            source_count=len(movies),
-                            movies=movies,
-                            recommendations=rec_models,
-                            user_id=user_id,
-                            db=user_session,
-                        )
-                    finally:
-                        user_session.close()
-            except Exception as e:
-                logger.warning("Error saving session: %s", e)
-
-
-def _stream_local_with_persistence(movies, count, model, user_id, strategy="taste", strategy_params=None, watched_titles=None, excluded_tmdb_ids=None, lang=None):
-    """SSE generator for the no-AI local (TMDB-only) recommendation path."""
-    service = AIService(api_key="", model_type="deepseek", user_id=user_id)
-    taste_analysis = service._analyze_user_taste(movies)
-    try:
-        recs = service.get_local_recommendations(
-            movies, count, strategy, strategy_params,
-            taste_analysis=taste_analysis,
-            user_tmdb_ids=(strategy_params or {}).get("user_tmdb_ids"),
-            excluded_tmdb_ids=excluded_tmdb_ids,
-            lang=lang,
-        )
-    except ValueError as e:
-        yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
-        return
-
-    start_data = json.dumps({"model": LOCAL_MODEL, "source_count": len(movies)})
-    yield f"event: start\ndata: {start_data}\n\n"
-
-    for rec in recs:
-        rec_data = json.dumps({
-            "title": rec.title,
-            "year": rec.year,
-            "genre": rec.genre,
-            "reason": rec.reason,
-            "confidence": rec.confidence,
-            "poster_url": rec.poster_url,
-            "tmdb_id": rec.tmdb_id,
-            "media_type": rec.media_type,
-        }, ensure_ascii=False)
-        yield f"event: recommendation\ndata: {rec_data}\n\n"
-
-    done_data = json.dumps({
-        "model_used": LOCAL_MODEL,
-        "source_count": len(movies),
-        "total": len(recs),
-        "filtered_count": 0,
-    })
-    yield f"event: done\ndata: {done_data}\n\n"
-
-    # Persist the session so history shows the local recommendations
-    if recs:
-        try:
-            rec_models = [
-                MediaRecommendation(
-                    title=r.title,
-                    year=r.year,
-                    genre=r.genre,
-                    reason=r.reason,
-                    confidence=r.confidence,
-                    tmdb_id=r.tmdb_id,
-                    media_type=r.media_type,
-                )
-                for r in recs
-            ]
-            user_session = get_user_session(user_id)
-            try:
-                db_save_session(
-                    model=LOCAL_MODEL,
-                    source_count=len(movies),
-                    movies=movies,
-                    recommendations=rec_models,
-                    user_id=user_id,
-                    db=user_session,
-                )
-            finally:
-                user_session.close()
-        except Exception as e:
-            logger.warning("Error saving local session: %s", e)
-
-
-def _followup_stream_with_persistence(movies, count, model, api_key, user_id, watched_titles=None, excluded_tmdb_ids=None, previous_recommendations=None, conversation=None, question="", lang=None):
-    """SSE generator that auto-saves follow-up recommendations to DB on completion."""
-    service = AIService(api_key=api_key, model_type=model, user_id=user_id)
-    taste_analysis = service._analyze_user_taste(movies)
-    watched = watched_titles or _extract_watched_titles(movies)
-    # Retrieve RAG context for follow-up (silently falls back to None)
-    rag_context = _retrieve_rag_context(user_id, movies, "taste", lang)
-    raw_generator = service.get_followup_stream(
-        movies=movies,
-        previous_recommendations=previous_recommendations or [],
-        conversation=conversation or [],
-        question=question,
-        count=count,
-        watched_titles=watched,
-        taste_analysis=taste_analysis,
-        excluded_tmdb_ids=excluded_tmdb_ids,
-        lang=lang,
-        rag_context=rag_context,
-    )
-    recommendations_cache: list[dict] = []
-
-    for event in raw_generator:
-        if event.startswith("event: result"):
-            lines = event.split("\n")
-            event_data = ""
-            for line in lines:
-                if line.startswith("data: "):
-                    event_data = line[6:].strip()
-                    break
-            if event_data:
-                try:
-                    result = json.loads(event_data)
-                    if result.get("type") == "recommendations":
-                        recs = result.get("recommendations", [])
-                        if recs:
-                            recommendations_cache = recs
-                except json.JSONDecodeError:
-                    pass
-        yield event
-
-    # Save follow-up recs after result event has been yielded
-    if recommendations_cache:
-        try:
-            rec_models = [
-                MediaRecommendation(
-                    title=r.get("title", "Unknown"),
-                    year=r.get("year"),
-                    genre=r.get("genre"),
-                    reason=r.get("reason", ""),
-                    confidence=min(max(float(r.get("confidence", 0.5)), 0.0), 1.0),
-                    tmdb_id=r.get("tmdb_id"),
-                    media_type=r.get("media_type"),
-                )
-                for r in recommendations_cache
-            ]
-            if rec_models:
-                user_session = get_user_session(user_id)
-                try:
-                    db_save_session(
-                        model=model,
-                        source_count=len(movies),
-                        movies=movies,
-                        recommendations=rec_models,
-                        user_id=user_id,
-                        db=user_session,
-                    )
-                finally:
-                    user_session.close()
-        except Exception as e:
-            logger.warning("Error saving follow-up session: %s", e)
-
-
 # ── Endpoints ───────────────────────────────────────────────────────
 
 
@@ -691,7 +383,7 @@ def recommend(
             library["wishlist_titles"],
             excluded_titles=library["excluded_titles"],
         )
-        taste_analysis = service._analyze_user_taste(movies)
+        taste_analysis = service.analyze_user_taste(movies)
 
         # ── Merge hard-ignored titles into exclusion list ────────────
         # Titles from past sessions that the user ignored (didn't add to
@@ -724,7 +416,7 @@ def recommend(
             strategy_params_dict["user_tmdb_ids"] = user_source_items
 
         # ── RAG context retrieval (background, non-blocking) ────────
-        rag_context = _retrieve_rag_context(current_user["id"], movies, request.strategy, request.lang)
+        rag_context = retrieve_rag_context(current_user["id"], movies, request.strategy, request.lang)
 
         # ── Local (no-AI) path ────────────────────────────────────────
         if model == LOCAL_MODEL:
@@ -747,19 +439,16 @@ def recommend(
                 lang=request.lang,
                 rag_context=rag_context,
             )
-        # Auto-save recommendations to DB (same as the streaming endpoint does)
+        # Persist via the deep session module (one owner for save semantics).
         if recommendations:
-            try:
-                db_save_session(
-                    model=model,
-                    source_count=len(movies),
-                    movies=movies,
-                    recommendations=recommendations,
-                    user_id=current_user["id"],
-                    db=db,
-                )
-            except Exception as e:
-                logger.warning("Error saving session (sync): %s", e)
+            save_recommendation_session(
+                model=model,
+                source_count=len(movies),
+                movies=movies,
+                recommendations=recommendations,
+                user_id=current_user["id"],
+                db=db,
+            )
         return RecommendationResponse(
             recommendations=recommendations,
             model_used=model,
@@ -821,11 +510,10 @@ def recommend_stream(
     # ── Local (no-AI) path uses its own SSE generator ────────────────
     if model == LOCAL_MODEL:
         return StreamingResponse(
-            _stream_local_with_persistence(
-                movies, request.count, LOCAL_MODEL, current_user["id"],
+            stream_local_recommendations(
+                movies, request.count, current_user["id"],
                 strategy=request.strategy,
                 strategy_params=strategy_params_dict,
-                watched_titles=excluded_titles,
                 excluded_tmdb_ids=excluded_tmdb_ids,
                 lang=request.lang,
             ),
@@ -838,7 +526,7 @@ def recommend_stream(
         )
 
     return StreamingResponse(
-        _stream_with_persistence(
+        stream_recommendations(
             movies, request.count, model, api_key, current_user["id"],
             strategy=request.strategy,
             strategy_params=strategy_params_dict,
@@ -897,7 +585,7 @@ def followup_stream(
     # Single DB query: titles + TMDB IDs — all in one (already filtered by initial recommendation)
     library = _load_user_library(db, current_user["id"])
     return StreamingResponse(
-        _followup_stream_with_persistence(
+        stream_followup(
             movies=movies,
             count=request.count,
             model=request.model,

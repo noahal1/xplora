@@ -8,7 +8,14 @@ from sqlmodel import Session
 
 from auth import get_current_user
 from deps import get_user_db
-from helpers import parse_movie_data, NORMALIZE_GENRE, NORMALIZE_COUNTRY, iso_utc
+from helpers import (
+    parse_movie_data,
+    NORMALIZE_GENRE,
+    NORMALIZE_COUNTRY,
+    iso_utc,
+    normalize_genre_str,
+    normalize_country_str,
+)
 from models import (
     MediaData,
     MediaRating,
@@ -32,9 +39,6 @@ from crud import (
     batch_delete_media as db_batch_delete_media,
     delete_all_media_for_user,
     db_delete_media_by_status,
-    enrich_media_metadata as db_enrich_media_metadata,
-    clear_scrape_error as db_clear_scrape_error,
-    set_scrape_error as db_set_scrape_error,
     get_media_stats,
     get_top_rated,
     reorder_top_rated,
@@ -43,9 +47,9 @@ from crud import (
     log_operation,
 )
 from movie_search import search_movies as search_external_movies, get_movie_detail as get_external_movie_detail
+from movie_metadata import Match, enrich as enrich_metadata, resolve_title
 from scraper import async_background_enrich_movies, async_background_cache_posters
-from scraper.ai_repair import async_background_ai_repair, get_repair_progress, ai_repair_single_item, _normalize_genre_str, _normalize_country_str
-from poster_cache import download_and_cache_poster
+from scraper.ai_repair import async_background_ai_repair, get_repair_progress, ai_repair_single_item
 
 
 router = APIRouter(prefix="/api", tags=["media"])
@@ -784,110 +788,23 @@ async def enrich_media_metadata_endpoint(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ):
-    """Scrape metadata from TMDB or TVmaze for a media item by its title and update the record."""
+    """Scrape metadata from TMDB or TVmaze for a media item by its title and update the record.
+
+    Thin adapter: resolve *which* external identity to use (title search),
+    then hand the whole chain to the deep movie_metadata module.
+    """
     media_item = get_media_for_user(media_id, current_user["id"], db=db)
     if not media_item:
         raise HTTPException(status_code=404, detail="Media item not found")
 
-    try:
-        results = search_external_movies(media_item.title, source)
-    except RuntimeError as e:
-        source_label = "TMDB" if source == "tmdb" else "TVmaze"
-        raise HTTPException(status_code=502, detail=f"搜索 {source_label} 失败：{str(e)}")
-
-    if not results:
-        source_label = "TMDB" if source == "tmdb" else "TVmaze"
-        raise HTTPException(
-            status_code=404,
-            detail=f"在 {source_label} 中未找到「{media_item.title}」的匹配结果，请先手动编辑标题再试",
-        )
-
-    # For items without a season_number, prefer movie search results to avoid
-    # incorrectly tagging a movie as TV (e.g. "Interstellar" matching a TV
-    # special/documentary on TMDB). TV results are only valid when the item
-    # was explicitly imported as a TV series with a season marker.
-    if media_item.season_number:
-        # item is a TV series — prefer TV results, fall back to any result
-        tv_results = [r for r in results if r.get("media_type") == "tv"]
-        match = tv_results[0] if tv_results else results[0]
-    else:
-        movie_results = [r for r in results if r.get("media_type") != "tv"]
-        match = movie_results[0] if movie_results else results[0]
-
-    source_id = match.get("source_id", "")
-    # Use the actual source from the match result (e.g. "tmdb" or "tvmaze")
-    # instead of the user-requested source, because the search may have
-    # returned a match from a different source than requested.
-    match_source = match.get("source", source)
-    if not source_id:
-        raise HTTPException(status_code=502, detail=f"{match_source.upper()} 搜索结果缺少 source_id")
-
-    # Pass media_type from search result so TV series use /tv/{id} instead of /movie/{id}
-    media_type = match.get("media_type", "movie")
-    # If the item already has a season_number persisted, pass it along so
-    # the season-specific metadata (season poster, episode count) is refreshed
-    season_number = media_item.season_number if media_type == "tv" else None
-    try:
-        detail = get_external_movie_detail(match_source, source_id, media_type=media_type, season_number=season_number)
-    except RuntimeError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"获取 {match_source.upper()} 详情失败：{str(e)}。搜索已成功但获取详情失败，可能是 API 限流或网络问题。",
-        )
-
-    # Explicitly set media_type on the detail dict so that
-    # enrich_media_metadata overwrites any previously incorrect value
-    # in the database (e.g. a movie incorrectly tagged as "tv" from an
-    # earlier scrape where a TV special matched the same title).
-    # Movie detail (_get_tmdb_detail) doesn't include "media_type",
-    # so without this the old DB value would persist.
-    detail["media_type"] = media_type
-
-    # Localize the poster image
-    poster_cached = False
-    if detail.get("poster_url"):
-        local_url = download_and_cache_poster(
-            detail["poster_url"],
-            tmdb_id=detail.get("tmdb_id") or source_id,
-        )
-        if local_url:
-            detail["poster_url"] = local_url
-            poster_cached = True
-
-    updated = db_enrich_media_metadata(media_id, current_user["id"], detail, db=db)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Media item not found")
-
-    # Reconcile scrape_error
-    if poster_cached or not detail.get("poster_url"):
-        db_clear_scrape_error(media_id, current_user["id"], db=db)
-    else:
-        db_set_scrape_error(
-            media_id, current_user["id"],
-            "海报图片下载失败，已保留原始 TMDB 地址。可稍后重试「批量刮削」以缓存到本地",
-            db=db,
-        )
-
-    return {
-        "id": updated.id,
-        "title": updated.title,
-        "rating": updated.rating,
-        "year": updated.year,
-        "genre": updated.genre,
-        "status": updated.status,
-        "poster_url": updated.poster_url,
-        "overview": updated.overview,
-        "runtime": updated.runtime,
-        "imdb_id": updated.imdb_id,
-        "tmdb_id": updated.tmdb_id,
-        "country": updated.country,
-        "tagline": updated.tagline,
-        "scrape_error": updated.scrape_error,
-        "tv_series_id": updated.tv_series_id,
-        "season_number": updated.season_number,
-        "episode_count": updated.episode_count,
-        "series_poster_url": updated.series_poster_url,
-    }
+    match = resolve_title(media_item.title, source, media_item.season_number)
+    return enrich_metadata(
+        media_id=media_id,
+        user_id=current_user["id"],
+        match=match,
+        db=db,
+        fetch_error_detail="获取 {source} 详情失败：{error}。搜索已成功但获取详情失败，可能是 API 限流或网络问题。",
+    )
 
 
 @router.post("/media/{media_id}/mark-watched")
@@ -1148,55 +1065,17 @@ async def rematch_media(
     if not media_item:
         raise HTTPException(status_code=404, detail="Media item not found")
 
-    try:
-        detail = get_external_movie_detail(source, source_id, media_type=media_type)
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-    # Explicitly set media_type so enrich_media_metadata overwrites
-    # any previously incorrect value in the database
-    detail["media_type"] = media_type
-
-    # Download and cache poster locally
-    poster_cached = False
-    if detail.get("poster_url"):
-        local_url = download_and_cache_poster(
-            detail["poster_url"],
-            tmdb_id=detail.get("tmdb_id") or source_id,
-        )
-        if local_url:
-            detail["poster_url"] = local_url
-            poster_cached = True
-
-    # Update metadata fields (preserves user's title/year)
-    updated = db_enrich_media_metadata(media_id, current_user["id"], detail, db=db)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Media item not found")
-
-    # Clear scrape_error on success
-    db_clear_scrape_error(media_id, current_user["id"], db=db)
-
-    log_operation(current_user["id"], current_user["username"], "rematch_media", f"手动匹配: {updated.title}", db=db)
-    return {
-        "id": updated.id,
-        "title": updated.title,
-        "rating": updated.rating,
-        "year": updated.year,
-        "genre": updated.genre,
-        "status": updated.status,
-        "poster_url": updated.poster_url,
-        "overview": updated.overview,
-        "runtime": updated.runtime,
-        "imdb_id": updated.imdb_id,
-        "tmdb_id": updated.tmdb_id,
-        "country": updated.country,
-        "tagline": updated.tagline,
-        "scrape_error": updated.scrape_error,
-        "tv_series_id": updated.tv_series_id,
-        "season_number": updated.season_number,
-        "episode_count": updated.episode_count,
-        "series_poster_url": updated.series_poster_url,
-    }
+    # Thin adapter: the caller already knows the exact external identity, so
+    # hand it to the same deep chain as enrich (without a title search).
+    result = enrich_metadata(
+        media_id=media_id,
+        user_id=current_user["id"],
+        match=Match(source=source, source_id=source_id, media_type=media_type),
+        db=db,
+        reconcile_scrape_error=False,
+    )
+    log_operation(current_user["id"], current_user["username"], "rematch_media", f"手动匹配: {result['title']}", db=db)
+    return result
 
 
 @router.get("/media/detail")
@@ -1325,13 +1204,13 @@ def ai_infer_single(
 
     # Decide whether the AI suggestion would change anything.
     # Normalize both sides so Chinese ↔ English doesn't trigger a false diff.
-    normalized_existing_genre = _normalize_genre_str(existing_genre) if existing_genre else None
+    normalized_existing_genre = normalize_genre_str(existing_genre) if existing_genre else None
     genre_conflict = (
         existing_genre and ai_genre
         and existing_genre != ai_genre
         and normalized_existing_genre != ai_genre
     )
-    normalized_existing_country = _normalize_country_str(existing_country)
+    normalized_existing_country = normalize_country_str(existing_country)
     country_conflict = (
         existing_country and ai_country
         and existing_country != ai_country

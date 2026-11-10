@@ -25,7 +25,7 @@ from ai_service.constants import MODEL_CONFIGS
 from config_manager import get_api_key as get_config_api_key
 from crud import update_media
 from database import get_user_session
-from helpers import NORMALIZE_GENRE, NORMALIZE_COUNTRY
+from helpers import normalize_genre_str, normalize_country_str
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +161,7 @@ def _build_update_payload(item: dict, genre: str | None, country: str | None) ->
     payload = {}
     if genre is not None and genre.strip() and item.get("needs_genre"):
         # Normalise genre to canonical English name
-        normalised = _normalize_genre_str(genre.strip())
+        normalised = normalize_genre_str(genre.strip())
         payload["genre"] = normalised
     if country is not None and country.strip() and item.get("needs_country"):
         # Normalise country to canonical English name
@@ -170,31 +170,13 @@ def _build_update_payload(item: dict, genre: str | None, country: str | None) ->
     return payload
 
 
-def _normalize_genre_str(genre_str: str) -> str:
-    """Normalize a genre string: replace Chinese/variant names with canonical English.
-
-    E.g. ``"动作 / 科幻"`` → ``"Action / Sci-Fi"``
-    """
-    parts = re.split(r"\s*/\s*", genre_str)
-    normalized_parts = []
-    for p in parts:
-        p = p.strip()
-        canonical = NORMALIZE_GENRE.get(p, p)
-        normalized_parts.append(canonical)
-    return " / ".join(normalized_parts)
-
-
-def _normalize_country_str(country_str: str | None) -> str | None:
-    """Normalize a country name: replace Chinese names with canonical English.
-
-    E.g. ``"美国"`` → ``"United States"``, ``"日本"`` → ``"Japan"``
-    Returns ``None`` if input is None or empty.
-    """
-    if not country_str or not country_str.strip():
-        return None
-    country_str = country_str.strip()
-    canonical = NORMALIZE_COUNTRY.get(country_str, country_str)
-    return canonical
+# Normalization now has ONE public home: helpers.normalize_genre_str /
+# helpers.normalize_country_str. The deep metadata module and the routers
+# use those public names; the local aliases below only keep this module's
+# own call sites working without churn, and resolve to the same functions
+# (so nothing imports a private implementation across a seam any more).
+_normalize_genre_str = normalize_genre_str
+_normalize_country_str = normalize_country_str
 
 
 # ═══════════════════════════════════════════════════════════════════

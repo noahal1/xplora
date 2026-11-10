@@ -6,20 +6,13 @@ from typing import Optional
 from passlib.hash import bcrypt
 from sqlmodel import Session, select
 
-from database import get_session
+from crud._session import resolve_db
 from models import UserRecord
-
-
-def _resolve_db(db: Optional[Session] = None) -> tuple[Session, bool]:
-    """Return a session and whether it needs to be closed."""
-    if db is not None:
-        return db, False
-    return get_session(), True
 
 
 def create_user(username: str, password: str, is_admin: bool = False, db: Optional[Session] = None) -> UserRecord:
     """Create a new user. Raises ValueError if username already exists."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         existing = session.exec(
             select(UserRecord).where(UserRecord.username == username)
@@ -46,7 +39,7 @@ def create_user(username: str, password: str, is_admin: bool = False, db: Option
 
 def authenticate_user(username: str, password: str, db: Optional[Session] = None) -> Optional[UserRecord]:
     """Verify username/password. Returns UserRecord on success, None on failure."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         user = session.exec(
             select(UserRecord).where(UserRecord.username == username)
@@ -63,7 +56,7 @@ def authenticate_user(username: str, password: str, db: Optional[Session] = None
 
 def get_user_by_id(user_id: int, db: Optional[Session] = None) -> Optional[UserRecord]:
     """Get a user by ID."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         return session.exec(
             select(UserRecord).where(UserRecord.id == user_id)
@@ -84,7 +77,7 @@ def change_password(user_id: int, old_password: str, new_password: str, db: Opti
     Raises ``ValueError`` if the user is still on their initial password and
     tries to set it back to the well-known default.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         user = session.exec(
             select(UserRecord).where(UserRecord.id == user_id)
@@ -109,7 +102,7 @@ def change_password(user_id: int, old_password: str, new_password: str, db: Opti
 
 def list_users(db: Optional[Session] = None) -> list[UserRecord]:
     """List all users (admin panel)."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         results = session.exec(
             select(UserRecord).order_by(UserRecord.created_at.desc())
@@ -122,7 +115,7 @@ def list_users(db: Optional[Session] = None) -> list[UserRecord]:
 
 def admin_delete_user(target_user_id: int, db: Optional[Session] = None) -> bool:
     """Admin: delete a user (cannot delete self). Returns True if deleted."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         user = session.exec(
             select(UserRecord).where(UserRecord.id == target_user_id)
@@ -146,7 +139,7 @@ def admin_reset_user_password(target_user_id: int, new_password: str, db: Option
     The target user is flagged to change their password at next login, since
     the new password was set by someone else and is therefore "initial".
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         user = session.exec(
             select(UserRecord).where(UserRecord.id == target_user_id)

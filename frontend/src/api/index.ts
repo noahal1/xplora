@@ -4,6 +4,28 @@ import type { MediaImport, WishlistItem, MediaDetail, DBSession, DBSessionDetail
 
 export const API_BASE = "/api";
 
+/**
+ * The interface to the deep HTTP core. Callers describe intent (path, method,
+ * body, signal); the core owns base URL, token, headers, HTML detection,
+ * 401 redirect and error parsing. `token` and `redirectOn401` exist only for
+ * the flows where a 401 is not a session expiry (first-run setup, login).
+ */
+export interface ApiOptions {
+  method?: string;
+  body?: BodyInit | null;
+  signal?: AbortSignal | null;
+  /** Explicit token for first-run flows (before localStorage is populated). */
+  token?: string | null;
+  /** false → public endpoint, no Bearer header. */
+  auth?: boolean;
+  /** false → 401 is a legitimate answer; do not redirect. */
+  redirectOn401?: boolean;
+  headers?: Record<string, string>;
+  /** Notified once response headers arrive (callers may clear their own timer). */
+  onResponse?: () => void;
+}
+
+/** Legacy header helper for the 83 exported wrappers; kept so their behaviour is exact. */
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem("xplora-token");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -11,28 +33,116 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
+function apiUrl(path: string): string {
+  if (path === API_BASE || path.startsWith(`${API_BASE}/`) || path.startsWith(`${API_BASE}?`)) return path;
+  return path.startsWith("/") ? `${API_BASE}${path}` : path;
+}
 
-  // If the response is HTML instead of JSON, the server is likely
-  // returning a fallback page (e.g. SPA index.html or nginx 404).
-  // This happens when the backend is not running or the route
-  // doesn't exist.
+function buildHeaders(opts: ApiOptions): Record<string, string> {
+  const headers: Record<string, string> = { ...(opts.headers ?? {}) };
+  // An explicit Authorization (first-run setup / freshly-issued token before
+  // localStorage is populated) always wins over the stored token.
+  if (!headers["Authorization"]) {
+    const token = opts.token !== undefined
+      ? opts.token
+      : opts.auth === false ? null : localStorage.getItem("xplora-token");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  // FormData carries its own multipart boundary; JSON bodies need a type.
+  if (opts.body != null && !(opts.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  return headers;
+}
+
+/**
+ * The deep core: ONE owner of base URL, token, HTML detection and the
+ * session-expiry 401 redirect. Returns the raw Response so heterogeneous
+ * consumers (blob export, login, fire-and-forget pollers) keep their own
+ * `.ok` / `.json()` / `.blob()` control flow.
+ */
+async function coreFetch(path: string, init: RequestInit, redirectOn401 = true): Promise<Response> {
+  const res = await fetch(path, init);
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("text/html")) {
     throw new Error("服务器返回了 HTML 页面，请检查后端服务是否已启动并包含最新路由");
   }
+  if (res.status === 401 && redirectOn401) {
+    localStorage.removeItem("xplora-token");
+    window.location.href = "/login";
+    throw new Error("登录已过期，请重新登录");
+  }
+  return res;
+}
 
+/** Centralized non-ok error parsing, used by the JSON helpers and SSE. */
+async function assertOk(res: Response): Promise<Response> {
   if (!res.ok) {
-    if (res.status === 401) {
-      localStorage.removeItem("xplora-token");
-      window.location.href = "/login";
-      throw new Error("登录已过期，请重新登录");
-    }
     const err = await res.json().catch(() => ({ detail: "服务器错误" }));
     throw new Error(err.detail || `请求失败 (${res.status})`);
   }
+  return res;
+}
+
+/** Thin adapter so the 83 exported wrappers keep their exact behaviour. */
+async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await coreFetch(apiUrl(url), options ?? {});
+  await assertOk(res);
   return res.json();
+}
+
+async function perform(path: string, opts: ApiOptions): Promise<Response> {
+  const res = await coreFetch(apiUrl(path), {
+    method: opts.method,
+    headers: buildHeaders(opts),
+    body: opts.body ?? undefined,
+    signal: opts.signal ?? undefined,
+  }, opts.redirectOn401 !== false);
+  opts.onResponse?.();
+  return res;
+}
+
+/** JSON request for migrated call sites — small interface, deep implementation. */
+export async function apiFetch<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
+  const res = await assertOk(await perform(path, opts));
+  return res.json();
+}
+
+/** Validated raw Response for fire-and-forget / blob / login consumers. */
+export function apiFetchResponse(path: string, opts: ApiOptions = {}): Promise<Response> {
+  return perform(path, opts);
+}
+
+/** SSE — owns fetch + framing; yields one { event, data } per complete frame. */
+export async function* streamEvents(
+  path: string,
+  opts: ApiOptions = {},
+): AsyncGenerator<{ event: string; data: any }> {
+  const res = await assertOk(await perform(path, opts));
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() || "";
+    for (const frame of frames) {
+      let event = "message";
+      let raw = "";
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7).trim();
+        else if (line.startsWith("data: ")) raw = line.slice(6).trim();
+      }
+      if (!raw) continue;
+      let data: any;
+      try { data = JSON.parse(raw); }
+      catch { console.warn("SSE parse warning: invalid event data", raw); continue; }
+      yield { event, data };
+    }
+  }
 }
 
 /** Add a single watched media item */

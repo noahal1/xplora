@@ -17,6 +17,12 @@ from config_manager import (
 from crud import log_operation
 from helpers import iso_utc
 from database import get_db, get_user_session, USE_PER_USER_DBS
+from media_store import (
+    list_recommendations,
+    list_sessions,
+    list_users,
+    list_all_media,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -31,9 +37,9 @@ async def export_all_data(
     In per-user DB mode, reads data from each user's personal database.
     If not using per-user DBs (PostgreSQL), reads from the shared DB.
     """
-    from models import UserRecord, MediaItemRecord, SessionRecord, RecommendationRecord
+    from models import MediaItemRecord, SessionRecord
 
-    users = db.exec(select(UserRecord)).all()
+    users = list_users(db)
     export = {
         "export_time": datetime.now(timezone.utc).isoformat(),
         "version": VERSION,
@@ -45,18 +51,12 @@ async def export_all_data(
             # Read from user's personal database
             user_db = get_user_session(u.id)
             try:
-                user_movies = user_db.exec(
-                    select(MediaItemRecord)
-                ).all()
-                user_sessions = user_db.exec(
-                    select(SessionRecord)
-                ).all()
+                user_movies = user_db.exec(select(MediaItemRecord)).all()
+                user_sessions = user_db.exec(select(SessionRecord)).all()
 
                 sessions_data = []
                 for s in user_sessions:
-                    recs = user_db.exec(
-                        select(RecommendationRecord).where(RecommendationRecord.session_id == s.id)
-                    ).all()
+                    recs = list_recommendations(s.id, user_db)
                     sessions_data.append({
                         "id": s.id,
                         "model": s.model,
@@ -96,18 +96,12 @@ async def export_all_data(
                 user_db.close()
         else:
             # Shared DB mode (PostgreSQL) — read directly from master DB
-            user_movies = db.exec(
-                select(MediaItemRecord).where(MediaItemRecord.user_id == u.id)
-            ).all()
-            user_sessions = db.exec(
-                select(SessionRecord).where(SessionRecord.user_id == u.id)
-            ).all()
+            user_movies = list_all_media(u.id, db)
+            user_sessions = list_sessions(u.id, db)
 
             sessions_data = []
             for s in user_sessions:
-                recs = db.exec(
-                    select(RecommendationRecord).where(RecommendationRecord.session_id == s.id)
-                ).all()
+                recs = list_recommendations(s.id, db)
                 sessions_data.append({
                     "id": s.id,
                     "model": s.model,

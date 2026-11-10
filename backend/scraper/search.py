@@ -6,7 +6,7 @@ import time
 from typing import Optional
 
 from config_manager import get_api_key as get_config_api_key
-from scraper.match import has_cjk, to_pinyin, find_best_match, strip_season, extract_season_number
+from matching import best_match, has_cjk, to_pinyin, strip_season, extract_season_number
 
 # Rate limiting — TMDB free tier allows ~50 req/s, but we're conservative
 # to avoid hitting any issues and to be a good API citizen.
@@ -174,7 +174,7 @@ def _search_scrape(
             if not p_results:
                 part_results.append(None)
                 continue
-            match = find_best_match(p_results, p, year)
+            match = best_match(p, p_results, year)
             part_results.append(match if match and match.get("source_id") else None)
 
         # Check if at least two non-None matches agree on source_id
@@ -202,7 +202,7 @@ def _search_scrape(
         results = search_fn(variant)
         if not results:
             continue
-        match = find_best_match(results, variant, year)
+        match = best_match(variant, results, year)
         if match and match.get("source_id"):
             detail = try_fetch_detail(
                 source, match["source_id"], title, year,
@@ -262,9 +262,9 @@ def _try_source(
         if not results:
             continue
         # Try matching pinyin results against the original variant first, then pinyin
-        match = find_best_match(results, v, year)
+        match = best_match(v, results, year)
         if not match or not match.get("source_id"):
-            match = find_best_match(results, p, year)
+            match = best_match(p, results, year)
         if match and match.get("source_id"):
             detail = try_fetch_detail(
                 source, match["source_id"], title, year,

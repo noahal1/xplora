@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { changePassword, checkUpdate } from "../api";
+import { changePassword, checkUpdate, apiFetchResponse } from "../api";
 import { useToast } from "../context/ToastContext";
 import { UpdateModal } from "../components/UpdateModal";
 import { Button } from "../components/ui/button";
@@ -100,7 +100,7 @@ export function ProfilePage() {
           filledKeys[key] = val.trim();
         }
       }
-      const res = await fetch("/api/admin/config", {
+      const res = await apiFetchResponse("/api/admin/config", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -137,7 +137,7 @@ export function ProfilePage() {
       setHealthLoading(true);
       setHealthError("");
       try {
-        const res = await fetch("/api/health");
+        const res = await apiFetchResponse("/api/health");
         if (!res.ok) throw new Error(t("profile.health_failed"));
         const data = await res.json();
         setHealth(data);
@@ -155,7 +155,7 @@ export function ProfilePage() {
     const fetchPrefs = async () => {
       try {
         const token = localStorage.getItem("xplora-token");
-        const res = await fetch("/api/profile/preferences", {
+        const res = await apiFetchResponse("/api/profile/preferences", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -214,7 +214,7 @@ export function ProfilePage() {
     setExporting(true);
     try {
       const token = localStorage.getItem("xplora-token");
-      const res = await fetch("/api/user/export", {
+      const res = await apiFetchResponse("/api/user/export", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -259,7 +259,7 @@ export function ProfilePage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/user/import", {
+      const res = await apiFetchResponse("/api/user/import", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -699,11 +699,11 @@ export function ProfilePage() {
               onClick={async () => {
                 try {
                   const token = localStorage.getItem("xplora-token");
-                  const currentPrefs = await fetch("/api/profile/preferences", {
+                  const currentPrefs = await apiFetchResponse("/api/profile/preferences", {
                     headers: { Authorization: `Bearer ${token}` },
                   }).then((r) => r.json());
                   const newVal = !currentPrefs.rag_enabled;
-                  await fetch("/api/profile/preferences", {
+                  await apiFetchResponse("/api/profile/preferences", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                     body: JSON.stringify({ rag_enabled: newVal }),
@@ -789,7 +789,7 @@ export function ProfilePage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => { setHealthLoading(true); setHealthError(""); fetch("/api/health").then(r => r.json()).then(setHealth).catch(e => setHealthError(e.message)).finally(() => setHealthLoading(false)); }}
+          onClick={() => { setHealthLoading(true); setHealthError(""); apiFetchResponse("/api/health").then(r => r.json()).then(setHealth).catch(e => setHealthError(e.message)).finally(() => setHealthLoading(false)); }}
           disabled={healthLoading}
           className="mt-3 w-full text-xs"
         >

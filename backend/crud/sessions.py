@@ -7,15 +7,8 @@ from sqlalchemy import func as sa_func
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
-from database import get_session
+from crud._session import resolve_db
 from models import SessionRecord, RecommendationRecord, MediaRating, MediaRecommendation
-
-
-def _resolve_db(db: Optional[Session] = None) -> tuple[Session, bool]:
-    """Return a session and whether it needs to be closed."""
-    if db is not None:
-        return db, False
-    return get_session(), True
 
 
 def save_session(
@@ -31,7 +24,7 @@ def save_session(
     Note: ``movies`` is kept for API compatibility but is not persisted.
     Only the recommendation results are stored.
     """
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         sess = SessionRecord(
             model=model,
@@ -76,7 +69,7 @@ def get_sessions(
     db: Optional[Session] = None,
 ) -> tuple[list[SessionRecord], int]:
     """List sessions for a user with pagination."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         base = select(SessionRecord).where(SessionRecord.user_id == user_id)
         total = session.scalar(
@@ -98,7 +91,7 @@ def get_sessions(
 
 def get_session_detail(session_id: int, user_id: int, db: Optional[Session] = None) -> Optional[SessionRecord]:
     """Get a single session (must belong to user)."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         return session.exec(
             select(SessionRecord)
@@ -115,7 +108,7 @@ def get_session_detail(session_id: int, user_id: int, db: Optional[Session] = No
 
 def delete_session(session_id: int, user_id: int, db: Optional[Session] = None) -> bool:
     """Delete a session (must belong to user)."""
-    session, close_db = _resolve_db(db)
+    session, close_db = resolve_db(db)
     try:
         sess = session.exec(
             select(SessionRecord).where(

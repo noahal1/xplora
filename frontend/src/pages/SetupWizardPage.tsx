@@ -5,7 +5,7 @@ import { getErrMsg } from "../lib/utils";
 import { useAuth } from "../context/AuthContext";
 import { useSetup } from "../context/SetupContext";
 import { useTheme } from "../context/ThemeContext";
-import { runSetup } from "../api";
+import { runSetup, apiFetchResponse } from "../api";
 import LineWaves from "../components/LineWaves";
 import { Logo } from "../components/Logo";
 
@@ -83,8 +83,9 @@ export function SetupWizardPage() {
         api_keys: apiKeys,
       });
       // Resolve the real user id from the issued token.
-      const meRes = await fetch("/api/auth/me", {
+      const meRes = await apiFetchResponse("/api/auth/me", {
         headers: { Authorization: `Bearer ${data.token}` },
+        redirectOn401: false,
       });
       let user = { id: 0, username: data.username, is_admin: data.is_admin };
       if (meRes.ok) {

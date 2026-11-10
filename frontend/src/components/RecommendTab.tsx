@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { MediaItem, Recommendation, ChatMessage, ExternalDetail, DBSession, DBSessionDetail, Playlist } from "../types";
 import * as api from "../api";
-import { API_BASE } from "../api";
+import { streamEvents } from "../api";
 import { exportJSON } from "../utils/export";
 import { useToast } from "../context/ToastContext";
 import { SkeletonCard } from "./Skeleton";
@@ -346,10 +346,8 @@ export function RecommendTab() {
 
     try {
       const sp = getStrategyParams();
-      const token = localStorage.getItem("xplora-token");
-      const response = await fetch(`${API_BASE}/recommend/stream`, {
+      for await (const { event, data } of streamEvents("/recommend/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre, media_type: m.media_type })),
           model: selectedModel,
@@ -359,56 +357,29 @@ export function RecommendTab() {
           lang: uiLang,
         }),
         signal: controller.signal,
-      });
-
-      if (!response.ok || !response.body) {
-        const err = await response.json().catch(() => ({ detail: t("recommend.server_error") }));
-        throw new Error(err.detail || t("recommend.request_failed"));
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() || "";
-        for (const eventBlock of events) {
-          const lines = eventBlock.split("\n");
-          let eventType = "message";
-          let eventData = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-            else if (line.startsWith("data: ")) eventData = line.slice(6).trim();
-          }
-          if (!eventData) continue;
-          try {
-            const data = JSON.parse(eventData);
-            switch (eventType) {
-              case "start":
-                if (data.source_count) sourceCount = data.source_count;
-                break;
-              case "recommendation": {
-                const enriched = enrichRec(data as Recommendation);
-                streamedRecs.push(enriched);
-                setRecommendations([...streamedRecs]);
-                break;
-              }
-              case "done":
-                // Backend may auto-fall back to local (no AI key) — surface the real model used
-                if (data.model_used) setModelUsed(getModelLabel(data.model_used));
-                break;
-              case "error":
-                throw new Error(data.message);
+      })) {
+        try {
+          switch (event) {
+            case "start":
+              if (data.source_count) sourceCount = data.source_count;
+              break;
+            case "recommendation": {
+              const enriched = enrichRec(data as Recommendation);
+              streamedRecs.push(enriched);
+              setRecommendations([...streamedRecs]);
+              break;
             }
-          } catch (parseErr) {
-            // Re-throw real errors thrown inside the switch; ignore JSON noise
-            if (parseErr instanceof Error && parseErr.message && eventType === "error") throw parseErr;
-            console.warn("SSE parse warning (recommend): invalid event data", eventData);
+            case "done":
+              // Backend may auto-fall back to local (no AI key) — surface the real model used
+              if (data.model_used) setModelUsed(getModelLabel(data.model_used));
+              break;
+            case "error":
+              throw new Error(data.message);
           }
+        } catch (parseErr) {
+          // Re-throw real errors thrown for the error event; ignore JSON noise
+          if (parseErr instanceof Error && parseErr.message && event === "error") throw parseErr;
+          console.warn("SSE parse warning (recommend): invalid event data", data);
         }
       }
 
@@ -479,10 +450,9 @@ export function RecommendTab() {
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const token = localStorage.getItem("xplora-token");
-      const response = await fetch("/api/recommend/followup", {
+      let accumulatedText = "";
+      for await (const { event, data } of streamEvents("/recommend/followup", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           movies: filteredMovies.map((m) => ({ title: m.title, rating: m.rating, year: m.year, genre: m.genre, media_type: m.media_type })),
           previous_recommendations: recommendations,
@@ -493,64 +463,37 @@ export function RecommendTab() {
           lang: uiLang,
         }),
         signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ detail: t("recommend.server_error") }));
-        throw new Error(err.detail || t("recommend.request_failed"));
-      }
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulatedText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() || "";
-        for (const eventBlock of events) {
-          const lines = eventBlock.split("\n");
-          let eventType = "message";
-          let eventData = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-            else if (line.startsWith("data: ")) eventData = line.slice(6).trim();
-          }
-          if (!eventData) continue;
-          try {
-            const data = JSON.parse(eventData);
-            switch (eventType) {
-              case "chunk":
-                accumulatedText += data.text || "";
-                setChatMessages((prev) => {
-                  const next = [...prev];
-                  const last = next[next.length - 1];
-                  if (last?.role === "assistant") next[next.length - 1] = { ...last, content: accumulatedText };
-                  else next.push({ role: "assistant", content: accumulatedText });
-                  return next;
-                });
-                break;
-              case "result":
-                const msg = data.message || accumulatedText;
-                setChatMessages((prev) => {
-                  const next = [...prev];
-                  const last = next[next.length - 1];
-                  if (last?.role === "assistant") next[next.length - 1] = { ...last, content: msg };
-                  else next.push({ role: "assistant", content: msg });
-                  return next;
-                });
-                if (data.recommendations) setRecommendations((prev) => [...prev, ...data.recommendations]);
-                break;
-              case "error":
-                throw new Error(data.message);
+        onResponse: () => clearTimeout(timeoutId),
+      })) {
+        try {
+          switch (event) {
+            case "chunk":
+              accumulatedText += data.text || "";
+              setChatMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant") next[next.length - 1] = { ...last, content: accumulatedText };
+                else next.push({ role: "assistant", content: accumulatedText });
+                return next;
+              });
+              break;
+            case "result": {
+              const msg = data.message || accumulatedText;
+              setChatMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant") next[next.length - 1] = { ...last, content: msg };
+                else next.push({ role: "assistant", content: msg });
+                return next;
+              });
+              if (data.recommendations) setRecommendations((prev) => [...prev, ...data.recommendations]);
+              break;
             }
-          } catch {
-            console.warn("SSE parse warning (followup): invalid event data", eventData);
+            case "error":
+              throw new Error(data.message);
           }
+        } catch {
+          console.warn("SSE parse warning (followup): invalid event data", data);
         }
       }
 

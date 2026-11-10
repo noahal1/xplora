@@ -2,7 +2,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useTranslation, Trans } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { adminDeleteUser, adminResetPassword } from "../api";
+import { adminDeleteUser, adminResetPassword, apiFetchResponse } from "../api";
 import { Modal } from "../components/Modal";
 import { getErrMsg } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -48,7 +48,7 @@ export function AdminUsersPage() {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/users", {
+      const res = await apiFetchResponse("/api/auth/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to load users");
@@ -77,7 +77,7 @@ export function AdminUsersPage() {
     }
     setCreating(true);
     try {
-      const res = await fetch("/api/auth/users", {
+      const res = await apiFetchResponse("/api/auth/users", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

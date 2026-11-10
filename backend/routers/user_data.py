@@ -12,6 +12,11 @@ from auth import get_current_user
 from deps import get_user_db
 from crud import log_operation, save_media, save_wishlist_items
 from helpers import iso_utc
+from media_store import (
+    list_all_media,
+    list_recommendations,
+    list_sessions,
+)
 from models import MediaRating, WishlistItem
 from scraper import async_background_enrich_movies
 
@@ -24,16 +29,16 @@ async def export_my_data(
     db: Session = Depends(get_user_db),
 ):
     """Export current user's data as JSON (movies + wishlist + sessions + playlists)."""
-    from models import MediaItemRecord, SessionRecord, RecommendationRecord, PlaylistRecord, PlaylistItemRecord
+    from models import PlaylistRecord, PlaylistItemRecord
 
     user_id = current_user["id"]
-    movies = db.query(MediaItemRecord).filter(MediaItemRecord.user_id == user_id).all()
-    sessions = db.query(SessionRecord).filter(SessionRecord.user_id == user_id).all()
+    movies = list_all_media(user_id, db)
+    sessions = list_sessions(user_id, db)
     playlists = db.query(PlaylistRecord).filter(PlaylistRecord.user_id == user_id).all()
 
     sessions_data = []
     for s in sessions:
-        recs = db.query(RecommendationRecord).filter(RecommendationRecord.session_id == s.id).all()
+        recs = list_recommendations(s.id, db)
         sessions_data.append({
             "id": s.id,
             "model": s.model,

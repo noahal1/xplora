@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from passlib.hash import bcrypt
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from auth import create_token
 from config_manager import (
@@ -23,6 +23,7 @@ from config_manager import (
 )
 from crud import log_operation
 from database import get_db
+from media_store import get_user_by_username, list_users
 from models import UserRecord
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def _find_setup_target(db: Session) -> UserRecord | None:
     Returns ``None`` when no setup target exists (e.g. already configured) or
     the instance has no users yet (handled by the caller).
     """
-    users = db.exec(select(UserRecord)).all()
+    users = list_users(db)
     if not users:
         return None  # empty instance -> create a brand new admin
     return next((u for u in users if u.must_change_password), None)
@@ -67,7 +68,7 @@ async def run_setup(req: SetupRequest, request: Request, db: Session = Depends(g
     """
     target = _find_setup_target(db)
     # No pending target but users already exist -> already configured.
-    if target is None and db.exec(select(UserRecord)).first() is not None:
+    if target is None and list_users(db):
         raise HTTPException(status_code=400, detail="实例已完成初始化，无法重复设置")
 
     username = (req.username or "").strip()
@@ -79,7 +80,7 @@ async def run_setup(req: SetupRequest, request: Request, db: Session = Depends(g
 
     if target is None:
         # Brand-new instance with no users: create the first admin.
-        if db.exec(select(UserRecord).where(UserRecord.username == username)).first():
+        if get_user_by_username(db, username):
             raise HTTPException(status_code=409, detail=f"用户 '{username}' 已存在")
         user = UserRecord(
             username=username,
@@ -93,9 +94,7 @@ async def run_setup(req: SetupRequest, request: Request, db: Session = Depends(g
     else:
         # Personalize the seeded default admin account.
         if username != target.username:
-            clash = db.exec(
-                select(UserRecord).where(UserRecord.username == username)
-            ).first()
+            clash = get_user_by_username(db, username)
             if clash and clash.id != target.id:
                 raise HTTPException(status_code=409, detail=f"用户 '{username}' 已存在")
         target.username = username

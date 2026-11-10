@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { apiFetch } from "../api";
 import { useTranslation } from "react-i18next";
 import { Globe, Heart, ExternalLink, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
@@ -20,8 +21,7 @@ export function AboutModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (open) {
-      fetch("/api/health")
-        .then((r) => r.json())
+      apiFetch<HealthInfo>("/api/health")
         .then((data) => setHealth(data))
         .catch(() => {});
     }

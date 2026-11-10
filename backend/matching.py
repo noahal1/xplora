@@ -1,0 +1,397 @@
+"""External-source title matching — one deep module.
+
+Owning the whole matching decision behind a small interface:
+
+* :func:`best_match` — pick the single most relevant candidate for a query.
+* :func:`rank` — order a list of candidates by title relevance.
+
+Normalization (CJK, pinyin, season markers, unicode, punctuation), scoring
+(:func:`title_similarity` / :func:`word_overlap_ratio`), the year boost and
+the confidence threshold all live here. Callers pass a query plus the
+candidates an adapter fetched, so the interface is the test surface: a
+substitutable candidate list, no network, no HTTP client. Bugs in *how*
+candidates are compared concentrate here instead of hiding in callers.
+"""
+
+import logging
+import re
+import unicodedata
+from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================
+# Season stripping helpers
+# ============================================
+
+# Regex patterns for season markers in titles
+# Chinese numeral mapping
+_CN_NUM_MAP: dict[str, int] = {
+    "零": 0, "〇": 0,
+    "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+    "百": 100, "千": 1000,
+}
+
+_CN_SEASON_RE = re.compile(
+    r"第["
+    r"一二三四五六七八九十零〇百千"
+    r"\d]+"
+    r"季"
+)
+_EN_SEASON_RE = re.compile(
+    r"(?:\s+Season\s+|\s+S\s*)\d+\s*",
+    re.IGNORECASE,
+)
+
+
+def _parse_chinese_number(s: str) -> int:
+    """Parse Chinese numeral string to integer.
+
+    ``"一"`` → ``1``, ``"十"`` → ``10``,
+    ``"十一"`` → ``11``, ``"二十"`` → ``20``,
+    ``"二十一"`` → ``21``.
+    """
+    if len(s) == 1:
+        return _CN_NUM_MAP.get(s, 0)
+
+    # Compound numbers with 十
+    if "十" in s:
+        parts = s.split("十")
+        left = parts[0]
+        right = parts[1] if len(parts) > 1 else ""
+        val_left = _CN_NUM_MAP.get(left, 0) if left else 1  # bare 十 → left=1
+        val_right = _CN_NUM_MAP.get(right, 0) if right else 0
+        return val_left * 10 + val_right
+
+    # Try parsing as combination of multipliers
+    total = 0
+    acc = 0
+    for ch in s:
+        n = _CN_NUM_MAP.get(ch, 0)
+        if n >= 10:
+            acc = max(acc, 1) * n
+            total += acc
+            acc = 0
+        else:
+            acc = n
+    total += acc
+    return total or 0
+
+
+def extract_season_number(title: str) -> int | None:
+    """Extract season number from a title with season marker.
+
+    ``"黑袍纠察队 第四季"`` → ``4``  (Chinese numeral)
+    ``"The Boys Season 4"`` → ``4``
+    ``"The Boys S4"`` → ``4``
+    ``"千与千寻"`` → ``None``
+    ``"权力的游戏 第一季"`` → ``1``
+    """
+    # Chinese: 第X季
+    m = _CN_SEASON_RE.search(title)
+    if m:
+        raw = m.group()  # e.g. "第四季"
+        num_str = raw[1:-1]  # strip 第 / 季
+        if num_str.isdigit():
+            return int(num_str)
+        return _parse_chinese_number(num_str)
+
+    # English: Season X or SX
+    m = _EN_SEASON_RE.search(title)
+    if m:
+        raw = m.group().strip()
+        d = re.search(r"\d+", raw)
+        if d:
+            return int(d.group())
+
+    return None
+
+
+def strip_season(title: str) -> str:
+    """Remove season markers from a title for cleaner search.
+
+    Handles:
+    - Chinese: ``第四季``, ``第1季``, ``第01季``
+    - English: ``Season 4``, ``S4``, ``Season 04``
+
+    ``"黑袍纠察队 第四季"`` → ``"黑袍纠察队"``
+    ``"The Boys Season 4"`` → ``"The Boys"``
+    ``"The Boys S4"`` → ``"The Boys"``
+    """
+    cleaned = _CN_SEASON_RE.sub("", title)
+    cleaned = _EN_SEASON_RE.sub("", cleaned)
+    return cleaned.strip()
+
+
+# ============================================
+# Pinyin / CJK helpers
+# ============================================
+
+
+def has_cjk(text: str) -> bool:
+    """Check whether a string contains CJK (Chinese / Japanese / Korean) characters."""
+    for ch in text:
+        cp = ord(ch)
+        if (
+            0x4E00 <= cp <= 0x9FFF
+            or 0x3400 <= cp <= 0x4DBF
+            or 0x20000 <= cp <= 0x2A6DF
+        ):
+            return True
+    return False
+
+
+def to_pinyin(text: str) -> str | None:
+    """Convert Chinese text to pinyin (``千与千寻`` → ``qian yu qian xun``).
+
+    Returns ``None`` if the ``pypinyin`` library is not available, so
+    callers can degrade gracefully.
+    """
+    if not has_cjk(text):
+        return None
+    try:
+        from pypinyin import lazy_pinyin
+
+        words = lazy_pinyin(text)
+        return " ".join(words)
+    except ImportError:
+        logger.debug("pypinyin not installed — skipping pinyin conversion")
+        return None
+
+
+# ============================================
+# Title matching helpers
+# ============================================
+
+# Common stop words in movie titles (EN / FR / DE / ES / IT)
+_STOP_WORDS: set[str] = {
+    "the", "a", "an", "and", "or", "of", "in", "to", "for",
+    "is", "it", "on", "at", "by", "with", "from", "as", "its",
+    "das", "der", "die", "dem", "den", "des", "ein", "eine",
+    "el", "la", "le", "les", "de", "un", "une", "du", "des",
+    "il", "lo", "gli", "i", "gli",
+    "y", "lo", "los", "las",
+}
+
+
+def normalize(s: str) -> str:
+    """Normalize a title for comparison: lowercase, strip, remove extra spaces."""
+    return " ".join(s.lower().strip().split())
+
+
+def normalize_unicode(s: str) -> str:
+    """Normalize Unicode characters, converting accented letters to ASCII.
+
+    E.g. ``Amélie`` → ``Amelie``, ``Café`` → ``Cafe``.
+    """
+    nfkd = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def remove_special_chars(s: str) -> str:
+    """Strip punctuation and special characters, keeping only letters,
+    digits, and whitespace."""
+    return re.sub(r"[^\w\s]", "", s)
+
+
+def title_words(s: str) -> set[str]:
+    """Extract meaningful words from a title (lowercased, no stop words,
+    no single letters, no punctuation)."""
+    cleaned = remove_special_chars(s)
+    cleaned = normalize_unicode(cleaned)
+    words = cleaned.lower().split()
+    return {w for w in words if w not in _STOP_WORDS and len(w) > 1}
+
+
+def word_overlap_ratio(a: str, b: str) -> float:
+    """Jaccard-like word overlap between two titles.
+
+    Returns the fraction of the smaller title's words that also appear
+    in the larger title (``intersection / min(len_a, len_b)``).
+    """
+    words_a = title_words(a)
+    words_b = title_words(b)
+    if not words_a or not words_b:
+        return 0.0
+    intersection = words_a & words_b
+    return len(intersection) / min(len(words_a), len(words_b))
+
+
+def title_similarity(a: str, b: str) -> float:
+    """Compute title similarity as a continuous score between 0.0 and 1.0.
+
+    Uses the same strategies as :func:`titles_match` but returns a graded
+    score instead of a boolean, allowing fine-grained ranking of candidates.
+
+    ======= ============================================================
+    Score   Condition
+    ======= ============================================================
+    1.00    Exact match (after basic normalization)
+    0.90    Unicode-normalized + punctuation-stripped match
+    0.50–   Substring match, scaled by length ratio (see below)
+    0.70–   Word overlap >= 70% (scaled linearly to 0.70–0.90)
+    0.50–   Word overlap 50–70% (scaled linearly to 0.50–0.70)
+    0.30–   Word overlap 30–50% (scaled linearly to 0.30–0.50)
+    0.00    Below confidence — no meaningful similarity
+    ======= ============================================================
+
+    **Substring scoring:** When one title is entirely contained in the other,
+    the score is scaled by the **length ratio** of the shorter to the longer
+    string. This prevents short queries (e.g. ``"麻将"``) from getting a near-
+    perfect match against much longer titles (e.g. ``"麻将之夜"``).
+
+    - Query ≈ result length → score approaches 0.85
+    - Query is a small fragment → score drops toward 0.50
+    """
+    a = normalize(a)
+    b = normalize(b)
+    if not a or not b:
+        return 0.0
+
+    # 1.00: Exact match
+    if a == b:
+        return 1.0
+
+    # 0.50–0.85: Substring match, scaled by length ratio
+    # If the query is only a small part of the result title, don't give
+    # a near-perfect score. E.g. "麻将" (2 chars) in "麻将之夜" (4 chars)
+    # → ratio = 0.5 → score = 0.50 + 0.35 * 0.5 = 0.675
+    if a in b or b in a:
+        min_len = min(len(a), len(b))
+        max_len = max(len(a), len(b))
+        length_ratio = min_len / max_len if max_len > 0 else 0
+        return 0.50 + 0.35 * length_ratio
+
+    # 0.90: Unicode-normalized + punctuation-stripped match
+    a_clean = remove_special_chars(normalize_unicode(a))
+    b_clean = remove_special_chars(normalize_unicode(b))
+    if not a_clean or not b_clean:
+        return 0.0
+    if a_clean == b_clean:
+        return 0.9
+
+    # Graded word overlap
+    overlap = word_overlap_ratio(a, b)
+    if overlap >= 0.7:
+        return 0.70 + (overlap - 0.7) * (0.20 / 0.30)
+    elif overlap >= 0.5:
+        return 0.50 + (overlap - 0.5) * (0.20 / 0.20)
+    elif overlap >= 0.3:
+        return 0.30 + (overlap - 0.3) * (0.20 / 0.20)
+
+    return 0.0
+
+
+def find_best_match(results: list[dict], title: str, year: Optional[int]) -> Optional[dict]:
+    """Find the best matching result using scored ranking.
+
+    Scores **all** candidates on a continuous scale rather than returning
+    the first match at each priority level.  This correctly handles cases
+    where TMDB returns multiple similar results — the best title match wins,
+    not whichever TMDB happened to rank first by popularity.
+
+    Scoring:
+    - **Title similarity** (primary): compares ``title`` against both the
+      result's localized ``title`` and ``original_title`` via
+      :func:`title_similarity`, taking the better score.  Falls back to
+      word overlap on the concatenated original + localized title.
+    - **Year boost**: if the result's year matches the target year **and**
+      there is meaningful title similarity (score >= 0.3), the title score
+      is multiplied by 1.3\u00d7.
+    - **Minimum threshold**: results scoring below 0.30 are rejected to
+      avoid attaching completely wrong metadata.
+
+    Returns the highest-scoring result, or ``None`` if no result meets
+    the minimum bar.
+    """
+    if not results:
+        return None
+
+    _MIN_CONFIDENCE = 0.30
+    best_score = 0.0
+    best_result = None
+
+    for r in results:
+        rt = r.get("title") or ""
+        ot = r.get("original_title") or ""
+
+        # Title similarity: best of localized and original title
+        candidates = []
+        if rt:
+            candidates.append(rt)
+        if ot and ot != rt:
+            candidates.append(ot)
+        if candidates:
+            title_score = max(title_similarity(title, c) for c in candidates)
+        else:
+            title_score = 0.0
+
+        # Fallback: combined original + localized for word overlap
+        # (e.g. when search term shares words across both titles)
+        if not title_score:
+            combined = f"{ot} {rt}".strip()
+            if combined:
+                overlap = word_overlap_ratio(combined, title)
+                if overlap >= 0.3:
+                    title_score = overlap
+
+        # Year boost: 1.3x multiplier, requires meaningful title overlap
+        year_mult = 1.0
+        if year is not None and r.get("year") == year and title_score >= 0.3:
+            year_mult = 1.3
+
+        score = title_score * year_mult
+
+        if score > best_score:
+            best_score = score
+            best_result = r
+
+    if best_score < _MIN_CONFIDENCE:
+        logger.info(
+            "No confident match for '%s' (year=%s) — "
+            "best score %.3f < %.2f threshold among %d results",
+            title, year, best_score, _MIN_CONFIDENCE, len(results),
+        )
+        return None
+
+    return best_result
+
+
+# ============================================
+# Deep interface — the two decisions callers need
+# ============================================
+
+def best_match(query: str, candidates: list[dict], year: Optional[int] = None) -> Optional[dict]:
+    """Pick the single most relevant candidate for ``query``.
+
+    ``candidates`` are plain dicts supplied by a substitutable source
+    adapter (TMDB, TVmaze, an in-memory mock). All scoring — title
+    similarity, word-overlap fallback, year boost and confidence
+    threshold — is owned here, so the interface is the test surface:
+    callers pass a query and candidates, never re-implement the decision.
+    """
+    return find_best_match(candidates, query, year)
+
+
+def rank(
+    query: str,
+    candidates: list,
+    *,
+    titles: Callable[[object], tuple[str, ...]],
+) -> list:
+    """Return ``candidates`` re-ordered by title relevance to ``query``.
+
+    ``titles`` extracts a candidate's title variants (localized and
+    original) so ranking stays shape-agnostic: callers own their result
+    objects, this module owns the scoring-and-sort decision that used to
+    be duplicated in ``movie_search``.
+    """
+    def _score(item: object) -> float:
+        variants = [t for t in titles(item) if t]
+        if not variants:
+            return 0.0
+        return max(title_similarity(query, t) for t in variants)
+
+    return sorted(candidates, key=_score, reverse=True)

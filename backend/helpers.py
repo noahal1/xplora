@@ -1,5 +1,6 @@
 """Helper functions for API endpoints — movie parsing, rating normalization, etc."""
 
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -7,6 +8,30 @@ from fastapi import HTTPException
 
 from config_manager import get_api_key as get_config_api_key
 from models import MediaRating
+
+
+def normalize_genre_str(genre_str: str) -> str:
+    """Normalize a genre string: replace Chinese/variant names with canonical English.
+
+    E.g. ``"动作 / 科幻"`` → ``"Action / Sci-Fi"``. This is the single public
+    home for genre normalization: it uses the ``NORMALIZE_GENRE`` map defined
+    below, and both the metadata-enrichment chain and the AI-repair scraper
+    call it instead of reaching into a private helper across a seam.
+    """
+    parts = re.split(r"\s*/\s*", genre_str)
+    return " / ".join(NORMALIZE_GENRE.get(p.strip(), p.strip()) for p in parts)
+
+
+def normalize_country_str(country_str: str | None) -> str | None:
+    """Normalize a country name: replace Chinese names with canonical English.
+
+    E.g. ``"美国"`` → ``"United States"``. Returns ``None`` for empty input.
+    Uses the ``NORMALIZE_COUNTRY`` map defined below.
+    """
+    if not country_str or not country_str.strip():
+        return None
+    country_str = country_str.strip()
+    return NORMALIZE_COUNTRY.get(country_str, country_str)
 
 
 # ── Timestamp serialization ─────────────────────────────────────

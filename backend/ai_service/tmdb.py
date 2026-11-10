@@ -10,7 +10,7 @@ from config_manager import get_api_key as get_config_api_key
 from .constants import MAX_TOKENS, SYSTEM_PROMPT_TMDB, TMDB_CACHE_TTL, _tmdb_cache_key, _tmdb_candidate_cache, logger
 
 
-class TMDCMixin:
+class TMDBMixin:
     """TMDB candidate pool building and hybrid recommendation curation."""
 
     def _build_tmdb_candidates(
@@ -431,3 +431,8 @@ class TMDCMixin:
             recs = [r for r in recs if not (r.tmdb_id and r.tmdb_id in excluded_tmdb_ids)]
 
         return recs[:count]
+
+
+# Backwards-compatible alias for the former misspelled class name.
+# External importers that used ``TMDCMixin`` keep working unchanged.
+TMDCMixin = TMDBMixin

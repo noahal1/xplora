@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
 import { useEnrich } from "../context/EnrichContext";
-import { changePassword, checkUpdate, fetchStats } from "../api";
+import { changePassword, checkUpdate, fetchStats, apiFetchResponse } from "../api";
 import { UpdateModal } from "../components/UpdateModal";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -169,7 +169,7 @@ export function MyPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch("/api/health");
+        const res = await apiFetchResponse("/api/health");
         if (res.ok) setHealth(await res.json());
       } catch { /* ignore */ }
     };
@@ -180,7 +180,7 @@ export function MyPage() {
   const loadEmbedStats = useCallback(async () => {
     try {
       const token = localStorage.getItem("xplora-token");
-      const res = await fetch("/api/profile/embed/stats", {
+      const res = await apiFetchResponse("/api/profile/embed/stats", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) setEmbedStats(await res.json());
@@ -195,9 +195,9 @@ export function MyPage() {
       const headers = { Authorization: `Bearer ${token}` };
 
       const [overviewRes, memRes, prefsRes] = await Promise.allSettled([
-        fetch("/api/profile/overview", { headers }),
-        fetch("/api/profile/memories", { headers }),
-        fetch("/api/profile/preferences", { headers }),
+        apiFetchResponse("/api/profile/overview", { headers }),
+        apiFetchResponse("/api/profile/memories", { headers }),
+        apiFetchResponse("/api/profile/preferences", { headers }),
         loadEmbedStats(), // updates its own state; result not needed here
       ]);
 
@@ -224,7 +224,7 @@ export function MyPage() {
     embedPollRef.current = setInterval(async () => {
       try {
         const token = localStorage.getItem("xplora-token");
-        const res = await fetch("/api/profile/embed/stats", {
+        const res = await apiFetchResponse("/api/profile/embed/stats", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -293,7 +293,7 @@ export function MyPage() {
       for (const [key, val] of Object.entries(editKeys)) {
         if (val.trim()) filledKeys[key] = val.trim();
       }
-      const res = await fetch("/api/admin/config", {
+      const res = await apiFetchResponse("/api/admin/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ api_keys: filledKeys }),
@@ -329,7 +329,7 @@ export function MyPage() {
     setExporting(true);
     try {
       const token = localStorage.getItem("xplora-token");
-      const res = await fetch("/api/user/export", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await apiFetchResponse("/api/user/export", { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("导出失败");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -351,7 +351,7 @@ export function MyPage() {
     try {
       const token = localStorage.getItem("xplora-token");
       const formData = new FormData(); formData.append("file", file);
-      const res = await fetch("/api/user/import", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
+      const res = await apiFetchResponse("/api/user/import", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || "导入失败"); }
       const data = await res.json();
       const typeLabel = data.status_type === "wish" ? t("profile.import_wish") : t("profile.import_watched");
@@ -367,7 +367,7 @@ export function MyPage() {
     try {
       const token = localStorage.getItem("xplora-token");
       const newVal = !ragEnabled;
-      await fetch("/api/profile/preferences", {
+      await apiFetchResponse("/api/profile/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ rag_enabled: newVal }),
@@ -621,7 +621,7 @@ export function MyPage() {
                       onClick={async () => {
                         try {
                           const token = localStorage.getItem("xplora-token");
-                          const res = await fetch("/api/profile/rebuild?model=deepseek", {
+                          const res = await apiFetchResponse("/api/profile/rebuild?model=deepseek", {
                             method: "POST",
                             headers: { Authorization: `Bearer ${token}` },
                           });
@@ -652,7 +652,7 @@ export function MyPage() {
                     setEmbedLoading(true);
                     try {
                       const token = localStorage.getItem("xplora-token");
-                      const res = await fetch("/api/profile/embed", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+                      const res = await apiFetchResponse("/api/profile/embed", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
                       if (res.ok) {
                         showToast(t("mypage.embed_triggered", "嵌入已触发"), "success");
                         // Start polling for real-time progress
@@ -740,7 +740,7 @@ export function MyPage() {
                     setMemoryLoading(true);
                     try {
                       const token = localStorage.getItem("xplora-token");
-                      const res = await fetch("/api/profile/memories/generate?model=deepseek", {
+                      const res = await apiFetchResponse("/api/profile/memories/generate?model=deepseek", {
                         method: "POST",
                         headers: { Authorization: `Bearer ${token}` },
                       });

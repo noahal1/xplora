@@ -13,16 +13,21 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select, func
+from sqlmodel import Session
 
 from auth import get_current_user
 from deps import get_user_db
 from helpers import iso_utc
+from media_store import (
+    count_embedded,
+    count_media,
+    get_memories,
+    get_preferences as get_user_preferences,
+    get_profile,
+    list_all_media,
+)
 from models import (
-    MediaItemRecord,
     UserProfileRecord,
-    UserMemoryRecord,
-    MovieEmbeddingRecord,
     UserPreferencesRecord,
 )
 
@@ -49,9 +54,13 @@ def _background_embed_all(user_id: int):
     """
     import json as _json
     import logging as _logging
-    from sqlmodel import select as _select
     from database import get_user_session
-    from models import MediaItemRecord as _MIR, MovieEmbeddingRecord as _MER, UserPreferencesRecord as _UPR
+    from media_store import (
+        get_preferences as _get_preferences,
+        list_all_media as _list_all_media,
+        list_embeddings as _list_embeddings,
+    )
+    from models import MovieEmbeddingRecord as _MER
     from ai_service.embedding import EmbeddingPipeline, build_movie_embedding_text
 
     _log = _logging.getLogger(__name__)
@@ -59,30 +68,20 @@ def _background_embed_all(user_id: int):
         db = get_user_session(user_id)
         try:
             # Check RAG preference
-            prefs = db.exec(
-                _select(_UPR).where(_UPR.user_id == user_id)
-            ).first()
+            prefs = _get_preferences(user_id, db)
             if prefs and not prefs.rag_enabled:
                 _log.debug("Skipping embedding for user %d: rag_enabled=False", user_id)
                 return
 
             # Fetch all watched movies
-            movies = db.exec(
-                _select(_MIR).where(
-                    _MIR.user_id == user_id,
-                    _MIR.status == "watched",
-                )
-            ).all()
+            movies = _list_all_media(user_id, db, status="watched")
 
             if not movies:
                 return
 
             # Fetch existing embeddings
             existing_titles = {
-                r.title.lower()
-                for r in db.exec(
-                    _select(_MER).where(_MER.user_id == user_id)
-                ).all()
+                r.title.lower() for r in _list_embeddings(user_id, db)
             }
 
             new_movies = [m for m in movies if m.title.lower() not in existing_titles]
@@ -165,18 +164,9 @@ async def embedding_stats(
     """Get embedding statistics for the current user."""
     user_id = current_user["id"]
 
-    total_movies = db.exec(
-        select(func.count(MediaItemRecord.id)).where(
-            MediaItemRecord.user_id == user_id,
-            MediaItemRecord.status == "watched",
-        )
-    ).one()
+    total_movies = count_media(user_id, db, status="watched")
 
-    embedded_count = db.exec(
-        select(func.count(MovieEmbeddingRecord.id)).where(
-            MovieEmbeddingRecord.user_id == user_id,
-        )
-    ).one()
+    embedded_count = count_embedded(user_id, db)
 
     return {
         "total_movies": total_movies or 0,
@@ -196,12 +186,7 @@ async def list_memories(
 ):
     """List the current user's taste memories."""
     user_id = current_user["id"]
-    memories = db.exec(
-        select(UserMemoryRecord).where(
-            UserMemoryRecord.user_id == user_id,
-            UserMemoryRecord.is_active == True,  # noqa: E712
-        ).order_by(UserMemoryRecord.created_at.desc())
-    ).all()
+    memories = get_memories(user_id, db, newest_first=True)
 
     return {
         "memories": [
@@ -231,19 +216,9 @@ async def generate_memories_endpoint(
     user_id = current_user["id"]
 
     # Fetch movies and existing memories
-    movies = db.exec(
-        select(MediaItemRecord).where(
-            MediaItemRecord.user_id == user_id,
-            MediaItemRecord.status == "watched",
-        )
-    ).all()
+    movies = list_all_media(user_id, db, status="watched")
 
-    existing = db.exec(
-        select(UserMemoryRecord).where(
-            UserMemoryRecord.user_id == user_id,
-            UserMemoryRecord.is_active == True,  # noqa: E712
-        )
-    ).all()
+    existing = get_memories(user_id, db)
 
     # Resolve model and API key
     model_type = model or "deepseek"
@@ -283,12 +258,7 @@ async def clear_memories(
 ):
     """Soft-delete all memories for the current user (set is_active=False)."""
     user_id = current_user["id"]
-    memories = db.exec(
-        select(UserMemoryRecord).where(
-            UserMemoryRecord.user_id == user_id,
-            UserMemoryRecord.is_active == True,  # noqa: E712
-        )
-    ).all()
+    memories = get_memories(user_id, db)
 
     for m in memories:
         m.is_active = False
@@ -310,16 +280,9 @@ async def profile_overview(
     """Get the current user's taste profile overview."""
     user_id = current_user["id"]
 
-    profile = db.exec(
-        select(UserProfileRecord).where(UserProfileRecord.user_id == user_id)
-    ).first()
+    profile = get_profile(user_id, db)
 
-    movie_count = db.exec(
-        select(func.count(MediaItemRecord.id)).where(
-            MediaItemRecord.user_id == user_id,
-            MediaItemRecord.status == "watched",
-        )
-    ).one()
+    movie_count = count_media(user_id, db, status="watched")
 
     if not profile:
         return {
@@ -361,12 +324,7 @@ async def rebuild_profile(
 
     user_id = current_user["id"]
 
-    movies = db.exec(
-        select(MediaItemRecord).where(
-            MediaItemRecord.user_id == user_id,
-            MediaItemRecord.status == "watched",
-        )
-    ).all()
+    movies = list_all_media(user_id, db, status="watched")
 
     if len(movies) < 3:
         raise HTTPException(400, "至少需要3部已看电影才能生成画像")
@@ -386,9 +344,7 @@ async def rebuild_profile(
     top_genres = [g for g, _ in genre_counter.most_common(5)]
     preferred_decades = [d for d, _ in decade_counter.most_common(3)]
 
-    profile = db.exec(
-        select(UserProfileRecord).where(UserProfileRecord.user_id == user_id)
-    ).first()
+    profile = get_profile(user_id, db)
 
     profile_data = {
         "top_genres": top_genres,
@@ -436,9 +392,7 @@ async def get_preferences(
 ):
     """Get user preferences (RAG enabled, etc.)."""
     user_id = current_user["id"]
-    prefs = db.exec(
-        select(UserPreferencesRecord).where(UserPreferencesRecord.user_id == user_id)
-    ).first()
+    prefs = get_user_preferences(user_id, db)
 
     return {
         "rag_enabled": prefs.rag_enabled if prefs else True,
@@ -453,9 +407,7 @@ async def update_preferences(
 ):
     """Update user preferences."""
     user_id = current_user["id"]
-    prefs = db.exec(
-        select(UserPreferencesRecord).where(UserPreferencesRecord.user_id == user_id)
-    ).first()
+    prefs = get_user_preferences(user_id, db)
 
     if not prefs:
         prefs = UserPreferencesRecord(user_id=user_id)
