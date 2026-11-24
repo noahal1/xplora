@@ -17,6 +17,7 @@ import { StrategySelector } from "./tabs/recommend/StrategySelector";
 import { SessionHistory } from "./tabs/recommend/SessionHistory";
 import { TMDBDetailModal } from "./shared/TMDBDetailModal";
 import { ResultsSection } from "./tabs/recommend/ResultsSection";
+import { TasteReel } from "./tabs/recommend/TasteReel";
 import { AddToPlaylistModal, type PlaylistTargetItem } from "./PlaylistsTab/AddToPlaylistModal";
 
 
@@ -604,6 +605,8 @@ export function RecommendTab() {
       {/* === Empty / Config State === */}
       {!isLoading && recommendations.length === 0 ? (
         <FadeContent className="section-card">
+          <TasteReel movies={filteredMovies} t={t} />
+          <div className="taste-reel-rule" />
           <StrategySelector
             strategy={strategy}
             onStrategyChange={setStrategy}

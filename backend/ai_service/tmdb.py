@@ -340,6 +340,7 @@ class TMDBMixin:
         user_tmdb_ids: Optional[list[tuple[str, str]]] = None,
         excluded_tmdb_ids: Optional[set[str]] = None,
         lang: Optional[str] = None,
+        rag_context=None,
     ) -> list[MediaRecommendation]:
         """Hybrid recommendation: TMDB candidate pool + AI curation.
 
@@ -375,6 +376,7 @@ class TMDBMixin:
             taste_analysis=taste_analysis,
             candidates=tmdb_candidates,
             lang=lang,
+            rag_context=rag_context,
         )
 
         try:

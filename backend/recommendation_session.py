@@ -314,12 +314,21 @@ def _stream_from_source(
     This is the single copy of the SSE framing + clamp + save logic that used
     to appear three times in the router.  ``result_event`` selects which event
     kind carries the recommendation payload (``recommendation`` for the
-    standard streams, ``result`` for follow-up chat).
+    standard streams, ``result`` for follow-up chat). Standard streams require
+    a ``done`` event; follow-up chat ends with its ``result`` instead. Neither
+    saves if the source reports an error.
     """
     recommendations_cache: list[dict] = []
+    saw_done = False
+    saw_error = False
 
     for event in source():
-        if event.startswith(f"event: {result_event}"):
+        event_header = event.partition("\n")[0].rstrip("\r")
+        if event_header == "event: done":
+            saw_done = True
+        elif event_header == "event: error":
+            saw_error = True
+        elif event_header == f"event: {result_event}":
             payload = _event_payload(event, result_event)
             if payload:
                 try:
@@ -337,6 +346,9 @@ def _stream_from_source(
                 except json.JSONDecodeError:
                     pass
         yield event
+
+    if saw_error or (result_event == "recommendation" and not saw_done):
+        return
 
     try:
         rec_models = [_to_model(r) for r in recommendations_cache]
