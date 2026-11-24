@@ -1,0 +1,27 @@
+# CI / test dependencies for the backend suite.
+#
+# .github/workflows/backend-tests.yml installs this file, then runs
+#   python -m compileall -q backend
+#   python -m pytest -v          (from backend/)
+#
+# This is the lightweight set needed to IMPORT the modules under test and run
+# the mocked unit tests.  Versions match backend/requirements.txt so CI tests
+# the same library versions as production.
+#
+# Deliberately excluded (both are LAZY imports, only used when the embedding /
+# clustering features actually run — not needed for import, syntax checks or
+# the mocked tests, and FlagEmbedding would drag in a ~2 GB torch install):
+#   FlagEmbedding>=1.2.0
+#   scikit-learn>=1.3.0
+#   uvicorn, pg8000, docker (server/runtime only)
+
+fastapi==0.115.6
+python-dotenv==1.0.1
+openai==1.58.1
+pydantic==2.10.4
+httpx==0.28.1
+sqlmodel==0.0.27
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+pytest>=8.0,<9
